@@ -3,9 +3,16 @@
 WhatsApp-native, voice-first assistant for older adults in India.
 Remembers, reminds, searches, assembles — and never transacts.
 
-Docs of record live outside this repo for now:
-`PRD-whatsapp-elder-agent.md` (research) and `PLAN-whatsapp-elder-agent-v1.md`
-(build plan, decisions, measurements).
+## Docs
+
+**Start at [`docs/DOC_SYSTEM.md`](docs/DOC_SYSTEM.md)** — it is the map, and it
+says what to read in what order before writing code. The PRD now lives in the
+repo at [`docs/PRD.md`](docs/PRD.md), with a preface recording which of its
+technical claims have since been measured wrong.
+
+Before touching Meta, Cloudflare or audio, read
+[`docs/LANDMINES.md`](docs/LANDMINES.md). Code changes go in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Layout
 
