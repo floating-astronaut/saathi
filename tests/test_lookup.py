@@ -11,14 +11,49 @@ def test_providers_register_and_declare_availability():
     assert "weather" in base.available() and "wikipedia" in base.available()
 
 
-def test_missing_key_is_a_config_fact_not_a_crash(monkeypatch):
+def test_no_credentials_at_all_is_a_config_fact_not_a_crash(monkeypatch):
     monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "")
+    monkeypatch.setattr(web.settings, "saathi_gcp_sa_file", "")
     assert base.get("web").available() is False
 
 
-def test_key_present_makes_web_available(monkeypatch):
+def test_either_credential_makes_web_available(monkeypatch):
+    monkeypatch.setattr(web.settings, "saathi_gcp_sa_file", "")
     monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "k")
     assert base.get("web").available() is True
+    monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "")
+    monkeypatch.setattr(web.settings, "saathi_gcp_sa_file", "/tmp/sa.json")
+    assert base.get("web").available() is True
+
+
+def test_vertex_is_preferred_and_regional(monkeypatch):
+    """Search is the only part of the system that leaves India. Vertex in
+    asia-south1 at least keeps the request in-region; AI Studio is global."""
+    assert web.VERTEX_LOCATION == "asia-south1"
+    monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "k")
+    monkeypatch.setattr(web.settings, "saathi_gcp_sa_file", "")
+    routes = web.WebSearch()._routes("q")
+    assert len(routes) == 1 and "generativelanguage" in routes[0][0]
+
+
+def test_unusable_service_account_falls_back_rather_than_failing(monkeypatch):
+    """Billing not enabled, a bad key file, an expired token — none of these
+    should cost the user their answer while a working route exists."""
+    monkeypatch.setattr(web.settings, "saathi_gcp_sa_file", "/nonexistent/sa.json")
+    monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "k")
+    routes = web.WebSearch()._routes("q")
+    assert len(routes) == 1 and "generativelanguage" in routes[0][0]
+
+
+def test_the_query_is_sent_alone(monkeypatch):
+    """A search backend has no business knowing who is asking."""
+    monkeypatch.setattr(web.settings, "saathi_gcp_sa_file", "")
+    monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "k")
+    _, _, _, body = web.WebSearch()._routes("what is the weather")[0]
+    sent = str(body)
+    assert "what is the weather" in sent
+    for leak in ("Kamala", "Amlodipine", "Nagpur", "user_id"):
+        assert leak not in sent
 
 
 # --- the security property ---------------------------------------------------

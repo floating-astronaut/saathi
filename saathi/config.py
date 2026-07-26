@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     #: fact rather than a bug.
     saathi_gemini_api_key: str = ""
 
+    #: Saathi's own GCP service account (project saathi-ai-503623). Preferred
+    #: over the API key: it reaches Vertex in asia-south1, so the request is
+    #: served from India rather than a global endpoint.
+    saathi_gcp_sa_file: str = ""
+    saathi_gcp_project: str = "saathi-ai-503623"
+
     # Admission control (pattern from OpenClaw's dmPolicy). "pairing" means an
     # unknown handle must redeem a code before the agent will talk to it; "open"
     # lets anyone in. Default is pairing: an unknown sender otherwise gets free

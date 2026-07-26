@@ -145,25 +145,18 @@ changes, nothing forces a re-consent or notices the drift.
 | Forwarded messages could drive tool calls | 2026-07-26 — `provenance.py`; state-mutating tools withheld on relayed content. |
 | Secrets could leak into logs | 2026-07-26 — `net_policy.RedactingFilter` on the root logger in both entrypoints. |
 | Privacy policy claimed 7-day voice retention that did not exist | 2026-07-26 — retention now real and the promise is kept by an **S3 lifecycle rule**, not by our code: if every worker died, voice notes would still expire on day 7. Kept deliberately because India is not one language and a transcript alone cannot tell you whether the model mis-heard or the speaker used a regional form. Erasure deletes objects immediately rather than waiting for the rule. |
+| Search ran on MeshPilot's Gemini key, on a global endpoint (was PR-21) | 2026-07-26 — Saathi's own GCP project `saathi-ai-503623` with its own service account, billing linked, and search served from **Vertex asia-south1**. The service account reaches the box via Secrets Manager, never SSM. AI Studio remains a fallback so an unpaid project or a bad key file cannot cost a user their answer. |
 | Scheduler was reminder-shaped (was PR-16) | 2026-07-26 — `scheduled_turns` is a general queue; kinds register. Worker reports `['checkin', 'media_purge', 'nudge', 'reminder']` and a test asserts it names none of them. |
 
-### PR-20 · Web search sends queries outside India
-Everything else in this system is India-resident: Postgres, audio, STT and both
-models are ap-south-1 regional. **Web search is not.** Gemini's Google Search
-grounding is the only real option — AWS sells no web index, Bedrock's Converse
-API accepts only tools we implement, and Kendra indexes our own documents — so a
-search query leaves the country.
+### PR-20 · Google's search index is global, even when the request is not
+Search now runs on **Vertex AI in `asia-south1` (Mumbai)**, so the request is
+served from India like everything else. What cannot be regionalised is Google's
+index itself — the crawl is global, and the query reaches Google.
 
-This matters more than it looks: "is this medicine safe with that one" is a
-health-adjacent query. Mitigated by sending **only the question** — no stored
-facts, no name, no history — but the query text itself still goes to Google.
+That is as good as this gets without building an index, and it is a meaningful
+improvement on the AI Studio global endpoint. But "is this medicine safe with
+that one" is still a health-adjacent query leaving our control.
 **Fix:** state it plainly in the privacy policy, and keep `look_up` narrow.
-
-### PR-21 · Gemini key is MeshPilot's
-`SAATHI_GEMINI_API_KEY` is copied from MeshPilot's `GEMINI_API_KEY` — the same
-credential coupling as the Meta app (D-J), and it means MeshPilot's quota and
-billing carry Saathi's search traffic.
-**Fix:** Saathi's own Google Cloud project and key.
 
 ### PR-19 · Audio retention has no consent toggle
 Voice notes are now stored for 7 days for debugging, which onboarding consent
