@@ -53,6 +53,7 @@ a measurement disagree, the measurement wins and `DECISIONS.md` records it.
 | `ENGINEERING_SUPERVISOR.md` | Append-only lane log. Evidence, not intentions. |
 | `PROD_READINESS.md` | Dev shortcuts that must be fixed before production, with severity. **Add a row when you take one.** |
 | `../CHANGELOG.md` | What changed in the Python, and what broke finding out. |
+| [`foundations/README.md`](foundations/README.md) | Product/domain research underneath the PRD — user research, accessibility, clinical/safety grounding, competitive landscape, DPDP/WhatsApp regulatory detail, glossary. Checks the PRD's *research* claims against primary sources the way §0 checks its technical ones. |
 
 ## What must be updated when work lands
 
