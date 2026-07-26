@@ -1,7 +1,8 @@
-# Saathi — a WhatsApp assistant for elders
+# Saathi — an AI companion for elders
 
-> **Saathi remembers, reminds, reads and assembles — and never transacts.**
-> Voice-first and Indic-first, on WhatsApp, for older adults in India. Every task
+> **An AI companion for older adults in India, on WhatsApp.**
+> It remembers, reminds, reads and assembles — and never transacts.
+> Voice-first and Indic-first. Every task
 > ends in something the user acts on themselves: a reminder, an answer, a
 > shortlist, a link they tap. No payment credentials, no OTPs, no account access,
 > no agent-initiated spend.
@@ -45,8 +46,9 @@ of Indian seniors own a smartphone, but **66% find digital tools confusing** and
 **51% fear making errors**. Distribution is already solved; the interface *is*
 the product.
 
-So Saathi is not a chat box with a model behind it. It is a narrow, careful
-assistant built around four capabilities and a set of refusals:
+So Saathi is not a chat box with a model behind it, and it is not a bot. It is
+a **companion** — warm, patient, and the same on the fourth asking as the first
+— built around four capabilities and a set of refusals:
 
 - **Remembers** — facts stored explicitly by tool call, never inferred into an
   opaque blob. "What do you know about me?" and "forget that" both work.
