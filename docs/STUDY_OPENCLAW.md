@@ -129,9 +129,12 @@ wholesale and inherit its costs.
 
 ## Queued from this study
 
-- **Provenance on message content.** Mark text that arrived as a *forward* and
-  refuse to let capabilities act on instructions found inside it. This is the
-  trusted-tool-policy idea, applied to our actual threat.
+- ~~**Provenance on message content.**~~ **Done** — `saathi/provenance.py`. The
+  trusted-tool-policy idea in our own terms: WhatsApp's `context.forwarded`,
+  quoted replies, and text lifted from images or PDFs all drop to `RELAYED`, and
+  state-mutating tools are withheld for that turn. Verified against the live
+  model with a real injection: on the forwarded path only 3 of 10 tools were
+  offered and `forget_everything` was simply absent.
 - **Generalise the scheduler** from "reminders" to "scheduled turns" before a
   second kind of scheduled work exists.
 

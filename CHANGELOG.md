@@ -179,3 +179,47 @@ number, and WhatsApp is one transport rather than the architecture.
 - Pipeline fakes still patched `pipeline.wa` and returned a 6-column handle row
   after the refactor added `status`.
 - `Resolved` briefly had a defaulted field before a non-defaulted one.
+
+---
+
+## 2026-07-26 (evening) — architecture, capabilities, provenance
+
+**224 tests passing.**
+
+### Changed — capabilities register instead of branching
+
+`handle_message` was an if/elif ladder growing a branch per feature. A capability
+is now `(priority, matches, handle)` registered in `capabilities.py`, which read
+top to bottom *is* the spec of the inbound path. Safety holds priority 0 and a
+test asserts it cannot be overtaken; a handler that raises is logged and skipped
+rather than killing the turn. Empty text now falls off the end of the chain
+instead of needing its own branch.
+
+### Added
+
+- `vision.py` — medicine packs, letters, photos. `qwen.qwen3-vl-235b-a22b`,
+  chosen because it is *regional* to ap-south-1: a photograph of a prescription
+  must not leave India, and the Anthropic vision models here are global-only.
+  Health-adjacent answers carry their disclaimer by construction.
+- `documents.py` — PDF text layer first, rasterise page one as fallback.
+- `onboarding.py` — deterministic, button-driven, **no model call**, which is
+  what makes an open door safe.
+- `commands.py` — stop/resume/help/what-you-know/clear/delete, model-free, so a
+  DPDP erasure request works even when Bedrock does not.
+- `net_policy.py` — SSRF blocking and secret redaction (ported MIT from
+  OpenClaw). Root logger filter, so redaction does not depend on anyone
+  remembering.
+- `provenance.py` — forwarded messages, quoted replies and text lifted from
+  media are `RELAYED`: content, never command. State-mutating tools are withheld
+  for the turn. Withholding beats filtering because an absent capability does not
+  care how the attack is phrased.
+
+### Broke / Fixed
+
+- Transport spy in the onboarding tests captured button **IDs** instead of
+  labels, so a length assertion was checking the wrong strings.
+- `band karo` did not match STOP: `\bband kar\b` requires a boundary that
+  "karo" does not provide.
+- `Resolved` briefly had a defaulted field before a non-defaulted one.
+- Onboarding tests reached the real `send_buttons` because the spy only patched
+  `send_text`, so the window guard raised on a fake connection.
