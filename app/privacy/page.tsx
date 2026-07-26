@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PolicyPage, H2, P, UL } from "@/components/policy-page";
+import { OperatorBlock } from "@/components/operator";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Saathi",
@@ -11,10 +12,16 @@ export default function Privacy() {
   return (
     <PolicyPage title="Privacy Policy" updated="26 July 2026">
       <P>
-        Saathi is a WhatsApp assistant for older adults, operated by Nuraveda Labs. This
-        policy describes exactly what we store, where, for how long, and how to have it
-        removed. It is written to be read by the person using Saathi, not only by lawyers.
+        Saathi is a WhatsApp assistant for older adults. This policy describes exactly
+        what we store, where, for how long, and how to have it removed. It is written to be
+        read by the person using Saathi, not only by lawyers.
       </P>
+      <H2>Who operates Saathi</H2>
+      <P>
+        Saathi is operated by the business below, which is the data fiduciary for your
+        personal data under India&rsquo;s Digital Personal Data Protection Act.
+      </P>
+      <OperatorBlock />
 
       <H2>What we store</H2>
       <UL>
@@ -118,8 +125,10 @@ export default function Privacy() {
       <P>
         Questions, complaints, or a data request you would rather not make in the chat:
         write to <strong>help.nuraveda@gmail.com</strong>. We respond to data requests
-        within 30 days.
+        within 30 days. If you are not satisfied with our response, you may escalate to the
+        Data Protection Board of India.
       </P>
+      <OperatorBlock />
     </PolicyPage>
   );
 }

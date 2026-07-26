@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PolicyPage, H2, P, UL } from "@/components/policy-page";
+import { OperatorBlock } from "@/components/operator";
 
 export const metadata: Metadata = {
   title: "Delete your data — Saathi",
@@ -58,6 +59,7 @@ export default function DataDeletion() {
 
       <H2>Contact</H2>
       <P>help.nuraveda@gmail.com</P>
+      <OperatorBlock />
     </PolicyPage>
   );
 }

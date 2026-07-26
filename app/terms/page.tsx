@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PolicyPage, H2, P, UL } from "@/components/policy-page";
+import { OperatorBlock } from "@/components/operator";
 
 export const metadata: Metadata = {
   title: "Terms of Service — Saathi",
@@ -10,8 +11,13 @@ export default function Terms() {
   return (
     <PolicyPage title="Terms of Service" updated="26 July 2026">
       <P>
-        Saathi is a WhatsApp assistant for older adults, operated by Nuraveda Labs. By
-        messaging Saathi you agree to these terms.
+        Saathi is a WhatsApp assistant for older adults. By messaging Saathi you agree to
+        these terms. The service is operated by:
+      </P>
+      <OperatorBlock />
+      <P>
+        These terms are governed by the laws of India, and the courts at Gwalior, Madhya
+        Pradesh have jurisdiction.
       </P>
 
       <H2>What Saathi does</H2>
@@ -64,6 +70,7 @@ export default function Terms() {
 
       <H2>Contact</H2>
       <P>help.nuraveda@gmail.com</P>
+      <OperatorBlock />
     </PolicyPage>
   );
 }
