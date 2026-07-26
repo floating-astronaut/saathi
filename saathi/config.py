@@ -26,6 +26,12 @@ class Settings(BaseSettings):
 
     sarvam_api_key: str = ""
 
+    #: Voice notes are kept briefly for debugging: India is not one language,
+    #: and a transcript alone cannot tell you whether the model mis-heard or the
+    #: speaker used a regional form. Deletion is enforced by an S3 lifecycle
+    #: rule, not by our code. Empty disables storage entirely.
+    saathi_audio_bucket: str = ""
+
     # Admission control (pattern from OpenClaw's dmPolicy). "pairing" means an
     # unknown handle must redeem a code before the agent will talk to it; "open"
     # lets anyone in. Default is pairing: an unknown sender otherwise gets free
