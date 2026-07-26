@@ -11,7 +11,7 @@ export default function Terms() {
   return (
     <PolicyPage title="Terms of Service" updated="26 July 2026">
       <P>
-        Saathi is a WhatsApp assistant for older adults. By messaging Saathi you agree to
+        Saathi is an AI companion for older adults in India, on WhatsApp. By messaging Saathi you agree to
         these terms. The service is operated by:
       </P>
       <OperatorBlock />

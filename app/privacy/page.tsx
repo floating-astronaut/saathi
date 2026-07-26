@@ -12,7 +12,7 @@ export default function Privacy() {
   return (
     <PolicyPage title="Privacy Policy" updated="26 July 2026">
       <P>
-        Saathi is a WhatsApp assistant for older adults. This policy describes exactly
+        Saathi is an AI companion for older adults in India, on WhatsApp. This policy describes exactly
         what we store, where, for how long, and how to have it removed. It is written to be
         read by the person using Saathi, not only by lawyers.
       </P>
