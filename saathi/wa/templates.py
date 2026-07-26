@@ -11,6 +11,16 @@ Rules encoded here, learned from Meta's rejection patterns:
   * Quick-reply button labels: 20 characters hard limit.
   * A template's job is not to say everything. It is to GET A REPLY, which
     reopens the free 24-hour window (PRD s11).
+  * **Meta Business Agent is present on this number and MUST stay disabled.**
+    `GET api.facebook.com/{phone_number_id}/agent_config/settings` shows an
+    agent already provisioned with `rollout.enabled = false`, but preconfigured
+    `ai_audience: EVERYONE` and `followup: {enabled: true, 3600s}`. Flipping
+    rollout on makes Meta's model the *primary responder*, so inbound messages
+    would never reach our deterministic §12 safety classifier — risk R7, the
+    one non-negotiable gate. Its knowledge model is business-scoped anyway
+    (delivery/returns/payment), with no per-user memory, which is the whole of
+    this product. Do not enable.
+
   * **Never delete a template to fix it.** Meta holds a deleted name for up to
     four weeks before it can be recreated, and the category cannot be changed
     while the old content is still deleting. reminder_fire/reminder_nudge were

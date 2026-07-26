@@ -24,3 +24,11 @@ def test_plain_hinglish_untouched():
 
 def test_excess_blank_lines_collapsed():
     assert to_whatsapp_text("a\n\n\n\nb") == "a\n\nb"
+
+
+def test_business_agent_landmine_is_documented():
+    """R7 guard: if someone enables Meta Business Agent on our number it becomes
+    the primary responder and our pre-LLM safety classifier never runs."""
+    from saathi.wa import templates
+    doc = templates.__doc__ or ""
+    assert "Business Agent" in doc and "rollout" in doc
