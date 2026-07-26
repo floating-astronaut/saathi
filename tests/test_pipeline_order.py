@@ -3,8 +3,11 @@
 These are the rules that make the product safe rather than merely working:
 safety before the model, dedupe before side effects, window touch before send.
 """
+from datetime import datetime, timezone
+
 import pytest
 from saathi import pipeline
+from saathi.channels import registry
 
 
 class FakeCursor:
@@ -19,13 +22,18 @@ class FakeConn:
     def __init__(self, seen_message=False):
         self.sql = []
         self.seen_message = seen_message
+
     async def execute(self, q, params=None):
         self.sql.append(" ".join(q.split())[:70])
         low = q.lower()
-        if "insert into users" in low:
-            return FakeCursor((1, "Asia/Kolkata", "auto", "Kamala"))
+        # identity.resolve: an existing, recently-seen handle
+        if "from user_channels c join users u" in low:
+            return FakeCursor((5, 1, datetime.now(timezone.utc),
+                               "Kamala", "Asia/Kolkata", "auto", "active"))
         if "select 1 from messages" in low:
             return FakeCursor((1,) if self.seen_message else None)
+        if "from conversations" in low:
+            return FakeCursor((7,))
         if "returning id" in low:
             return FakeCursor((99,))
         return FakeCursor(None)
@@ -33,11 +41,15 @@ class FakeConn:
 
 @pytest.fixture
 def spy(monkeypatch):
+    """Patch the transport, not the WhatsApp module — sends now go through the
+    channel abstraction, which is the point of the refactor."""
     sent = []
-    async def fake_send_text(conn, uid, wa_id, text): sent.append(text); return "wamid.out"
+    async def fake_send_text(conn, uid, handle, text): sent.append(text); return "wamid.out"
     async def fake_touch(conn, uid, at=None): conn.sql.append("WINDOW_TOUCH"); return None
-    monkeypatch.setattr(pipeline.wa, "send_text", fake_send_text)
+    async def fake_history(conn, uid, limit=12): return []
+    monkeypatch.setattr(registry.get("whatsapp"), "send_text", fake_send_text)
     monkeypatch.setattr(pipeline.window, "touch", fake_touch)
+    monkeypatch.setattr(pipeline.conversation, "history", fake_history)
     return sent
 
 
@@ -99,3 +111,42 @@ async def test_empty_text_does_not_call_the_model(spy, monkeypatch):
     out = await pipeline.handle_message(
         conn, {"id": "w4", "from": "91", "type": "text", "text": {"body": "   "}})
     assert out == {"skipped": "empty"}
+
+
+async def test_unknown_handle_gets_no_agent_turn(spy, monkeypatch):
+    """Admission control: an unadmitted sender must cost one rate-limited reply
+    and nothing else — no STT, no model, no tools."""
+    async def boom(*a, **k):
+        raise AssertionError("agent ran for an unadmitted handle")
+    monkeypatch.setattr(pipeline.loop, "run", boom)
+
+    async def pending(*a, **k):
+        return pipeline.identity.Resolved(
+            user_id=1, user_channel_id=5, display_name=None, tz="Asia/Kolkata",
+            voice_reply_pref="auto", is_new=True, needs_reverification=False,
+            status="pending")
+    async def explain(conn, uc_id, maxn): return True
+    monkeypatch.setattr(pipeline.identity, "resolve", pending)
+    monkeypatch.setattr(pipeline.identity, "should_explain", explain)
+
+    out = await pipeline.handle_message(
+        FakeConn(), {"id": "u1", "from": "919999999999", "type": "text",
+                     "text": {"body": "hello?"}})
+    assert out == {"skipped": "not_admitted"}
+    assert len(spy) == 1 and "code" in spy[0].lower()
+
+
+async def test_unknown_handle_goes_quiet_after_the_reply_cap(spy, monkeypatch):
+    async def pending(*a, **k):
+        return pipeline.identity.Resolved(
+            user_id=1, user_channel_id=5, display_name=None, tz="Asia/Kolkata",
+            voice_reply_pref="auto", is_new=False, needs_reverification=False,
+            status="pending")
+    async def exhausted(conn, uc_id, maxn): return False
+    monkeypatch.setattr(pipeline.identity, "resolve", pending)
+    monkeypatch.setattr(pipeline.identity, "should_explain", exhausted)
+    out = await pipeline.handle_message(
+        FakeConn(), {"id": "u2", "from": "919999999999", "type": "text",
+                     "text": {"body": "hello again"}})
+    assert out == {"skipped": "not_admitted"}
+    assert spy == []          # silence, not an argument

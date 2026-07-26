@@ -127,3 +127,55 @@ First working session. PRD → live webhook. **82 tests passing**, 11 commits.
   D-D.
 - Template names are `reminder_fire_v2` / `reminder_nudge_v2`. The originals are
   burned: Meta holds a deleted template name for up to four weeks. `869dbc1`
+
+---
+
+## 2026-07-26 (later) — identity, channels, admission
+
+**100 tests passing.** The system now has a user model rather than a phone
+number, and WhatsApp is one transport rather than the architecture.
+
+### Added
+
+- `db/migrations/002_identity_and_channels.sql` — `user_channels`,
+  `channel_link_codes`, `conversations`; `messages` gains `channel`,
+  `conversation_id`, `deleted_at`, `redacted_at`. Existing users backfilled a
+  verified primary WhatsApp handle.
+- `identity.py` — resolve / revoke / link. **A phone number is not an identity**;
+  it is a revocable claim on one. Dormant handles (60 d, inside India's ~90-day
+  recycling window) return `needs_reverification` so a recycled number cannot
+  inherit an elder's medicines, doctor and family.
+- `channels/` — `Transport` protocol plus `Capabilities` as *data*
+  (`has_session_window`, `max_quick_replies`, `supports_voice_notes`, `markup`).
+  Channels differ in ways that change product behaviour, not just wire format —
+  WhatsApp has a 24 h window and 3 buttons, Telegram has neither limit — so the
+  pipeline asks the transport instead of branching on a channel name.
+- `conversation.py` — threads, cross-channel history for prompt context, and
+  message deletion. Redaction (`redacted_at`, content nulled, row kept) is
+  distinct from erasure (hard delete), so acknowledgement rates and the safety
+  audit trail stay honest when a user deletes a message.
+- `db/migrations/003_admission_control.sql` + admission gate — **pattern taken
+  from OpenClaw's `channels.<name>.dmPolicy: pairing | open`.**
+
+### Changed
+
+- `pipeline.handle_message` takes `channel` and resolves a `Transport`. All
+  sends, media fetches and text formatting go through it. Session-window
+  handling is now conditional on `capabilities.has_session_window`.
+- The agent receives conversation history, so a turn is no longer stateless.
+
+### Security
+
+- **Admission control.** Previously *any* number that messaged us created an
+  identity and got a full agent turn — an open cost vector (LLM + STT on our
+  bill), a safety surface on an eldercare agent, and junk identities. Unknown
+  handles are now `pending`: they get one rate-limited, bilingual, actionable
+  reply and no model turn. Default policy is `pairing`, not `open`.
+
+### Test-suite fixes (ours, not the code's)
+
+- Fake cursor lacked `rowcount`; fake conn truncated captured SQL at 60 chars so
+  redaction assertions could not see the clauses they were checking.
+- Pipeline fakes still patched `pipeline.wa` and returned a 6-column handle row
+  after the refactor added `status`.
+- `Resolved` briefly had a defaulted field before a non-defaulted one.
