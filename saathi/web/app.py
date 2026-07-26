@@ -9,10 +9,15 @@ from __future__ import annotations
 import hashlib
 import hmac
 
+import asyncio
+import logging
+
 from fastapi import FastAPI, Request, Response
 
-from .. import db
+from .. import db, pipeline
 from ..config import settings
+
+log = logging.getLogger("saathi.web")
 
 app = FastAPI(title="Saathi", version="0.1.0")
 
@@ -48,11 +53,25 @@ def valid_signature(body: bytes, header: str | None) -> bool:
     return hmac.compare_digest(expected, header)
 
 
+async def _process(payload: dict) -> None:
+    """Do the work off the request path. Meta times webhooks out quickly and
+    retries on non-2xx, so a slow STT or model call must never delay the ack."""
+    await db.pool().open()
+    for msg, name in pipeline.extract_messages(payload):
+        try:
+            async with db.pool().connection() as conn:
+                result = await pipeline.handle_message(conn, msg, name)
+                log.info("handled %s -> %s", msg.get("id"), result)
+        except Exception:  # noqa: BLE001 - one bad message must not stop the rest
+            log.exception("failed handling %s", msg.get("id"))
+
+
 @app.post("/webhook/whatsapp")
 async def receive(request: Request):
     body = await request.body()
     if not valid_signature(body, request.headers.get("X-Hub-Signature-256")):
         return Response(status_code=403)
-    # Meta retries aggressively; ack fast and do the work off the request path.
-    # Idempotency is enforced by messages.wa_message_id being unique.
+    payload = await request.json()
+    # Ack immediately; idempotency is enforced by messages.wa_message_id.
+    asyncio.create_task(_process(payload))
     return {"ok": True}
