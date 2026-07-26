@@ -102,6 +102,55 @@ TOOLS: list[dict] = [
             }},
         }
     },
+    {
+        "toolSpec": {
+            "name": "what_you_know",
+            "description": (
+                "List everything stored about the user. Use when they ask what "
+                "you know or remember about them."
+            ),
+            "inputSchema": {"json": {"type": "object", "properties": {}}},
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "forget_everything",
+            "description": (
+                "Permanently delete everything stored about the user. Only after "
+                "they clearly ask, and only after you have confirmed once."
+            ),
+            "inputSchema": {"json": {
+                "type": "object",
+                "properties": {"confirmed": {"type": "boolean"}},
+                "required": ["confirmed"],
+            }},
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "set_preference",
+            "description": "Change how the assistant behaves: voice replies on/off, language.",
+            "inputSchema": {"json": {
+                "type": "object",
+                "properties": {
+                    "voice_replies": {"type": "string", "enum": ["auto", "always", "never"]},
+                    "language": {"type": "string", "description": "hi | en | hi-en"},
+                },
+            }},
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "snooze_reminder",
+            "description": "Push a reminder later by N minutes when the user taps snooze.",
+            "inputSchema": {"json": {
+                "type": "object",
+                "properties": {"reminder_id": {"type": "integer"},
+                               "minutes": {"type": "integer"}},
+                "required": ["reminder_id", "minutes"],
+            }},
+        }
+    },
 ]
 
 TOOL_CONFIG = {"tools": TOOLS}
