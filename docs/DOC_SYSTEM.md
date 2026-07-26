@@ -52,6 +52,7 @@ a measurement disagree, the measurement wins and `DECISIONS.md` records it.
 | `LANDMINES.md` | Traps already paid for. Read before Meta / Cloudflare / audio work. |
 | `ENGINEERING_SUPERVISOR.md` | Append-only lane log. Evidence, not intentions. |
 | `../CHANGELOG.md` | What changed in the Python, and what broke finding out. |
+| [`foundations/README.md`](foundations/README.md) | Product/domain research underneath the PRD — user research, accessibility, clinical/safety grounding, competitive landscape, DPDP/WhatsApp regulatory detail, glossary. Checks the PRD's *research* claims against primary sources the way §0 checks its technical ones. |
 
 ## What must be updated when work lands
 
