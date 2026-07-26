@@ -16,8 +16,8 @@ export default function Terms() {
       </P>
       <OperatorBlock />
       <P>
-        These terms are governed by the laws of India, and the courts at Gwalior, Madhya
-        Pradesh have jurisdiction.
+        These terms are governed by the laws of India, and the courts at New Delhi have
+        jurisdiction.
       </P>
 
       <H2>What Saathi does</H2>
