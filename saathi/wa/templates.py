@@ -25,8 +25,12 @@ TEMPLATES: list[dict] = [
         "language": "en",
         "category": "UTILITY",
         "components": [
+            # Meta recategorised the earlier copy ("Namaste! {{1}} ka time ho gaya
+            # hai") as MARKETING at 7.5x the price. UTILITY requires the message
+            # to visibly follow from something the user themselves requested, so
+            # the body now points at their own prior action.
             {"type": "BODY",
-             "text": "Namaste! {{1}} ka time ho gaya hai.",
+             "text": "Aapne jo reminder set kiya tha \u2014 {{1}} ka time ho gaya hai.",
              "example": {"body_text": [["Amlodipine ki goli lene"]]}},
             {"type": "BUTTONS", "buttons": [
                 {"type": "QUICK_REPLY", "text": "Ho gaya"},
@@ -41,7 +45,7 @@ TEMPLATES: list[dict] = [
         "category": "UTILITY",
         "components": [
             {"type": "BODY",
-             "text": "Namaste! Kya aapne {{1}} kar liya?",
+             "text": "Aapke reminder ke baare mein: kya aapne {{1}} kar liya?",
              "example": {"body_text": [["Amlodipine ki goli lena"]]}},
             {"type": "BUTTONS", "buttons": [
                 {"type": "QUICK_REPLY", "text": "Ho gaya"},
