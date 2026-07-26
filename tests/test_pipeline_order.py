@@ -67,7 +67,9 @@ async def test_emergency_never_reaches_the_model(spy, monkeypatch):
     out = await pipeline.handle_message(
         conn, {"id": "w1", "from": "91", "type": "text",
                "text": {"body": "mujhe seene mein dard ho raha hai"}})
-    assert out == {"handled": "safety", "trigger": "medical_emergency"}
+    # the chain reports which handler claimed it, which is the point of the refactor
+    assert out["handled"] == "safety" and out["trigger"] == "medical_emergency"
+    assert out["handler"] == "safety"
     assert "112" in spy[0]
     assert any("safety_events" in s for s in conn.sql)
 
@@ -79,7 +81,7 @@ async def test_duplicate_webhook_is_a_noop(spy, monkeypatch):
     conn = FakeConn(seen_message=True)
     out = await pipeline.handle_message(
         conn, {"id": "dup", "from": "91", "type": "text", "text": {"body": "hi"}})
-    assert out == {"skipped": "duplicate"}
+    assert out["skipped"] == "duplicate"
     assert spy == []
 
 
@@ -116,7 +118,9 @@ async def test_empty_text_does_not_call_the_model(spy, monkeypatch):
     conn = FakeConn()
     out = await pipeline.handle_message(
         conn, {"id": "w4", "from": "91", "type": "text", "text": {"body": "   "}})
-    assert out == {"skipped": "empty"}
+    # No handler claims empty text, so it falls off the end of the chain — the
+    # old code needed an explicit branch for this.
+    assert out["handled"] == "nothing"
 
 
 async def test_unknown_handle_gets_no_agent_turn(spy, monkeypatch):
@@ -139,7 +143,7 @@ async def test_unknown_handle_gets_no_agent_turn(spy, monkeypatch):
     out = await pipeline.handle_message(
         FakeConn(), {"id": "u1", "from": "919999999999", "type": "text",
                      "text": {"body": "hello?"}})
-    assert out == {"skipped": "not_admitted"}
+    assert out["skipped"] == "not_admitted"
     assert len(spy) == 1 and "code" in spy[0].lower()
 
 
@@ -156,5 +160,5 @@ async def test_unknown_handle_goes_quiet_after_the_reply_cap(spy, monkeypatch):
     out = await pipeline.handle_message(
         FakeConn(), {"id": "u2", "from": "919999999999", "type": "text",
                      "text": {"body": "hello again"}})
-    assert out == {"skipped": "not_admitted"}
+    assert out["skipped"] == "not_admitted"
     assert spy == []          # silence, not an argument
