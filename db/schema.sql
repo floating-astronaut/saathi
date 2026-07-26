@@ -14,7 +14,8 @@
 
 begin;
 
-create extension if not exists pg_trgm;      -- fuzzy match for entity correction (§10)
+-- Extensions live in db/extensions.sql (superuser). pg_trgm powers the fuzzy
+-- match used by the §10 entity-correction pass.
 
 -- ---------------------------------------------------------------- users
 
