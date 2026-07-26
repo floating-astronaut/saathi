@@ -91,6 +91,25 @@ async def checkin(conn, *, turn_id, user_id, payload, scheduled_for):
     await _handle(conn, user_id, CHECKIN_TEMPLATE, [str(n[0] if n else 0)])
 
 
+# --- media retention ---------------------------------------------------------
+
+async def media_purge(conn, *, turn_id, user_id, payload, scheduled_for):
+    """Tidy media_blobs rows for objects S3 has already expired.
+
+    S3 owns the deletion; this only stops the table growing without bound. It
+    reschedules itself, which is the pattern any recurring maintenance should
+    use now that the queue is general.
+    """
+    from .. import media_store
+    n = await media_store.purge_expired(conn)
+    from datetime import datetime, timedelta, timezone
+    await scheduling.enqueue(conn, user_id, "media_purge",
+                             datetime.now(timezone.utc) + timedelta(hours=6),
+                             dedupe_key=f"purge:{datetime.now(timezone.utc):%Y%m%d%H}")
+    log.info("media purge tidied %s rows", n)
+
+
+scheduling.register("media_purge", media_purge)
 scheduling.register("reminder", reminder)
 scheduling.register("nudge", nudge)
 scheduling.register("checkin", checkin)

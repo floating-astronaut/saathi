@@ -72,9 +72,17 @@ async def erase(conn, user_id: int, hard: bool = False) -> dict:
         "insert into erasure_requests (user_id, state) values (%s, 'running')", (user_id,)
     )
     if hard:
-        # messages/facts/media cascade from users; keep the audit row only.
-        counts = {}
-        for table in ("facts", "messages", "media_blobs", "reminder_fires", "reminders"):
+        # Objects in S3 do not cascade from a foreign key — delete them first,
+        # because erasure cannot wait seven days for a lifecycle rule.
+        try:
+            from . import media_store
+            counts_audio = await media_store.erase_for_user(conn, user_id)
+        except Exception:  # noqa: BLE001 - never block an erasure request
+            log.exception("audio erasure failed for user %s", user_id)
+            counts_audio = -1
+        counts = {"audio_objects": counts_audio}
+        for table in ("facts", "messages", "media_blobs", "reminder_fires",
+                      "reminders", "scheduled_turns", "training_samples"):
             cur = await conn.execute(f"delete from {table} where user_id = %s", (user_id,))
             counts[table] = cur.rowcount
     else:

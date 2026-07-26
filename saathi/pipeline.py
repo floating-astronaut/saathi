@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 
 from . import (commands, conversation, documents, identity, memory,
-               onboarding, provenance, training, vision)
+               media_store, onboarding, provenance, training, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -85,13 +85,17 @@ async def handle_ack(conn, user_id: int, button_id: str) -> str | None:
 
 
 async def transcribe_voice(conn, user_id: int, media_id: str,
-                           channel: str = "whatsapp") -> stt_mod.Transcript:
+                           channel: str = "whatsapp",
+                           wa_message_id: str | None = None) -> stt_mod.Transcript:
     """Voice note -> corrected transcript, biased by what we know about the user.
 
     Media URLs expire in minutes (§9), so the fetch happens immediately and is
     not deferred behind anything slower.
     """
     ogg = await registry.get(channel).fetch_media(media_id)
+    # Keep the original OGG, not the transcode — debugging a mis-hearing needs
+    # what the user actually sent.
+    await media_store.put_voice(conn, user_id, ogg, wa_message_id=wa_message_id)
     wav = await ogg_to_wav16k(ogg)
     entities = await memory.surface_forms(conn, user_id)
     return await stt_mod.transcribe(wav, entities=entities)
@@ -310,7 +314,8 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     # typed it or spoke it.
     if kind == "audio":
         media_id = (msg.get("audio") or {}).get("id")
-        ctx.transcript = await transcribe_voice(conn, who.user_id, media_id, channel)
+        ctx.transcript = await transcribe_voice(conn, who.user_id, media_id, channel,
+                                               wa_message_id=wa_mid)
         ctx.text = ctx.transcript.text
         if ctx.transcript.corrections:
             await _contribute_corrections(conn, who.user_id, ctx.transcript)

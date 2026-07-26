@@ -96,16 +96,6 @@ against reality.
 transcribed, deliberately including the messy ones. Build it before trusting any
 accuracy claim.
 
-### PR-10 · Privacy policy overstates voice retention
-The policy says voice recordings are deleted after 7 days. In fact **audio is
-never persisted at all** — it is fetched, transcoded in memory, transcribed and
-discarded; `media_blobs` exists but nothing writes to it. Reality is stricter
-than the promise, which is the safe direction, but the statement is still
-inaccurate.
-**Fix:** either say plainly that recordings are never stored, or implement the
-7-day debug retention §13 envisaged. Do not leave the policy describing
-something that does not happen.
-
 ### PR-11 · Template names burned
 `reminder_fire` and `reminder_nudge` were deleted to fix their category. Meta
 holds a deleted name for up to four weeks. Live templates are `_v2`.
@@ -135,12 +125,6 @@ Admission control stops unknown handles cheaply, but an *onboarded* user can
 send unlimited voice notes, each costing STT minutes and a model turn. §14 caps
 free-tier STT minutes; nothing enforces it.
 
-### PR-16 · Scheduler is reminder-shaped
-`saathi-worker` knows about reminders specifically. Nudges, daily check-ins and
-dormancy re-verification are all specced and would each add a branch.
-**Fix:** generalise to scheduled *turns* before the second kind exists — see
-`STUDY_OPENCLAW.md`.
-
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during
 internal testing and will look broken to anyone who does not know why.
@@ -160,3 +144,12 @@ changes, nothing forces a re-consent or notices the drift.
 | Anyone messaging us got a free model turn | 2026-07-26 — onboarding is deterministic and model-free, so an open door costs templated replies and nothing else. |
 | Forwarded messages could drive tool calls | 2026-07-26 — `provenance.py`; state-mutating tools withheld on relayed content. |
 | Secrets could leak into logs | 2026-07-26 — `net_policy.RedactingFilter` on the root logger in both entrypoints. |
+| Privacy policy claimed 7-day voice retention that did not exist | 2026-07-26 — retention now real and the promise is kept by an **S3 lifecycle rule**, not by our code: if every worker died, voice notes would still expire on day 7. Kept deliberately because India is not one language and a transcript alone cannot tell you whether the model mis-heard or the speaker used a regional form. Erasure deletes objects immediately rather than waiting for the rule. |
+| Scheduler was reminder-shaped (was PR-16) | 2026-07-26 — `scheduled_turns` is a general queue; kinds register. Worker reports `['checkin', 'media_purge', 'nudge', 'reminder']` and a test asserts it names none of them. |
+
+### PR-19 · Audio retention has no consent toggle
+Voice notes are now stored for 7 days for debugging, which onboarding consent
+and the privacy policy both cover. But there is no per-user opt-out short of
+declining the service, and no way to say "keep my transcripts, not my voice".
+**Fix:** a preference, once there is evidence anyone wants it. Recorded so the
+absence is deliberate rather than forgotten.
