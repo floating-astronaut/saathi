@@ -59,6 +59,7 @@ Read, in this order — every session, not once:
 | infrastructure | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) |
 | anything in the Python | [`CHANGELOG.md`](CHANGELOG.md) — symptom first |
 | a trap that cost you time | [`docs/LANDMINES.md`](docs/LANDMINES.md) |
+| a shortcut you took "because this is dev" | [`docs/PROD_READINESS.md`](docs/PROD_READINESS.md) |
 | a lane closing | [`docs/ENGINEERING_SUPERVISOR.md`](docs/ENGINEERING_SUPERVISOR.md), with evidence |
 
 ## Adding a capability
