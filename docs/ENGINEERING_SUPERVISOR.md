@@ -92,3 +92,60 @@ reachable on the public internet and 82 tests passing.
 - Managed Postgres before external users — no backups today.
 - TTS, onboarding + consent, real eval corpus of elder voice notes.
 - Rotate the credentials exposed above.
+
+---
+
+## 2026-07-26 — Lane SAATHI-1: channel live end to end
+
+### Closed
+
+- **Public site.** `https://n8nworld.store` — landing plus `/privacy/`,
+  `/terms/`, `/data-deletion/`, the three URLs Meta app review checks. Next.js
+  static export on Cloudflare Pages (`saathi-site`), source on the **`site`
+  branch** so application pushes never trigger a site build. Deployed by direct
+  upload.
+- **Operating entity named**: Indofolk Wellness Private Limited, Greater Kailash
+  I, New Delhi, GSTIN `07AAHCI7432A1ZV` — matching the business verified in Meta
+  BM. An earlier draft named a different entity (a proprietorship); its GSTIN was
+  dropped rather than carried over, since reusing another legal person's tax ID
+  would have been false.
+- **Domain verified with Meta** — TXT added at the apex without disturbing the
+  existing SPF or google-site-verification records.
+- **Webhook registered.** App `1571039744742551` subscribed to
+  `whatsapp_business_account` → `https://saathi.n8nworld.store/webhook/whatsapp`,
+  fields `messages, message_template_status_update, account_update`, active.
+  WABA `1023945910495878` subscribed to the app.
+- **All four templates APPROVED as UTILITY** — including `reminder_fire_v2` and
+  `reminder_nudge_v2`, which had first come back MARKETING at 7.5× the price.
+  The rewrite (anchoring the body to the user's own prior action) held through
+  review. This settles the ~₹20 vs ~₹90/user/month question in our favour.
+
+### Evidence
+
+- `GET /{app}/subscriptions` → object `whatsapp_business_account`, our callback,
+  `active: true`.
+- Meta called our verify endpoint synchronously during registration and it
+  passed — which exercises the tunnel, the Browser-Integrity-Check rule and the
+  verify token in one shot.
+- Signed webhook POST → 200; tampered, wrong and absent signature → 403.
+
+### 🚩 Open risk found while verifying
+
+`GET /{waba}/subscribed_apps` returns **two** apps:
+
+    MeshPilot        1571039744742551   (ours)
+    Business Agent   1143680903703001   (Meta's)
+
+Meta's Business Agent app is subscribed to our WABA's webhooks. Its
+`rollout.enabled` is `false`, so it should not be responding — but a subscribed
+app plus one toggle is all that stands between us and Meta's model becoming the
+primary responder, which would bypass the deterministic §12 safety classifier
+(R7). Recommend unsubscribing it. Not done unilaterally: it was not created by
+this lane. See `LANDMINES.md`.
+
+### Queued
+
+- Unsubscribe the Business Agent app from the WABA (operator decision).
+- Replace the landing page's template waitlist copy with real product copy.
+- Managed Postgres before external users — still no backups.
+- TTS, onboarding + consent flow, real eval corpus.

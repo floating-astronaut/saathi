@@ -81,6 +81,12 @@ of this product.
 We *are* eligible (`is_eligible: true`). It is simply the wrong architecture
 here. It is a strong fit for MeshPilot's ecommerce brands.
 
+**Worse than it first looked:** `GET /{waba}/subscribed_apps` shows the Business
+Agent app (`1143680903703001`) is *already subscribed to our WABA's webhooks*,
+alongside ours. Only `rollout.enabled = false` keeps it quiet. A subscribed app
+plus one toggle is all that separates us from Meta's model answering first.
+Check this list after any Business Manager change.
+
 ---
 
 ## Cloudflare: Browser Integrity Check 1010-blocks webhooks, and fakes a passing security test
