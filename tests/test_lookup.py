@@ -12,12 +12,12 @@ def test_providers_register_and_declare_availability():
 
 
 def test_missing_key_is_a_config_fact_not_a_crash(monkeypatch):
-    monkeypatch.setattr(web.settings, "saathi_search_api_key", "")
+    monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "")
     assert base.get("web").available() is False
 
 
 def test_key_present_makes_web_available(monkeypatch):
-    monkeypatch.setattr(web.settings, "saathi_search_api_key", "k")
+    monkeypatch.setattr(web.settings, "saathi_gemini_api_key", "k")
     assert base.get("web").available() is True
 
 
