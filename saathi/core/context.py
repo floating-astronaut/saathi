@@ -28,11 +28,19 @@ class MessageContext:
     transcript: Any = None
     conversation_id: int | None = None
     message_id: int | None = None
+    #: Did the user author this, or is it forwarded/lifted from media?
+    provenance: str = "typed"
     meta: dict = field(default_factory=dict)
 
     @property
     def button_id(self) -> str:
         return ((self.msg.get("interactive") or {}).get("button_reply") or {}).get("id", "")
+
+    @property
+    def trusted(self) -> bool:
+        """False for forwarded or media-extracted text — content, not command."""
+        from ..provenance import Provenance
+        return Provenance(self.provenance).is_trusted
 
     @property
     def is_onboarded(self) -> bool:

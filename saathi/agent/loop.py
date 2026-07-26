@@ -58,6 +58,7 @@ async def run(
     handle_tool: ToolHandler,
     history: list[dict] | None = None,
     user_name: str | None = None,
+    allowed_tools: set[str] | None = None,
 ) -> Turn:
     """Run one user turn to completion, executing tools as the model calls them.
 
@@ -69,6 +70,12 @@ async def run(
 
     prefix: Prefix = build_prefix(facts, tool_tokens(),
                                   settings.saathi_prefix_token_budget, user_name)
+    # Withholding beats filtering: a filter must recognise every phrasing of an
+    # attack, while an absent tool does not care what the text says.
+    tool_config = TOOL_CONFIG
+    if allowed_tools is not None:
+        tool_config = {"tools": [t for t in TOOLS
+                                 if t["toolSpec"]["name"] in allowed_tools]}
     messages: list[dict] = list(history or [])
     messages.append({"role": "user", "content": [{"text": user_text}]})
 
@@ -81,7 +88,7 @@ async def run(
             modelId=settings.saathi_model_id,
             system=[{"text": prefix.system}],
             messages=messages,
-            toolConfig=TOOL_CONFIG,
+            toolConfig=tool_config,
             inferenceConfig={"maxTokens": 700, "temperature": 0.2},
         )
         usage = resp.get("usage", {})

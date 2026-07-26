@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import logging
 
-from . import commands, conversation, documents, identity, memory, onboarding, vision
+from . import (commands, conversation, documents, identity, memory, onboarding,
+               provenance as prov, vision)
 from .agent import loop as agent_loop
 from .agent.tools.handlers import Handlers
 from .core.context import MessageContext
@@ -121,9 +122,13 @@ register(simple("media", 30, lambda c: c.kind in ("image", "document"), _media))
 async def _agent(ctx: MessageContext) -> dict:
     facts = await memory.load_facts(ctx.conn, ctx.user_id)
     prior = await conversation.history(ctx.conn, ctx.user_id)
+    p = prov.Provenance(ctx.provenance)
+    names = {t["toolSpec"]["name"] for t in __import__(
+        "saathi.agent.tools.specs", fromlist=["TOOLS"]).TOOLS}
     turn = await agent_loop.run(
-        ctx.text, facts, Handlers(ctx.conn, ctx.user_id, ctx.tz).handle,
-        history=prior, user_name=ctx.display_name)
+        prov.fence(ctx.text, p), facts, Handlers(ctx.conn, ctx.user_id, ctx.tz).handle,
+        history=prior, user_name=ctx.display_name,
+        allowed_tools=prov.allowed_tools(names, p))
     if ctx.conversation_id:
         await conversation.touch(ctx.conn, ctx.conversation_id)
     await agent_loop.record(ctx.conn, turn, ctx.user_id, ctx.message_id,
@@ -133,7 +138,7 @@ async def _agent(ctx: MessageContext) -> dict:
     await ctx.reply(reply)
     ctx.meta["reply"] = reply
     return {"handled": "agent", "tools": [n for n, _ in turn.tool_calls],
-            "prefix_tokens": turn.prefix_tokens}
+            "prefix_tokens": turn.prefix_tokens, "provenance": ctx.provenance}
 
 
 register(simple("agent", 90, lambda c: bool(c.text.strip()), _agent))

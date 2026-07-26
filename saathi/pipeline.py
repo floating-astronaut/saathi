@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 
 from . import (commands, conversation, documents, identity, memory,
-               onboarding, training, vision)
+               onboarding, provenance, training, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -303,6 +303,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         voice_pref=who.voice_reply_pref,
         onboarding=await _onboarding_state(conn, who.user_id),
         wa_message_id=wa_mid, kind=kind, conversation_id=convo_id,
+        provenance=provenance.detect(msg, kind).value,
     )
 
     # Resolve text once, so every handler sees the same thing whether the user
