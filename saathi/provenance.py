@@ -36,6 +36,10 @@ from enum import Enum
 #: message is the whole point of the feature.
 READ_ONLY_TOOLS = frozenset({
     "list_reminders", "what_you_know", "build_cart",
+    # Deliberately allowed on relayed content: "is this message true?" is a
+    # lookup about a forward, and refusing it would remove the answer an elder
+    # most needs when a scam arrives.
+    "look_up",
 })
 
 #: Tools that change stored state. Withheld when the turn is driven by text the

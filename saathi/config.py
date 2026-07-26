@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     #: rule, not by our code. Empty disables storage entirely.
     saathi_audio_bucket: str = ""
 
+    #: General web search. Empty means the provider reports itself unavailable
+    #: and the agent does not offer it — better than a tool that silently
+    #: returns nothing, which looks like a bug rather than a config fact.
+    saathi_search_api_key: str = ""
+
     # Admission control (pattern from OpenClaw's dmPolicy). "pairing" means an
     # unknown handle must redeem a code before the agent will talk to it; "open"
     # lets anyone in. Default is pairing: an unknown sender otherwise gets free
