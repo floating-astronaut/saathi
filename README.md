@@ -183,6 +183,7 @@ in what order, before writing code.
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Hard-to-reverse choices, with reasons and dates. |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Deploy, verify, recover. Infrastructure IDs. |
 | [`docs/LANDMINES.md`](docs/LANDMINES.md) | **Read before touching Meta, Cloudflare or audio.** |
+| [`docs/PROD_READINESS.md`](docs/PROD_READINESS.md) | What is knowingly unfinished, and what breaks in production if it stays that way. |
 | [`docs/STUDY_OPENCLAW.md`](docs/STUDY_OPENCLAW.md) | What we took from OpenClaw, and what we deliberately did not. |
 | [`docs/ENGINEERING_SUPERVISOR.md`](docs/ENGINEERING_SUPERVISOR.md) | Append-only lane log. Evidence, not intentions. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Code changes — and what broke finding them out. |

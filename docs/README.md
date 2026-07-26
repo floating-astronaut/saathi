@@ -13,5 +13,6 @@ order before writing code.
 | [`RUNBOOK.md`](RUNBOOK.md) | Deploy, verify, recover. Infrastructure IDs. |
 | [`LANDMINES.md`](LANDMINES.md) | Traps already paid for. Read before Meta / Cloudflare / audio work. |
 | [`ENGINEERING_SUPERVISOR.md`](ENGINEERING_SUPERVISOR.md) | Append-only lane log. Evidence, not intentions. |
+| [`PROD_READINESS.md`](PROD_READINESS.md) | Dev shortcuts to fix before production. Add a row when you take one. |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | Code changes, and what broke finding them out. |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Branch rules, commit rules, how to add a capability. |
