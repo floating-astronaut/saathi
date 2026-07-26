@@ -28,6 +28,16 @@ site  ──▶  the public site  ──▶  Cloudflare Pages → n8nworld.store
 3. Preview builds are allowed for `site-*` branches. Use them to review copy
    before it is public.
 
+## Deploying
+
+```bash
+ops/deploy.sh
+```
+
+Never hand-roll the tar/S3/SSM sequence — that is how a migration step gets
+skipped at the wrong moment. The script refuses a dirty tree or a non-`main`
+branch on purpose.
+
 ## Every commit
 
 - Authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>`
