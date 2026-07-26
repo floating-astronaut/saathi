@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+*.ogg
+*.wav
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
