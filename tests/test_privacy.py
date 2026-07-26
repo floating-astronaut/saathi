@@ -120,3 +120,47 @@ async def test_export_reads_the_kanonymised_view_not_the_raw_table():
     await training.export(C())
     assert "training_export" in seen["q"]
     assert "training_samples" not in seen["q"]
+
+
+# --- narrow redaction before storage ----------------------------------------
+
+@pytest.mark.parametrize("raw,gone", [
+    ("mera aadhaar 4321 8765 1234 hai", "4321 8765 1234"),
+    ("PAN ABCDE1234F likha hai", "ABCDE1234F"),
+    ("card number 4111 1111 1111 1111", "4111 1111 1111 1111"),
+    ("otp 483920 aaya hai", "483920"),
+    ("483920 is your OTP", "483920"),
+    ("mera pin 4471 hai", "4471"),
+])
+def test_credentials_are_stripped_before_storage(raw, gone):
+    assert gone not in privacy.redact_for_storage(raw)
+
+
+@pytest.mark.parametrize("keep", [
+    "mere doctor Dr Mehta hain Apollo Nagpur mein",
+    "roz subah aath baje Amlodipine 5mg leni hai",
+    "meri beti Priya ka number 9876543210 hai",
+    "raat ko paune gyarah baje",
+    "priya@example.com par mail bhej dena",
+    "ghar ka pata S-258 Greater Kailash hai",
+])
+def test_the_things_that_are_the_product_survive(keep):
+    """Aggressive redaction would break reminders and recall. Names, medicines,
+    times, phone numbers, emails and places must all come through intact."""
+    assert privacy.redact_for_storage(keep) == keep
+
+
+def test_phone_numbers_are_not_mistaken_for_cards():
+    """Luhn is what keeps this narrow: an Indian mobile is 10 digits and almost
+    never passes, so 'call my daughter' keeps working."""
+    s = "9876543210 par call karna hai"
+    assert privacy.redact_for_storage(s) == s
+
+
+def test_a_real_card_number_does_not_survive():
+    assert "4111111111111111" not in privacy.redact_for_storage("card 4111111111111111")
+
+
+def test_empty_and_none_safe():
+    assert privacy.redact_for_storage("") == ""
+    assert privacy.redact_for_storage(None) is None
