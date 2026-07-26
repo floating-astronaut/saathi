@@ -21,29 +21,17 @@ from __future__ import annotations
 
 import logging
 
-from . import memory
+from . import conversation, identity, memory
+from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
 from .safety.classifier import classify
 from .speech import stt as stt_mod
 from .speech.audio import ogg_to_wav16k
-from .wa import client as wa
+from .channels import registry
 from .wa import window
-from .wa.format import to_whatsapp_text
 
 log = logging.getLogger("saathi.pipeline")
-
-
-async def upsert_user(conn, wa_id: str, name: str | None) -> tuple[int, str, str, str | None]:
-    """Return (user_id, tz, voice_reply_pref, display_name); creates on first contact."""
-    row = await (await conn.execute(
-        """insert into users (wa_id, display_name) values (%s, %s)
-           on conflict (wa_id) do update
-              set display_name = coalesce(excluded.display_name, users.display_name)
-           returning id, tz, voice_reply_pref, display_name""",
-        (wa_id, name),
-    )).fetchone()
-    return row[0], row[1], row[2], row[3]
 
 
 async def already_seen(conn, wa_message_id: str | None) -> bool:
@@ -95,31 +83,56 @@ async def handle_ack(conn, user_id: int, button_id: str) -> str | None:
     return None
 
 
-async def transcribe_voice(conn, user_id: int, media_id: str) -> stt_mod.Transcript:
+async def transcribe_voice(conn, user_id: int, media_id: str,
+                           channel: str = "whatsapp") -> stt_mod.Transcript:
     """Voice note -> corrected transcript, biased by what we know about the user.
 
     Media URLs expire in minutes (§9), so the fetch happens immediately and is
     not deferred behind anything slower.
     """
-    ogg = await wa.fetch_media(media_id)
+    ogg = await registry.get(channel).fetch_media(media_id)
     wav = await ogg_to_wav16k(ogg)
     entities = await memory.surface_forms(conn, user_id)
     return await stt_mod.transcribe(wav, entities=entities)
 
 
-async def handle_message(conn, msg: dict, contact_name: str | None = None) -> dict:
-    """Process one inbound message. Returns a small dict for logging/tests."""
-    wa_id = msg.get("from")
+async def handle_message(conn, msg: dict, contact_name: str | None = None,
+                         channel: str = "whatsapp") -> dict:
+    """Process one inbound message on any channel.
+
+    Channel-agnostic by construction: the only channel-specific things reached
+    from here are the transport (how to send) and the session window (whether a
+    free-form send is currently legal). Everything else — identity, safety,
+    memory, the agent — is shared, which is what lets Telegram be additive.
+    """
+    transport = registry.get(channel)
+    handle = msg.get("from")
     wa_mid = msg.get("id")
     kind = msg.get("type", "text")
 
-    user_id, tz, voice_pref, display_name = await upsert_user(conn, wa_id, contact_name)
+    who = await identity.resolve(conn, channel, handle, contact_name,
+                                 dm_policy=settings.saathi_dm_policy)
+    user_id, tz, voice_pref = who.user_id, who.tz, who.voice_reply_pref
+    display_name = who.display_name
 
     if await already_seen(conn, wa_mid):
         log.info("duplicate webhook for %s, ignoring", wa_mid)
         return {"skipped": "duplicate"}
 
-    await window.touch(conn, user_id)
+    # --- ADMISSION: an unknown handle gets no agent turn (OpenClaw dmPolicy) --
+    # Placed before dedupe, STT and the model, because the whole point is that an
+    # unadmitted sender costs us nothing but one rate-limited reply.
+    if who.status == "pending":
+        if await identity.should_explain(conn, who.user_channel_id,
+                                         settings.saathi_admission_max_replies):
+            await transport.send_text(conn, who.user_id, handle, identity.ADMISSION_REPLY)
+        log.info("unadmitted handle %s/%s — not processed", channel, handle)
+        return {"skipped": "not_admitted"}
+
+    # The session window is a WhatsApp concept; channels without one skip it.
+    if transport.capabilities.has_session_window:
+        await window.touch(conn, user_id)
+    convo_id = await conversation.current(conn, user_id, channel)
 
     # --- interactive button: deterministic, never reaches the model ---------
     if kind == "interactive":
@@ -127,7 +140,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None) -> di
         reply = await handle_ack(conn, user_id, btn)
         await log_message(conn, user_id, "in", "interactive", wa_message_id=wa_mid, body=btn)
         if reply:
-            await wa.send_text(conn, user_id, wa_id, reply)
+            await transport.send_text(conn, user_id, handle, reply)
             await log_message(conn, user_id, "out", "text", body=reply)
             return {"handled": "ack", "button": btn}
 
@@ -135,7 +148,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None) -> di
     transcript = None
     if kind == "audio":
         media_id = (msg.get("audio") or {}).get("id")
-        transcript = await transcribe_voice(conn, user_id, media_id)
+        transcript = await transcribe_voice(conn, user_id, media_id, channel)
         text = transcript.text
         voice_in = True
     else:
@@ -155,7 +168,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None) -> di
             """insert into safety_events (user_id, message_id, trigger, matched, action)
                values (%s,%s,%s,%s,'blocked_llm')""",
             (user_id, msg_id or None, verdict.trigger.value, verdict.matched))
-        await wa.send_text(conn, user_id, wa_id, verdict.reply)
+        await transport.send_text(conn, user_id, handle, verdict.reply)
         await log_message(conn, user_id, "out", "text", body=verdict.reply)
         log.warning("safety trigger %s for user %s", verdict.trigger.value, user_id)
         return {"handled": "safety", "trigger": verdict.trigger.value}
@@ -165,17 +178,19 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None) -> di
 
     # --- agent -------------------------------------------------------------
     facts = await memory.load_facts(conn, user_id)
+    prior = await conversation.history(conn, user_id)
     turn = await loop.run(text, facts, Handlers(conn, user_id, tz).handle,
-                          user_name=display_name)
+                          history=prior, user_name=display_name)
+    await conversation.touch(conn, convo_id)
     # R6: is this a task or just conversation? Instrument from day one.
     await loop.record(conn, turn, user_id, msg_id or None,
                       turn_kind="task" if turn.tool_calls else "chat")
 
-    reply = to_whatsapp_text(turn.text) or "Maaf kijiye, main samajh nahi payi. Phir se boliye?"
-    await wa.send_text(conn, user_id, wa_id, reply)
+    reply = transport.format_text(turn.text) or "Maaf kijiye, main samajh nahi payi. Phir se boliye?"
+    await transport.send_text(conn, user_id, handle, reply)
     await log_message(conn, user_id, "out", "text", body=reply)
 
-    return {"handled": "agent", "voice_in": voice_in,
+    return {"handled": "agent", "channel": channel, "voice_in": voice_in,
             "tools": [n for n, _ in turn.tool_calls],
             "reply": reply, "prefix_tokens": turn.prefix_tokens}
 

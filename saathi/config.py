@@ -26,5 +26,14 @@ class Settings(BaseSettings):
 
     sarvam_api_key: str = ""
 
+    # Admission control (pattern from OpenClaw's dmPolicy). "pairing" means an
+    # unknown handle must redeem a code before the agent will talk to it; "open"
+    # lets anyone in. Default is pairing: an unknown sender otherwise gets free
+    # LLM turns and STT minutes on our bill, and this is an eldercare agent.
+    saathi_dm_policy: str = "pairing"
+    #: How many times we will explain the pairing requirement to one unknown
+    #: handle before going silent. Each reply costs money.
+    saathi_admission_max_replies: int = 2
+
 
 settings = Settings()
