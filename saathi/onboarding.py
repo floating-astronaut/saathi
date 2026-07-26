@@ -38,14 +38,15 @@ CONSENT_VERSION = "2026-07-26.v1"
 
 WELCOME = (
     "Namaste! 🙏 Main *Saathi* hoon.\n\n"
-    "Main aapki yaad rakhne mein madad karti hoon — dawa ka time, doctor ka "
-    "appointment, saamaan ki list. Aap mujhse Hindi ya English mein, likh kar "
-    "ya bol kar baat kar sakte hain.\n\n"
+    "Main aapke saath hoon — baat karne ke liye bhi, aur yaad rakhne ke liye bhi. "
+    "Dawa ka time, doctor ka appointment, saamaan ki list. Aap mujhse Hindi ya "
+    "English mein, likh kar ya bol kar baat kar sakte hain.\n\n"
     "Main kabhi paisa nahi maangti, kabhi OTP nahi maangti, aur kabhi aapke "
     "account mein kuch nahi karti.\n\n"
-    "*I'm Saathi.* I help you remember things — medicines, appointments, lists. "
-    "Talk to me in Hindi or English, by typing or voice note. I never ask for "
-    "money or OTPs, and never touch your accounts.\n\n"
+    "*I'm Saathi.* I'm here for company as much as for reminders — medicines, "
+    "appointments, lists, or just a chat. Talk to me in Hindi or English, by "
+    "typing or voice note. I never ask for money or OTPs, and never touch your "
+    "accounts.\n\n"
     "Shuru karein? / Shall we start?"
 )
 
