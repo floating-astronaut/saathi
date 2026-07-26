@@ -57,6 +57,7 @@ async def run(
     facts: list[tuple[str, str]],
     handle_tool: ToolHandler,
     history: list[dict] | None = None,
+    user_name: str | None = None,
 ) -> Turn:
     """Run one user turn to completion, executing tools as the model calls them.
 
@@ -66,7 +67,8 @@ async def run(
     """
     assert_no_forbidden_tools()
 
-    prefix: Prefix = build_prefix(facts, tool_tokens(), settings.saathi_prefix_token_budget)
+    prefix: Prefix = build_prefix(facts, tool_tokens(),
+                                  settings.saathi_prefix_token_budget, user_name)
     messages: list[dict] = list(history or [])
     messages.append({"role": "user", "content": [{"text": user_text}]})
 
