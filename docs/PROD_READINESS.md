@@ -147,6 +147,24 @@ changes, nothing forces a re-consent or notices the drift.
 | Privacy policy claimed 7-day voice retention that did not exist | 2026-07-26 — retention now real and the promise is kept by an **S3 lifecycle rule**, not by our code: if every worker died, voice notes would still expire on day 7. Kept deliberately because India is not one language and a transcript alone cannot tell you whether the model mis-heard or the speaker used a regional form. Erasure deletes objects immediately rather than waiting for the rule. |
 | Scheduler was reminder-shaped (was PR-16) | 2026-07-26 — `scheduled_turns` is a general queue; kinds register. Worker reports `['checkin', 'media_purge', 'nudge', 'reminder']` and a test asserts it names none of them. |
 
+### PR-20 · Web search sends queries outside India
+Everything else in this system is India-resident: Postgres, audio, STT and both
+models are ap-south-1 regional. **Web search is not.** Gemini's Google Search
+grounding is the only real option — AWS sells no web index, Bedrock's Converse
+API accepts only tools we implement, and Kendra indexes our own documents — so a
+search query leaves the country.
+
+This matters more than it looks: "is this medicine safe with that one" is a
+health-adjacent query. Mitigated by sending **only the question** — no stored
+facts, no name, no history — but the query text itself still goes to Google.
+**Fix:** state it plainly in the privacy policy, and keep `look_up` narrow.
+
+### PR-21 · Gemini key is MeshPilot's
+`SAATHI_GEMINI_API_KEY` is copied from MeshPilot's `GEMINI_API_KEY` — the same
+credential coupling as the Meta app (D-J), and it means MeshPilot's quota and
+billing carry Saathi's search traffic.
+**Fix:** Saathi's own Google Cloud project and key.
+
 ### PR-19 · Audio retention has no consent toggle
 Voice notes are now stored for 7 days for debugging, which onboarding consent
 and the privacy policy both cover. But there is no per-user opt-out short of

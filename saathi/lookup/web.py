@@ -1,12 +1,25 @@
-"""General web search — the slot a paid provider fills.
+"""General web search, via Gemini's Google Search grounding.
 
-No key is configured today (`SERPAPI_API_KEY` exists but is empty), so this
-reports itself unavailable and the agent simply does not offer it. That is the
-honest behaviour: a provider that silently returns nothing looks like a bug,
-while one that declares itself unavailable is a configuration fact.
+AWS has no equivalent: Bedrock's Converse API accepts only tools we implement
+ourselves, and Kendra indexes your own documents rather than the web. The box
+has perfectly good internet — but internet access is not search. Fetching a URL
+you already know is easy; *discovering which URL holds the answer* needs a
+crawled index of the web, and only a handful of companies have one.
 
-Serper is the assumed shape because it is cheap and returns clean JSON. Swapping
-to Brave or SerpAPI is this file only.
+Google's is reachable through Gemini with the `google_search` tool: it returns a
+grounded answer plus the sources it used, which is a better shape for us than
+raw result links an elder would have to open.
+
+**Gemini is used only as a search backend, never as the voice.** The
+conversational model stays `zai.glm-5` — chosen on a measured Hinglish
+entity-accuracy bakeoff and regional to ap-south-1 (decision D-D). This provider
+returns retrieved text, which the agent then reports in its own words.
+
+⚠️ **Residency:** a search query leaves India and goes to Google, unlike
+everything else in this system. "Is this medicine safe with that one" is a
+health-adjacent query. That is an argument for keeping look_up narrow and for
+never sending the user's stored facts along with the question — this sends the
+query only.
 """
 from __future__ import annotations
 
@@ -20,42 +33,55 @@ from .base import Answer, register
 
 log = logging.getLogger("saathi.lookup.web")
 
-ENDPOINT = "https://google.serper.dev/search"
+ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+MODEL = "gemini-2.5-flash"
+
+# The query is sent alone. No stored facts, no name, no history — a search
+# backend has no business knowing who is asking.
+INSTRUCTION = (
+    "Answer this question for an older adult in India, factually and briefly, "
+    "in 2-3 short sentences of plain English. If the answer is uncertain or "
+    "sources disagree, say so. Do not give medical, legal or financial advice.\n\n"
+    "Question: "
+)
 
 
 class WebSearch:
     name = "web"
 
     def available(self) -> bool:
-        return bool(settings.saathi_search_api_key)
+        return bool(settings.saathi_gemini_api_key)
 
     async def lookup(self, query: str, **ctx) -> Answer | None:
-        if not self.available():
+        q = (query or "").strip()
+        if not q or not self.available():
             return None
-        net_policy.assert_safe_url(ENDPOINT)
-        async with httpx.AsyncClient(timeout=20) as http:
-            r = await http.post(
-                ENDPOINT,
-                headers={"X-API-KEY": settings.saathi_search_api_key,
-                         "Content-Type": "application/json"},
-                json={"q": query, "gl": "in", "hl": "en", "num": 4})
+        url = ENDPOINT.format(model=MODEL)
+        net_policy.assert_safe_url(url)
+        try:
+            async with httpx.AsyncClient(timeout=45) as http:
+                r = await http.post(
+                    url, params={"key": settings.saathi_gemini_api_key},
+                    json={"contents": [{"parts": [{"text": INSTRUCTION + q}]}],
+                          "tools": [{"google_search": {}}]})
             if r.status_code >= 400:
-                log.warning("search %s: %s", r.status_code, r.text[:200])
+                log.warning("gemini search %s: %s", r.status_code, r.text[:200])
                 return None
-            d = r.json()
-
-        # Prefer the answer box; fall back to the top organic results.
-        if d.get("answerBox", {}).get("answer"):
-            return Answer(text=d["answerBox"]["answer"], source="web search")
-        lines, first_url = [], None
-        for hit in (d.get("organic") or [])[:3]:
-            snippet = (hit.get("snippet") or "").strip()
-            if snippet:
-                lines.append(f"- {snippet}")
-                first_url = first_url or hit.get("link")
-        if not lines:
+            cand = r.json()["candidates"][0]
+        except Exception:  # noqa: BLE001 - a dead provider must not kill the turn
+            log.exception("gemini search failed")
             return None
-        return Answer(text="\n".join(lines), source="web search", url=first_url)
+
+        text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
+        if not text.strip():
+            return None
+        grounding = cand.get("groundingMetadata") or {}
+        sites = [(c.get("web") or {}).get("title", "")
+                 for c in (grounding.get("groundingChunks") or [])]
+        sites = [s for s in sites if s][:3]
+        return Answer(text=text.strip()[:1200],
+                      source=", ".join(sites) if sites else "Google Search",
+                      extra={"grounded_sources": len(sites)})
 
 
 register(WebSearch())
