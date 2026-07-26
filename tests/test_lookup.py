@@ -70,3 +70,18 @@ async def test_weather_without_a_city_returns_nothing_rather_than_guessing():
 
 async def test_wikipedia_empty_query_is_safe():
     assert await base.get("wikipedia").lookup("   ") is None
+
+
+def test_prompt_requires_lookup_for_factual_claims():
+    """A confident wrong answer about a medicine is worse than a slower right
+    one, so the model must not answer these from memory."""
+    from saathi.agent.prompt import SYSTEM
+    assert "look_up" in SYSTEM
+    assert "Do NOT answer these from memory" in SYSTEM
+    assert "medicine" in SYSTEM.lower()
+
+
+def test_prompt_still_allows_direct_answers_for_conversation():
+    """Requiring a lookup for chat would make a companion feel like a search box."""
+    from saathi.agent.prompt import SYSTEM
+    assert "chat, feelings" in SYSTEM
