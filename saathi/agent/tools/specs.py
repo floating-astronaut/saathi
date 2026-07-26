@@ -141,6 +141,26 @@ TOOLS: list[dict] = [
     },
     {
         "toolSpec": {
+            "name": "look_up",
+            "description": (
+                "Look something up in the world: today's weather, or a factual "
+                "question about a person, place or thing. Use when the answer "
+                "depends on current or external information you cannot know. "
+                "Does NOT browse arbitrary websites."
+            ),
+            "inputSchema": {"json": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "what to look up"},
+                    "kind": {"type": "string", "enum": ["weather", "fact", "web"],
+                             "description": "weather for forecasts, fact for who/what questions"},
+                },
+                "required": ["query", "kind"],
+            }},
+        }
+    },
+    {
+        "toolSpec": {
             "name": "snooze_reminder",
             "description": "Push a reminder later by N minutes when the user taps snooze.",
             "inputSchema": {"json": {

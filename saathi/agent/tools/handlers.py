@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from dateutil.rrule import rrulestr
 
 from ... import memory
+from ...lookup import base as lookup
 
 _DAYS = {"mon": "MO", "tue": "TU", "wed": "WE", "thu": "TH",
          "fri": "FR", "sat": "SA", "sun": "SU"}
@@ -187,3 +188,46 @@ class Handlers:
                   and state in ('sent', 'nudged', 'pending')""",
             (str(mins), a["reminder_id"], self.user_id))
         return {"snoozed_minutes": mins, "fires_updated": cur.rowcount}
+
+    # --- looking things up -------------------------------------------------
+
+    async def _look_up(self, a: dict) -> dict:
+        """Answer from the world, via a registered provider.
+
+        The provider's text comes back fenced: it is third-party content, and a
+        search result saying "ignore previous instructions" must be as inert as
+        a forwarded WhatsApp message.
+        """
+        from ...lookup import weather, wiki, web  # noqa: F401 - registers providers
+        kind = (a.get("kind") or "fact").lower()
+        query = (a.get("query") or "").strip()
+        order = {"weather": ["weather"],
+                 "fact": ["wikipedia", "web"],
+                 "web": ["web", "wikipedia"]}.get(kind, ["wikipedia", "web"])
+
+        city = None
+        if kind == "weather":
+            row = await (await self.conn.execute(
+                """select value from facts
+                    where user_id = %s and deleted_at is null
+                      and (kind = 'place' or key ilike '%%city%%' or key ilike '%%shehar%%')
+                    order by updated_at desc limit 1""", (self.user_id,))).fetchone()
+            city = row[0] if row else None
+            if not city and not query:
+                return {"need": "city",
+                        "say": "Aap kis shehar mein rehte hain? Bata dijiye, main yaad "
+                               "rakh lungi aur aage se mausam bata dungi."}
+
+        for name in order:
+            p = lookup.get(name)
+            if not p or not p.available():
+                continue
+            try:
+                ans = await p.lookup(query, city=city)
+            except Exception as exc:  # noqa: BLE001 - a dead provider must not kill the turn
+                continue
+            if ans:
+                return {"found": True, "provider": name, "content": ans.fenced(),
+                        "url": ans.url}
+        return {"found": False,
+                "say": "Yeh main abhi pata nahi kar payi. Kuch aur poochhna ho to bataiye."}
