@@ -30,7 +30,11 @@ class Settings(BaseSettings):
     # unknown handle must redeem a code before the agent will talk to it; "open"
     # lets anyone in. Default is pairing: an unknown sender otherwise gets free
     # LLM turns and STT minutes on our bill, and this is an eldercare agent.
-    saathi_dm_policy: str = "pairing"
+    # "open" now that onboarding exists and is deterministic: an unknown sender
+    # walks a scripted, model-free path, so anyone may start by messaging us
+    # without opening a cost vector. "pairing" remains available for a closed
+    # pilot.
+    saathi_dm_policy: str = "open"
     #: How many times we will explain the pairing requirement to one unknown
     #: handle before going silent. Each reply costs money.
     saathi_admission_max_replies: int = 2

@@ -34,6 +34,9 @@ class FakeConn:
             return FakeCursor((1,) if self.seen_message else None)
         if "from conversations" in low:
             return FakeCursor((7,))
+        # already onboarded — these tests exercise the steady state
+        if "select onboarding" in low:
+            return FakeCursor(("done",))
         if "returning id" in low:
             return FakeCursor((99,))
         return FakeCursor(None)
@@ -45,9 +48,12 @@ def spy(monkeypatch):
     channel abstraction, which is the point of the refactor."""
     sent = []
     async def fake_send_text(conn, uid, handle, text): sent.append(text); return "wamid.out"
+    async def fake_send_buttons(conn, uid, handle, body, buttons):
+        sent.append(body); return "wamid.out"
     async def fake_touch(conn, uid, at=None): conn.sql.append("WINDOW_TOUCH"); return None
     async def fake_history(conn, uid, limit=12): return []
     monkeypatch.setattr(registry.get("whatsapp"), "send_text", fake_send_text)
+    monkeypatch.setattr(registry.get("whatsapp"), "send_buttons", fake_send_buttons)
     monkeypatch.setattr(pipeline.window, "touch", fake_touch)
     monkeypatch.setattr(pipeline.conversation, "history", fake_history)
     return sent
@@ -114,6 +120,7 @@ async def test_empty_text_does_not_call_the_model(spy, monkeypatch):
 
 
 async def test_unknown_handle_gets_no_agent_turn(spy, monkeypatch):
+    monkeypatch.setattr(pipeline.settings, "saathi_dm_policy", "pairing")
     """Admission control: an unadmitted sender must cost one rate-limited reply
     and nothing else — no STT, no model, no tools."""
     async def boom(*a, **k):
@@ -137,6 +144,7 @@ async def test_unknown_handle_gets_no_agent_turn(spy, monkeypatch):
 
 
 async def test_unknown_handle_goes_quiet_after_the_reply_cap(spy, monkeypatch):
+    monkeypatch.setattr(pipeline.settings, "saathi_dm_policy", "pairing")
     async def pending(*a, **k):
         return pipeline.identity.Resolved(
             user_id=1, user_channel_id=5, display_name=None, tz="Asia/Kolkata",

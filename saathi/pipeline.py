@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from . import conversation, identity, memory, training
+from . import commands, conversation, identity, memory, onboarding, training
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -118,6 +118,69 @@ async def _contribute_corrections(conn, user_id: int, transcript) -> None:
             log.exception("training contribution failed")
 
 
+async def _onboarding_state(conn, user_id: int) -> str:
+    row = await (await conn.execute(
+        "select onboarding::text from users where id = %s", (user_id,))).fetchone()
+    return row[0] if row else "new"
+
+
+HELP_TEXT = (
+    "Main yeh kar sakti hoon:\n"
+    "• Reminder lagana — \"roz subah aath baje dawa\"\n"
+    "• Cheezein yaad rakhna — \"mere doctor Dr Sharma hain\"\n"
+    "• Sawaal ka jawab dena, message samjhana\n"
+    "• Saamaan ki list banana\n\n"
+    "Kabhi bhi keh sakte hain: \"mere baare mein kya jaante ho\", "
+    "\"sab kuch bhool jao\", ya \"band karo\"."
+)
+
+
+async def _run_command(conn, transport, user_id: int, handle: str, cmd) -> dict | None:
+    """Deterministic handling of unambiguous requests. No model, no cost."""
+    from .agent.tools.handlers import Handlers
+    C = commands.Command
+    if cmd is C.HELP:
+        await transport.send_text(conn, user_id, handle, HELP_TEXT)
+        return {}
+    if cmd is C.STOP:
+        await conn.execute("update users set paused = true where id = %s", (user_id,))
+        await transport.send_text(conn, user_id, handle,
+            "Theek hai, main ab message nahi bhejungi. 'chalu karo' kehkar wapas "
+            "shuru kar sakte hain.\n\nStopped. Say \"resume\" to start again.")
+        return {}
+    if cmd is C.RESUME:
+        await conn.execute("update users set paused = false where id = %s", (user_id,))
+        await transport.send_text(conn, user_id, handle, "Wapas shuru! / Resumed.")
+        return {}
+    if cmd is C.WHAT_YOU_KNOW:
+        known = await memory.describe(conn, user_id)
+        if not known["count"]:
+            body = "Abhi mere paas aapke baare mein kuch bhi nahi hai.\n\nI have nothing stored about you yet."
+        else:
+            lines = [f"• {v}" for vals in known["known"].values() for v in vals]
+            body = ("Mere paas yeh hai:\n" + "\n".join(lines) +
+                    "\n\nKuch hatana ho to bataiye.")
+        await transport.send_text(conn, user_id, handle, body)
+        return {}
+    if cmd is C.CLEAR_CHAT:
+        n = await conversation.clear_conversation(conn, user_id)
+        await transport.send_text(conn, user_id, handle,
+            f"Chat saaf kar di ({n} message). Aapke reminders aur yaadein waise hi hain.\n\n"
+            f"Chat cleared. Your reminders and memories are untouched.")
+        return {}
+    if cmd is C.DELETE_ALL:
+        # Confirm once — it cannot be undone. The confirmation is a button so
+        # there is no ambiguity about what "yes" meant.
+        await transport.send_buttons(conn, user_id, handle,
+            "Kya aap sach mein sab kuch hataana chahte hain? Yeh wapas nahi aayega.\n\n"
+            "Delete everything? This cannot be undone.",
+            [("del:yes", "Haan, sab hatao"), ("del:no", "Nahi, rehne do")])
+        return {}
+    if cmd is C.START:
+        return None      # a bare greeting from an onboarded user is conversation
+    return None
+
+
 async def handle_message(conn, msg: dict, contact_name: str | None = None,
                          channel: str = "whatsapp") -> dict:
     """Process one inbound message on any channel.
@@ -134,6 +197,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
 
     who = await identity.resolve(conn, channel, handle, contact_name,
                                  dm_policy=settings.saathi_dm_policy)
+    ob_state = await _onboarding_state(conn, who.user_id)
     user_id, tz, voice_pref = who.user_id, who.tz, who.voice_reply_pref
     display_name = who.display_name
 
@@ -141,10 +205,11 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         log.info("duplicate webhook for %s, ignoring", wa_mid)
         return {"skipped": "duplicate"}
 
-    # --- ADMISSION: an unknown handle gets no agent turn (OpenClaw dmPolicy) --
-    # Placed before dedupe, STT and the model, because the whole point is that an
-    # unadmitted sender costs us nothing but one rate-limited reply.
-    if who.status == "pending":
+    # --- ADMISSION -----------------------------------------------------------
+    # Under `pairing` an unknown handle is refused outright. Under `open` (the
+    # default now that onboarding exists) anyone may start, which is safe because
+    # onboarding below never calls the model.
+    if who.status == "pending" and settings.saathi_dm_policy == "pairing":
         if await identity.should_explain(conn, who.user_channel_id,
                                          settings.saathi_admission_max_replies):
             await transport.send_text(conn, who.user_id, handle, identity.ADMISSION_REPLY)
@@ -159,6 +224,23 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     # --- interactive button: deterministic, never reaches the model ---------
     if kind == "interactive":
         btn = ((msg.get("interactive") or {}).get("button_reply") or {}).get("id", "")
+        ob = await onboarding.handle_button(conn, transport, user_id, handle,
+                                            btn, display_name)
+        if ob is not None:
+            await log_message(conn, user_id, "in", "interactive",
+                              wa_message_id=wa_mid, body=btn)
+            return {"handled": "onboarding", **ob}
+        if btn.startswith("del:"):
+            if btn == "del:yes":
+                await memory.erase(conn, user_id, hard=True)
+                await identity.revoke(conn, channel, handle, "user erasure")
+                await transport.send_text(conn, user_id, handle,
+                    "Sab kuch hata diya gaya. Alvida, aur khayal rakhiyega. 🌼\n\n"
+                    "Everything has been deleted. Take care.")
+                return {"handled": "erased"}
+            await transport.send_text(conn, user_id, handle,
+                "Theek hai, kuch nahi hataaya. / Nothing was deleted.")
+            return {"handled": "erase_cancelled"}
         reply = await handle_ack(conn, user_id, btn)
         await log_message(conn, user_id, "in", "interactive", wa_message_id=wa_mid, body=btn)
         if reply:
@@ -188,6 +270,14 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         transcript_raw=transcript.raw if transcript else None,
         stt_ms=transcript.ms if transcript else None)
 
+    # --- ONBOARDING: deterministic, no model call ---------------------------
+    # Safety still runs first (below) for anyone already onboarded, but a brand
+    # new sender must be greeted before anything else — including before we spend
+    # a model turn deciding what they meant.
+    if ob_state == "new":
+        await onboarding.begin(conn, transport, user_id, handle)
+        return {"handled": "onboarding", "onboarding": "welcome"}
+
     # --- SAFETY: before the model sees anything (§12, R7) -------------------
     verdict = classify(text)
     if verdict.blocks_llm:
@@ -202,6 +292,20 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
 
     if not text.strip():
         return {"skipped": "empty"}
+
+    # Mid-onboarding free text (the name step). Still no model call.
+    if ob_state not in ("done",):
+        ob = await onboarding.handle_text(conn, transport, user_id, handle, ob_state, text)
+        if ob is not None:
+            return {"handled": "onboarding", **ob}
+
+    # --- INLINE COMMANDS: unambiguous, deterministic, work when the model is
+    # down. A DPDP erasure request must not depend on Bedrock being up.
+    cmd = commands.parse(text)
+    if cmd.command:
+        out = await _run_command(conn, transport, user_id, handle, cmd.command)
+        if out is not None:
+            return {"handled": "command", "command": cmd.command.value, **out}
 
     # --- agent -------------------------------------------------------------
     facts = await memory.load_facts(conn, user_id)

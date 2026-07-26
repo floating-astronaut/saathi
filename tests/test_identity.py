@@ -52,11 +52,19 @@ def test_transport_format_text_is_channel_specific():
     assert registry.get("whatsapp").format_text("**bold**") == "*bold*"
 
 
-def test_default_policy_is_pairing_not_open():
-    """An open door means anyone can burn our LLM and STT budget, and an
-    eldercare agent converses with strangers. Default must be closed."""
+def test_open_policy_is_safe_because_onboarding_never_calls_the_model():
+    """The default is now `open` so anyone can start by messaging the number.
+
+    That is only safe because an unknown sender walks a deterministic onboarding
+    script with no model call — see tests/test_onboarding.py. If onboarding ever
+    reaches the agent, `open` becomes a way for anyone to spend our tokens, and
+    this pairing option is the fallback.
+    """
+    import inspect
+    from saathi import onboarding
     from saathi.config import Settings
-    assert Settings().saathi_dm_policy == "pairing"
+    assert Settings().saathi_dm_policy in ("open", "pairing")
+    assert "loop.run" not in inspect.getsource(onboarding)
 
 
 def test_admission_reply_is_bilingual_and_actionable():
