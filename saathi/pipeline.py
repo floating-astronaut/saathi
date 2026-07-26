@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 
 from . import (commands, conversation, documents, identity, memory,
-               media_store, onboarding, provenance, training, vision)
+               media_store, onboarding, privacy, provenance, training, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -48,6 +48,12 @@ async def log_message(conn, user_id: int, direction: str, kind: str, *,
                       wa_message_id: str | None = None, body: str | None = None,
                       transcript: str | None = None, transcript_raw: str | None = None,
                       stt_ms: int | None = None, template: str | None = None) -> int:
+    # Narrow PII redaction on the write path: the credential never reaches the
+    # database rather than being cleaned up later. Names, medicines, places and
+    # phone numbers survive — they are the product.
+    body = privacy.redact_for_storage(body)
+    transcript = privacy.redact_for_storage(transcript)
+    transcript_raw = privacy.redact_for_storage(transcript_raw)
     row = await (await conn.execute(
         """insert into messages (user_id, direction, kind, wa_message_id, body_text,
                                  transcript, transcript_raw, stt_ms, template_name)

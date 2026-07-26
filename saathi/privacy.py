@@ -107,3 +107,64 @@ def scrub_slots(slots: dict) -> dict:
         elif isinstance(v, str):
             out[k] = f"<{k}>"                     # title etc. -> shape only
     return out
+
+
+# --- redaction before storage ------------------------------------------------
+# Deliberately narrow. Aggressive redaction would destroy the product: medicine
+# names, people, places and times ARE the memory, and stripping them breaks
+# reminders and recall. So this removes only credentials and identity numbers
+# that have no product use and are pure liability if we hold them.
+#
+# Explicitly NOT redacted, and each for a reason:
+#   names       — "Dr Mehta", "Priya" are what the assistant is for
+#   phone       — "call my daughter" needs the number to be useful later
+#   email       — a relative's address is plausibly worth remembering
+#   addresses   — "Apollo Nagpur" is a place they go
+#
+# Redacted, because we never need them and holding them is the risk:
+#   Aadhaar, PAN, payment cards, OTPs, CVVs, long account numbers
+
+_AADHAAR = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b")
+_PAN = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
+_CARDISH = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+_OTP_CTX = re.compile(
+    r"\b(otp|o\.t\.p|pin|cvv|code|password|passcode)\b[^0-9]{0,20}(\d{3,8})\b", re.I)
+_OTP_CTX_REV = re.compile(
+    r"\b(\d{4,8})\b[^0-9]{0,25}\b(otp|pin|cvv|code|password|passcode)\b", re.I)
+
+STORAGE_REDACTED = "[redacted]"
+
+
+def _luhn(digits: str) -> bool:
+    """Payment cards satisfy Luhn; Indian phone numbers usually do not.
+
+    Checking it is what keeps this from eating a phone number someone wanted
+    remembered — the difference between narrow and aggressive.
+    """
+    d = [int(c) for c in digits if c.isdigit()]
+    if not 13 <= len(d) <= 19:
+        return False
+    total, parity = 0, len(d) % 2
+    for i, n in enumerate(d):
+        if i % 2 == parity:
+            n *= 2
+            if n > 9:
+                n -= 9
+        total += n
+    return total % 10 == 0
+
+
+def redact_for_storage(text: str) -> str:
+    """Strip credentials and identity numbers before a message is persisted.
+
+    Runs on the write path, so the sensitive value never reaches the database
+    rather than being cleaned up afterwards.
+    """
+    if not text:
+        return text
+    out = _OTP_CTX.sub(lambda m: f"{m.group(1)} {STORAGE_REDACTED}", text)
+    out = _OTP_CTX_REV.sub(lambda m: f"{STORAGE_REDACTED} {m.group(2)}", out)
+    out = _PAN.sub(STORAGE_REDACTED, out)
+    out = _AADHAAR.sub(STORAGE_REDACTED, out)
+    out = _CARDISH.sub(lambda m: STORAGE_REDACTED if _luhn(m.group(0)) else m.group(0), out)
+    return out
