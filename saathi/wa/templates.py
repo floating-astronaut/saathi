@@ -11,6 +11,10 @@ Rules encoded here, learned from Meta's rejection patterns:
   * Quick-reply button labels: 20 characters hard limit.
   * A template's job is not to say everything. It is to GET A REPLY, which
     reopens the free 24-hour window (PRD s11).
+  * **Never delete a template to fix it.** Meta holds a deleted name for up to
+    four weeks before it can be recreated, and the category cannot be changed
+    while the old content is still deleting. reminder_fire/reminder_nudge were
+    lost this way; the live ones are the _v2 names. Submit a new name instead.
 
 Copy rules from PRD s6, which matter more here than anywhere else because
 this is the text an elder sees cold, with no conversational context:
@@ -21,7 +25,7 @@ from __future__ import annotations
 
 TEMPLATES: list[dict] = [
     {
-        "name": "reminder_fire",
+        "name": "reminder_fire_v2",
         "language": "en",
         "category": "UTILITY",
         "components": [
@@ -40,7 +44,7 @@ TEMPLATES: list[dict] = [
     },
     {
         # Deliberately NOT "you missed it". A gentle check, never a reproach.
-        "name": "reminder_nudge",
+        "name": "reminder_nudge_v2",
         "language": "en",
         "category": "UTILITY",
         "components": [
