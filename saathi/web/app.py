@@ -14,10 +14,11 @@ import logging
 
 from fastapi import FastAPI, Request, Response
 
-from .. import db, pipeline
+from .. import db, net_policy, pipeline
 from ..config import settings
 
 log = logging.getLogger("saathi.web")
+logging.getLogger().addFilter(net_policy.RedactingFilter())
 
 app = FastAPI(title="Saathi", version="0.1.0")
 
