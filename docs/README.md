@@ -14,3 +14,4 @@ order before writing code.
 | [`LANDMINES.md`](LANDMINES.md) | Traps already paid for. Read before Meta / Cloudflare / audio work. |
 | [`ENGINEERING_SUPERVISOR.md`](ENGINEERING_SUPERVISOR.md) | Append-only lane log. Evidence, not intentions. |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | Code changes, and what broke finding them out. |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Branch rules, commit rules, how to add a capability. |
