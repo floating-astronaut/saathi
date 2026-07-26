@@ -10,12 +10,16 @@ import logging
 
 from psycopg_pool import AsyncConnectionPool
 
+from .. import net_policy
 from ..config import settings
 from .reminder_scheduler import run_forever
 from .send_reminder import send
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s — %(message)s")
+# Redact at the root: a capability that logs an exception containing a presigned
+# URL must not leak it by forgetting to call redact() itself.
+logging.getLogger().addFilter(net_policy.RedactingFilter())
 
 
 async def main() -> None:
