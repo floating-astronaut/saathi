@@ -73,3 +73,55 @@ v1 — the fact set per user is tens of rows and fits in the prompt.
 Two correctness notes that cost money to learn elsewhere: the row locks only
 hold inside an explicit transaction, and claim-and-mark must be a single
 statement so there is no window where a row is claimed but unmarked.
+
+## Capabilities are registered, not branched
+
+The inbound path used to be an `if/elif` ladder that grew a branch per feature.
+That shape stops being reviewable at about six capabilities: every new one edits
+the same function, ordering becomes implicit, and nobody can say what runs
+before what without reading all of it. It is the failure mode that breaks
+products of this kind at scale.
+
+A capability is now an object with three things:
+
+    priority  — lower runs first; ordering is data, not source order
+    matches() — cheap, side-effect-free "is this mine?"
+    handle()  — returns a result to claim the message, or None to fall through
+
+`saathi/capabilities.py` read top to bottom *is* the specification of what
+happens to an inbound message. Adding web search, weather, or a new document
+type is a `register(...)` there — never an edit to `pipeline.handle_message`, and
+a test asserts the dispatcher does not name any individual capability.
+
+Priority bands keep the ordering legible as this grows:
+
+| Band | For |
+|---|---|
+| 0–9 | safety and admission — must not be overtakeable |
+| 10–19 | onboarding — a new user is not a general query |
+| 20–29 | deterministic commands — unambiguous, model-free |
+| 30–49 | media and modality |
+| 50–89 | specific capabilities |
+| 90–99 | the agent, as the catch-all |
+
+Two properties are enforced by tests rather than convention: **safety is
+priority 0** and cannot be overtaken (R7), and **a handler that raises is logged
+and skipped** rather than killing the turn — one broken capability must not take
+the assistant down for someone asking about their medicine.
+
+## Seeing and reading
+
+`vision.py` uses **`qwen.qwen3-vl-235b-a22b`**, chosen because it is a
+*regional* ap-south-1 model: a photograph of someone's prescription must not
+leave India, and the Anthropic vision models here are `global.`-only. GLM-5 has
+no vision at all.
+
+Health-adjacent answers carry their disclaimer **by construction** — the caller
+cannot obtain the text without it, because `Reading.rendered()` attaches it.
+PRD §12's line holds: naming what is printed on a pack is information; saying
+whether or how much to take is advice, and we never cross it.
+
+`documents.py` tries a PDF's text layer first (most bills, statements and
+e-tickets have one, and extraction is exact and free), falling back to
+rasterising page one for scans. Page count is bounded — an elder wants the gist
+and the deadline, and an unbounded document is an unbounded bill.

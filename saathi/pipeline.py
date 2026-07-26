@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import logging
 
-from . import commands, conversation, identity, memory, onboarding, training
+from . import (commands, conversation, documents, identity, memory,
+               onboarding, training, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -118,6 +119,78 @@ async def _contribute_corrections(conn, user_id: int, transcript) -> None:
             log.exception("training contribution failed")
 
 
+async def _handle_media(conn, transport, user_id: int, handle: str,
+                        msg: dict, kind: str, wa_mid: str | None) -> dict | None:
+    """Read an image or document and reply with what it says.
+
+    Deliberately does not go through the agent loop: the vision model *is* the
+    answer, and routing its output back through a text model would add latency,
+    cost, and a chance of the disclaimer being paraphrased away.
+    """
+    node = msg.get(kind) or {}
+    media_id = node.get("id")
+    caption = (node.get("caption") or "").strip() or None
+    mime = node.get("mime_type")
+    if not media_id:
+        return None
+    try:
+        blob = await transport.fetch_media(media_id)
+    except Exception:  # noqa: BLE001
+        log.exception("media fetch failed")
+        await transport.send_text(conn, user_id, handle,
+            "Maaf kijiye, yeh file main khol nahi payi. Dobara bhej sakte hain?\n\n"
+            "Sorry, I couldn't open that. Could you send it again?")
+        return {"handled": "media_error"}
+
+    reading = None
+    if kind == "document" and "pdf" in (mime or "").lower():
+        text = documents.extract_text(blob)
+        if documents.has_text_layer(text):
+            reading = await _read_pdf_text(text, caption)
+        else:
+            page = await documents.render_first_page(blob)
+            if page:
+                reading = await vision.read_document(page, "image/png", caption)
+    if reading is None:
+        intent = vision.classify_intent(caption)
+        if intent == "medicine":
+            reading = await vision.describe_medicine(blob, mime)
+        elif intent == "document":
+            reading = await vision.read_document(blob, mime, caption)
+        else:
+            reading = await vision.describe_image(blob, mime, caption)
+
+    body = transport.format_text(reading.rendered())
+    await log_message(conn, user_id, "in", "image" if kind == "image" else "text",
+                      wa_message_id=wa_mid, body=caption or f"[{kind}]")
+    await transport.send_text(conn, user_id, handle, body)
+    await log_message(conn, user_id, "out", "text", body=body)
+    return {"handled": "media", "kind": reading.kind, "had_disclaimer": bool(reading.disclaimer)}
+
+
+async def _read_pdf_text(text: str, question: str | None) -> "vision.Reading":
+    """Summarise an extracted text layer with the ordinary text model."""
+    from .agent import loop as agent_loop
+    ask = question or "What does this say?"
+    prompt = (
+        "An older adult in India forwarded this document and asks: "
+        f"{ask!r}\n\nDocument text:\n" + text[:6000] +
+        "\n\nExplain in simple Hinglish, short lines. Lead with what it is and "
+        "what they need to do, then any date or amount. If it asks for money, an "
+        "OTP, a PIN or bank details, say clearly it looks like a scam."
+    )
+    turn = await agent_loop.run(prompt, [], _no_tools)
+    low = (turn.text or "").lower()
+    money = any(w in low for w in ("otp", "pin", "bank", "upi", "payment"))
+    return vision.Reading(turn.text or "",
+                          vision.MONEY_DISCLAIMER if money else vision.DOCUMENT_DISCLAIMER,
+                          "document")
+
+
+async def _no_tools(name: str, args: dict) -> dict:
+    return {"error": "no tools available while reading a document"}
+
+
 async def _onboarding_state(conn, user_id: int) -> str:
     row = await (await conn.execute(
         "select onboarding::text from users where id = %s", (user_id,))).fetchone()
@@ -183,13 +256,23 @@ async def _run_command(conn, transport, user_id: int, handle: str, cmd) -> dict 
 
 async def handle_message(conn, msg: dict, contact_name: str | None = None,
                          channel: str = "whatsapp") -> dict:
-    """Process one inbound message on any channel.
+    """Assemble the context, then let the capability chain decide.
 
-    Channel-agnostic by construction: the only channel-specific things reached
-    from here are the transport (how to send) and the session window (whether a
-    free-form send is currently legal). Everything else — identity, safety,
-    memory, the agent — is shared, which is what lets Telegram be additive.
+    This function used to be an if/elif ladder that grew a branch per feature —
+    the shape that stops being reviewable at about six capabilities and makes
+    ordering implicit. It now does only what genuinely must happen for *every*
+    message, in a fixed order, and hands off:
+
+        identity -> admission -> dedupe -> window -> conversation -> transcribe
+        -> log -> dispatch
+
+    Adding a capability is a `register(...)` in capabilities.py. It is not an
+    edit here.
     """
+    from . import capabilities  # noqa: F401 - registers the chain on import
+    from .core.context import MessageContext
+    from .core.handlers import dispatch
+
     transport = registry.get(channel)
     handle = msg.get("from")
     wa_mid = msg.get("id")
@@ -197,18 +280,8 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
 
     who = await identity.resolve(conn, channel, handle, contact_name,
                                  dm_policy=settings.saathi_dm_policy)
-    ob_state = await _onboarding_state(conn, who.user_id)
-    user_id, tz, voice_pref = who.user_id, who.tz, who.voice_reply_pref
-    display_name = who.display_name
 
-    if await already_seen(conn, wa_mid):
-        log.info("duplicate webhook for %s, ignoring", wa_mid)
-        return {"skipped": "duplicate"}
-
-    # --- ADMISSION -----------------------------------------------------------
-    # Under `pairing` an unknown handle is refused outright. Under `open` (the
-    # default now that onboarding exists) anyone may start, which is safe because
-    # onboarding below never calls the model.
+    # Admission: under `pairing` an unknown handle never reaches the chain.
     if who.status == "pending" and settings.saathi_dm_policy == "pairing":
         if await identity.should_explain(conn, who.user_channel_id,
                                          settings.saathi_admission_max_replies):
@@ -216,114 +289,49 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         log.info("unadmitted handle %s/%s — not processed", channel, handle)
         return {"skipped": "not_admitted"}
 
-    # The session window is a WhatsApp concept; channels without one skip it.
+    if await already_seen(conn, wa_mid):
+        log.info("duplicate webhook for %s, ignoring", wa_mid)
+        return {"skipped": "duplicate"}
+
     if transport.capabilities.has_session_window:
-        await window.touch(conn, user_id)
-    convo_id = await conversation.current(conn, user_id, channel)
+        await window.touch(conn, who.user_id)
+    convo_id = await conversation.current(conn, who.user_id, channel)
 
-    # --- interactive button: deterministic, never reaches the model ---------
-    if kind == "interactive":
-        btn = ((msg.get("interactive") or {}).get("button_reply") or {}).get("id", "")
-        ob = await onboarding.handle_button(conn, transport, user_id, handle,
-                                            btn, display_name)
-        if ob is not None:
-            await log_message(conn, user_id, "in", "interactive",
-                              wa_message_id=wa_mid, body=btn)
-            return {"handled": "onboarding", **ob}
-        if btn.startswith("del:"):
-            if btn == "del:yes":
-                await memory.erase(conn, user_id, hard=True)
-                await identity.revoke(conn, channel, handle, "user erasure")
-                await transport.send_text(conn, user_id, handle,
-                    "Sab kuch hata diya gaya. Alvida, aur khayal rakhiyega. 🌼\n\n"
-                    "Everything has been deleted. Take care.")
-                return {"handled": "erased"}
-            await transport.send_text(conn, user_id, handle,
-                "Theek hai, kuch nahi hataaya. / Nothing was deleted.")
-            return {"handled": "erase_cancelled"}
-        reply = await handle_ack(conn, user_id, btn)
-        await log_message(conn, user_id, "in", "interactive", wa_message_id=wa_mid, body=btn)
-        if reply:
-            await transport.send_text(conn, user_id, handle, reply)
-            await log_message(conn, user_id, "out", "text", body=reply)
-            return {"handled": "ack", "button": btn}
+    ctx = MessageContext(
+        conn=conn, transport=transport, channel=channel, handle=handle, msg=msg,
+        user_id=who.user_id, display_name=who.display_name, tz=who.tz,
+        voice_pref=who.voice_reply_pref,
+        onboarding=await _onboarding_state(conn, who.user_id),
+        wa_message_id=wa_mid, kind=kind, conversation_id=convo_id,
+    )
 
-    # --- get the text, transcribing if it arrived as voice -----------------
-    transcript = None
+    # Resolve text once, so every handler sees the same thing whether the user
+    # typed it or spoke it.
     if kind == "audio":
         media_id = (msg.get("audio") or {}).get("id")
-        transcript = await transcribe_voice(conn, user_id, media_id, channel)
-        text = transcript.text
-        voice_in = True
+        ctx.transcript = await transcribe_voice(conn, who.user_id, media_id, channel)
+        ctx.text = ctx.transcript.text
+        if ctx.transcript.corrections:
+            await _contribute_corrections(conn, who.user_id, ctx.transcript)
+    elif kind == "interactive":
+        ctx.text = ctx.button_id
     else:
-        text = (msg.get("text") or {}).get("body", "") or ""
-        voice_in = False
+        ctx.text = (msg.get("text") or {}).get("body", "") or ""
 
-    # The correction pass already produced gold-labelled pairs; contributing
-    # them is opt-in and gated per-entity inside training.record_correction.
-    if transcript and transcript.corrections:
-        await _contribute_corrections(conn, user_id, transcript)
+    if kind != "interactive":
+        ctx.message_id = await log_message(
+            conn, who.user_id, "in", kind, wa_message_id=wa_mid, body=ctx.text,
+            transcript=ctx.transcript.text if ctx.transcript else None,
+            transcript_raw=ctx.transcript.raw if ctx.transcript else None,
+            stt_ms=ctx.transcript.ms if ctx.transcript else None) or None
+    else:
+        await log_message(conn, who.user_id, "in", "interactive",
+                          wa_message_id=wa_mid, body=ctx.text)
 
-    msg_id = await log_message(
-        conn, user_id, "in", kind, wa_message_id=wa_mid, body=text,
-        transcript=transcript.text if transcript else None,
-        transcript_raw=transcript.raw if transcript else None,
-        stt_ms=transcript.ms if transcript else None)
-
-    # --- ONBOARDING: deterministic, no model call ---------------------------
-    # Safety still runs first (below) for anyone already onboarded, but a brand
-    # new sender must be greeted before anything else — including before we spend
-    # a model turn deciding what they meant.
-    if ob_state == "new":
-        await onboarding.begin(conn, transport, user_id, handle)
-        return {"handled": "onboarding", "onboarding": "welcome"}
-
-    # --- SAFETY: before the model sees anything (§12, R7) -------------------
-    verdict = classify(text)
-    if verdict.blocks_llm:
-        await conn.execute(
-            """insert into safety_events (user_id, message_id, trigger, matched, action)
-               values (%s,%s,%s,%s,'blocked_llm')""",
-            (user_id, msg_id or None, verdict.trigger.value, verdict.matched))
-        await transport.send_text(conn, user_id, handle, verdict.reply)
-        await log_message(conn, user_id, "out", "text", body=verdict.reply)
-        log.warning("safety trigger %s for user %s", verdict.trigger.value, user_id)
-        return {"handled": "safety", "trigger": verdict.trigger.value}
-
-    if not text.strip():
-        return {"skipped": "empty"}
-
-    # Mid-onboarding free text (the name step). Still no model call.
-    if ob_state not in ("done",):
-        ob = await onboarding.handle_text(conn, transport, user_id, handle, ob_state, text)
-        if ob is not None:
-            return {"handled": "onboarding", **ob}
-
-    # --- INLINE COMMANDS: unambiguous, deterministic, work when the model is
-    # down. A DPDP erasure request must not depend on Bedrock being up.
-    cmd = commands.parse(text)
-    if cmd.command:
-        out = await _run_command(conn, transport, user_id, handle, cmd.command)
-        if out is not None:
-            return {"handled": "command", "command": cmd.command.value, **out}
-
-    # --- agent -------------------------------------------------------------
-    facts = await memory.load_facts(conn, user_id)
-    prior = await conversation.history(conn, user_id)
-    turn = await loop.run(text, facts, Handlers(conn, user_id, tz).handle,
-                          history=prior, user_name=display_name)
-    await conversation.touch(conn, convo_id)
-    # R6: is this a task or just conversation? Instrument from day one.
-    await loop.record(conn, turn, user_id, msg_id or None,
-                      turn_kind="task" if turn.tool_calls else "chat")
-
-    reply = transport.format_text(turn.text) or "Maaf kijiye, main samajh nahi payi. Phir se boliye?"
-    await transport.send_text(conn, user_id, handle, reply)
-    await log_message(conn, user_id, "out", "text", body=reply)
-
-    return {"handled": "agent", "channel": channel, "voice_in": voice_in,
-            "tools": [n for n, _ in turn.tool_calls],
-            "reply": reply, "prefix_tokens": turn.prefix_tokens}
+    result = await dispatch(ctx)
+    if ctx.meta.get("reply"):
+        await log_message(conn, who.user_id, "out", "text", body=ctx.meta["reply"])
+    return {"channel": channel, **result}
 
 
 def extract_messages(payload: dict) -> list[tuple[dict, str | None]]:
