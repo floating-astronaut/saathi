@@ -132,3 +132,23 @@ async def record(conn, turn: Turn, user_id: int | None, message_id: int | None,
          turn.input_tokens, turn.output_tokens, turn.latency_ms,
          turn.tool_calls[0][0] if turn.tool_calls else None),
     )
+
+
+async def run_for_user(conn, user_id: int, user_text: str,
+                       history: list[dict] | None = None) -> Turn:
+    """Convenience path: load the user's real memory, run, record the cost.
+
+    Keeps callers from having to remember to (a) fetch facts and (b) write the
+    llm_calls row — the second is easy to skip and it is what makes the prefix
+    budget enforceable.
+    """
+    from .. import memory
+    from .tools.handlers import Handlers
+
+    row = await (await conn.execute(
+        "select tz from users where id = %s", (user_id,))).fetchone()
+    tz = row[0] if row else "Asia/Kolkata"
+    facts = await memory.load_facts(conn, user_id)
+    turn = await run(user_text, facts, Handlers(conn, user_id, tz).handle, history)
+    await record(conn, turn, user_id, None)
+    return turn

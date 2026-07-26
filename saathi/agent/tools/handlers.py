@@ -1,10 +1,13 @@
 """Tool side effects. The only code that mutates state on the model's behalf."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import rrulestr
+
+from ... import memory
 
 _DAYS = {"mon": "MO", "tue": "TU", "wed": "WE", "thu": "TH",
          "fri": "FR", "sat": "SA", "sun": "SU"}
@@ -112,13 +115,26 @@ class Handlers:
 
     # --- memory ------------------------------------------------------------
 
+    @staticmethod
+    def _bias_forms(value: str) -> list[str]:
+        """Extract the tokens ASR actually mangles: proper nouns and drug names.
+
+        Storing the whole sentence as a bias phrase is worthless - biasing works
+        on the specific rare token, so we pull capitalised words and any long
+        non-Hindi-stopword token, and keep the full value as a fallback.
+        """
+        stop = {"Dr", "Mr", "Mrs", "Ms", "The", "Aapka", "Meri", "Mere"}
+        toks = re.findall(r"[A-Z][A-Za-z]{2,}", value)
+        names = [t for t in toks if t not in stop]
+        return list(dict.fromkeys(names)) or [value]
+
     async def _remember(self, a: dict) -> dict:
         await self.conn.execute(
             """insert into facts (user_id, kind, key, value, surface_forms)
                values (%s,%s,%s,%s,%s)
                on conflict (user_id, kind, key) where deleted_at is null
                do update set value=excluded.value, updated_at=now()""",
-            (self.user_id, a["kind"], a["key"], a["value"], [a["value"]]),
+            (self.user_id, a["kind"], a["key"], a["value"], self._bias_forms(a["value"])),
         )
         return {"stored": {a["key"]: a["value"]}}
 
@@ -136,3 +152,38 @@ class Handlers:
         items = [str(i).strip() for i in a.get("items", []) if str(i).strip()]
         listing = "\n".join(f"{n}. {item}" for n, item in enumerate(items, 1))
         return {"items": items, "list": listing, "note": a.get("note")}
+
+    # --- introspection & control (C1, §13, D4) -----------------------------
+
+    async def _what_you_know(self, _a: dict) -> dict:
+        return await memory.describe(self.conn, self.user_id)
+
+    async def _forget_everything(self, a: dict) -> dict:
+        # The model must have confirmed first; the tool refuses otherwise.
+        # "Forget everything about me" has to actually work (§13), so this is
+        # a hard delete, not a tombstone.
+        if not a.get("confirmed"):
+            return {"error": "not confirmed - ask the user to confirm first"}
+        return await memory.erase(self.conn, self.user_id, hard=True)
+
+    async def _set_preference(self, a: dict) -> dict:
+        sets, vals = [], []
+        if a.get("voice_replies"):
+            sets.append("voice_reply_pref = %s"); vals.append(a["voice_replies"])
+        if a.get("language"):
+            sets.append("lang_pref = %s"); vals.append(a["language"])
+        if not sets:
+            return {"error": "nothing to change"}
+        vals.append(self.user_id)
+        await self.conn.execute(f"update users set {', '.join(sets)} where id = %s", vals)
+        return {"updated": {k: v for k, v in a.items() if v}}
+
+    async def _snooze_reminder(self, a: dict) -> dict:
+        mins = max(1, min(int(a.get("minutes", 15)), 24 * 60))
+        cur = await self.conn.execute(
+            """update reminder_fires
+                  set state = 'snoozed', snoozed_to = now() + (%s || ' minutes')::interval
+                where reminder_id = %s and user_id = %s
+                  and state in ('sent', 'nudged', 'pending')""",
+            (str(mins), a["reminder_id"], self.user_id))
+        return {"snoozed_minutes": mins, "fires_updated": cur.rowcount}
