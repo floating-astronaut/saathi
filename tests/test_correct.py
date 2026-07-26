@@ -49,3 +49,20 @@ def test_threshold_is_conservative():
     assert THRESHOLD >= 0.75
     got = correct("Ramipril lena hai", MEDS)   # a real, different drug
     assert "Ramipril" in got.text, got.corrections
+
+
+def test_devanagari_transcript_is_not_silently_corrupted():
+    """Latin-only matching must leave Devanagari alone rather than mangle it.
+
+    Measured on live Saaras: mode=transcribe returns Devanagari, under which
+    this pass is a no-op. That is why stt.py defaults to indic-en.
+    """
+    hindi = "रोज़ सुबह आठ बजे गोली लेनी है"
+    got = correct(hindi, MEDS + PEOPLE)
+    assert got.text == hindi and not got.changed
+
+
+def test_real_saaras_mangling_is_repaired():
+    """Verbatim output from a live indic-en transcription."""
+    got = correct("Roz subah ath bej bomlodipin ki goli lene aaye.", MEDS)
+    assert "Amlodipine" in got.text
