@@ -2,7 +2,18 @@
 
 PRD §9: STT is the product, TTS is a commodity. Inbound speech is an open set —
 disfluent, code-mixed, noisy, full of proper nouns no general model has seen.
-`codemix` is the right default for Hinglish.
+PRD §9 names the modes as transcribe/translate/verbatim/transliterate/codemix
+and calls `codemix` the right default. **Both are wrong, measured 2026-07-26.**
+The real enum is `transcribe | translate | indic-en | verbatim | translit |
+codemix`, and the correct default is **`indic-en`**:
+
+  transcribe/codemix -> Devanagari:  "रोज़ सुबह अथ बेजबम लोडिपिन की गोली"
+  indic-en           -> Latin:       "Roz subah ath bej bomlodipin ki goli"
+
+This is not cosmetic. The entity-correction pass (§10) matches Latin tokens
+against the user's medicine and people names, so under a Devanagari transcript
+it is structurally dead — it repaired nothing. Under `indic-en` the same audio
+yields `bomlodipin` -> `Amlodipine`. Script choice is what makes R1 tractable.
 
 The pipeline this sits in (§10):
     OGG/Opus -> ffmpeg -> WAV16k -> Saaras -> entity correction -> intent
@@ -49,11 +60,15 @@ class STTError(RuntimeError):
 
 
 async def transcribe(wav: bytes, entities: list[str] | None = None,
-                     language: str = "hi-IN", mode: str = "codemix") -> Transcript:
+                     language: str = "hi-IN", mode: str = "indic-en") -> Transcript:
     """Transcribe a 16 kHz mono WAV, then repair it against known entities.
 
     `entities` are the user's medicine/person/place names from memory. They are
     offered to the API as a bias vocabulary and always used locally afterwards.
+
+    Measured: the `prompt` bias field changed the transcript in 1 of 3 samples,
+    and that change was noise rather than an improvement. Treat API-side
+    boosting as unproven and the local correction pass as the mechanism.
     """
     if not settings.sarvam_api_key:
         raise STTError("SARVAM_API_KEY not set")
