@@ -23,7 +23,7 @@ class FakeConn:
         self.sql.append(" ".join(q.split())[:70])
         low = q.lower()
         if "insert into users" in low:
-            return FakeCursor((1, "Asia/Kolkata", "auto"))
+            return FakeCursor((1, "Asia/Kolkata", "auto", "Kamala"))
         if "select 1 from messages" in low:
             return FakeCursor((1,) if self.seen_message else None)
         if "returning id" in low:

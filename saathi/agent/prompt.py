@@ -55,6 +55,18 @@ What you never do:
 """
 
 
+def name_line(name: str | None) -> str:
+    """The user's own name, from their WhatsApp contact profile.
+
+    Kept out of `facts` on purpose: it is not something the user asked us to
+    remember, it arrives free with every webhook, and it should never appear in
+    "what do you know about me?" as though we had stored it. But it must reach
+    the prompt — an assistant that greets someone by name once and then forgets
+    reads as broken to exactly the audience least able to shrug it off.
+    """
+    return f"The person you are speaking to is called {name}.\n" if name else ""
+
+
 def facts_block(facts: list[tuple[str, str]], limit: int = 40) -> str:
     """Render the user's known facts. Also the entity-bias vocabulary (§10).
 
@@ -89,14 +101,15 @@ class Prefix:
     tokens: int
 
 
-def build_prefix(facts: list[tuple[str, str]], tool_tokens: int, budget: int) -> Prefix:
+def build_prefix(facts: list[tuple[str, str]], tool_tokens: int, budget: int,
+                 user_name: str | None = None) -> Prefix:
     """Assemble the system prefix and enforce the budget.
 
     Raising is deliberate. The failure mode we are guarding against is silent:
     a prefix that creeps from 3k to 6k doubles the bill and nothing breaks, so
     nobody notices until the invoice.
     """
-    text = SYSTEM + "\n" + facts_block(facts)
+    text = SYSTEM + "\n" + name_line(user_name) + facts_block(facts)
     total = estimate_tokens(text) + tool_tokens
     if total > budget:
         raise PrefixTooLarge(

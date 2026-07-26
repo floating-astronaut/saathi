@@ -34,16 +34,16 @@ from .wa.format import to_whatsapp_text
 log = logging.getLogger("saathi.pipeline")
 
 
-async def upsert_user(conn, wa_id: str, name: str | None) -> tuple[int, str, str]:
-    """Return (user_id, tz, voice_reply_pref), creating the user on first contact."""
+async def upsert_user(conn, wa_id: str, name: str | None) -> tuple[int, str, str, str | None]:
+    """Return (user_id, tz, voice_reply_pref, display_name); creates on first contact."""
     row = await (await conn.execute(
         """insert into users (wa_id, display_name) values (%s, %s)
            on conflict (wa_id) do update
               set display_name = coalesce(excluded.display_name, users.display_name)
-           returning id, tz, voice_reply_pref""",
+           returning id, tz, voice_reply_pref, display_name""",
         (wa_id, name),
     )).fetchone()
-    return row[0], row[1], row[2]
+    return row[0], row[1], row[2], row[3]
 
 
 async def already_seen(conn, wa_message_id: str | None) -> bool:
@@ -113,7 +113,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None) -> di
     wa_mid = msg.get("id")
     kind = msg.get("type", "text")
 
-    user_id, tz, voice_pref = await upsert_user(conn, wa_id, contact_name)
+    user_id, tz, voice_pref, display_name = await upsert_user(conn, wa_id, contact_name)
 
     if await already_seen(conn, wa_mid):
         log.info("duplicate webhook for %s, ignoring", wa_mid)
@@ -165,7 +165,8 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None) -> di
 
     # --- agent -------------------------------------------------------------
     facts = await memory.load_facts(conn, user_id)
-    turn = await loop.run(text, facts, Handlers(conn, user_id, tz).handle)
+    turn = await loop.run(text, facts, Handlers(conn, user_id, tz).handle,
+                          user_name=display_name)
     # R6: is this a task or just conversation? Instrument from day one.
     await loop.record(conn, turn, user_id, msg_id or None,
                       turn_kind="task" if turn.tool_calls else "chat")

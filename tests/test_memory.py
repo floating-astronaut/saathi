@@ -49,3 +49,16 @@ def test_persona_gender_is_pinned():
     # this audience; the prompt must state one and only one.
     from saathi.agent.prompt import SYSTEM
     assert "You are female" in SYSTEM and "rakhungi" in SYSTEM
+
+
+def test_user_name_reaches_the_prompt():
+    from saathi.agent.prompt import build_prefix
+    p = build_prefix([("doctor", "Dr Mehta")], tool_tokens=800, budget=3000, user_name="Kamala")
+    assert "Kamala" in p.system
+
+
+def test_name_is_omitted_cleanly_when_unknown():
+    from saathi.agent.prompt import build_prefix, name_line
+    assert name_line(None) == ""
+    p = build_prefix([], tool_tokens=800, budget=3000, user_name=None)
+    assert "called None" not in p.system
