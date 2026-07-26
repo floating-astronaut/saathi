@@ -39,12 +39,25 @@ journalctl -u saathi-worker -f
 
 ## Deploy
 
-Code ships via S3 (there is no SSH key by design):
+```bash
+ops/deploy.sh              # package, migrate, test on the box, restart, verify
+ops/deploy.sh --no-test    # skip the on-box test run
+ops/deploy.sh --check      # verify only, change nothing
+```
 
-1. tar the repo, upload to `s3://saathi-dev-artifacts-559896294326/saathi.tar.gz`
-2. presign a GET, fetch it on the box over SSM, extract to `/home/ubuntu/saathi`
-3. `uv sync`
-4. `systemctl restart saathi-web saathi-worker`
+It **refuses to deploy a dirty tree or a branch other than `main`**, because a
+deploy that does not correspond to a commit cannot be reproduced or rolled back,
+and nobody can tell afterwards what is actually running.
+
+Why an artifact rather than editing on the box, or running an agent there: the
+box has **no SSH by design** (SSM only), and every commit must be SSH-signed
+with a key that lives on the dev box. Authoring on the box would mean copying
+that key onto a second machine or committing unsigned. So the sequence is
+author and sign here, ship an artifact, restart there.
+
+Under the hood: tar → `s3://saathi-dev-artifacts-559896294326/saathi.tar.gz` →
+presigned GET fetched over SSM → migrations → `saathi-env-sync` → `uv sync` →
+tests → restart → verify.
 
 ## Secrets
 
