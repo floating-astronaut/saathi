@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from . import conversation, identity, memory
+from . import conversation, identity, memory, training
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -96,6 +96,28 @@ async def transcribe_voice(conn, user_id: int, media_id: str,
     return await stt_mod.transcribe(wav, entities=entities)
 
 
+async def _contribute_corrections(conn, user_id: int, transcript) -> None:
+    """Feed confirmed ASR repairs into the derived corpus.
+
+    Looks up each corrected value's entity kind so that person and place names
+    are excluded — a repair on a family member's name is never trainable, however
+    useful it would be. Failures here must never affect the user's turn.
+    """
+    for c in transcript.corrections:
+        try:
+            row = await (await conn.execute(
+                """select kind::text from facts
+                    where user_id = %s and deleted_at is null
+                      and (value ilike %s or %s = any(surface_forms))
+                    limit 1""",
+                (user_id, f"%{c.replacement}%", c.replacement))).fetchone()
+            if row:
+                await training.record_correction(conn, user_id,
+                                                 c.original, c.replacement, row[0])
+        except Exception:  # noqa: BLE001 - training must never break a reply
+            log.exception("training contribution failed")
+
+
 async def handle_message(conn, msg: dict, contact_name: str | None = None,
                          channel: str = "whatsapp") -> dict:
     """Process one inbound message on any channel.
@@ -154,6 +176,11 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     else:
         text = (msg.get("text") or {}).get("body", "") or ""
         voice_in = False
+
+    # The correction pass already produced gold-labelled pairs; contributing
+    # them is opt-in and gated per-entity inside training.record_correction.
+    if transcript and transcript.corrections:
+        await _contribute_corrections(conn, user_id, transcript)
 
     msg_id = await log_message(
         conn, user_id, "in", kind, wa_message_id=wa_mid, body=text,

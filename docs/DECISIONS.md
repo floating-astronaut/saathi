@@ -83,3 +83,25 @@ under business `ayurpetofficial` (verified), which owns the `Saatih AI APP` WABA
 Operator decision, made knowingly: it couples the two products at the credential
 layer, in exchange for a verified business and a CLOUD_API number today. A
 Saathi-owned app remains the clean end state.
+
+### D-K · Training corpus is derived, opt-in, and k-anonymised · 2026-07-26
+Operator direction: *"set up training in a way where we do not break any privacy
+rule even if training is weak, that is fine."* So privacy holds **by
+construction**, not by policy:
+
+- **No transcripts.** The corpus is derived pairs only — `bomlodipin →
+  Amlodipine`, `paune gyarah → 22:45`, and slot *shapes* with content stripped.
+- **Person and place names are never trainable.** No threshold, no consent flag,
+  no override (`privacy.TRAINABLE_KINDS` = medicine, brand).
+- **k-anonymity on export.** A pair leaves the box only once ≥5 distinct users
+  have produced it, which is what turns "a medicine this person takes" (health
+  data about them) into "a word Indian ASR mishears" (a property of the language).
+- **Separate opt-in consent.** Under DPDP, improving the model is a different
+  purpose from providing the service; it cannot ride on the onboarding consent.
+  Revoking purges everything already contributed.
+- Dirty or multi-word tokens are **refused, not cleaned** — a cleaner that
+  rescues a messy string is where PII leaks in.
+
+The compounding property survives all of this: the correction pass produces
+gold-labelled pairs for free, labelled by the user's own read-back confirmation,
+so the corpus builds itself from ordinary use with no annotation.
