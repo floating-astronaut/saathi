@@ -99,10 +99,13 @@ async def resolve(conn, channel: str, channel_user_id: str,
          display_name),
     )).fetchone())[0]
 
-    # Every user belongs to an account from the moment they exist, because
-    # spend has to hang off something that survives the number changing hands.
-    # It starts on the default tier, which mints nothing — arriving must not
-    # cost us money while the door is open. An operator promotes a tester.
+    # Every user belongs to an account from the moment they exist, because spend
+    # has to hang off something that survives the number changing hands.
+    #
+    # The account exists here; its *key* is not minted here. Minting waits until
+    # onboarding completes (`onboarding.py`), so a number that probes us once
+    # and never answers gets an account row and nothing billable. Admission is
+    # open by design, and the free grant is real money.
     await accounts.ensure_for_user(conn, user_id)
 
     # Under a pairing policy a brand-new handle starts pending: the identity

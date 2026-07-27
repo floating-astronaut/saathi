@@ -55,6 +55,38 @@ def configured(monkeypatch):
     monkeypatch.setattr(settings, "saathi_env", "test", raising=False)
 
 
+class _FakeResponse:
+    def __init__(self, payload): self._payload = payload
+    def raise_for_status(self): return None
+    def json(self): return self._payload
+
+
+class _FakeHttp:
+    """Stands in for `httpx.AsyncClient`, and records the minted body.
+
+    Present because an earlier version of this file reached the real
+    openrouter.ai and came back 401: a unit test that can make an outbound call
+    is a unit test that can spend money.
+    """
+    def __init__(self, *a, **kw): pass
+    async def __aenter__(self): return self
+    async def __aexit__(self, *a): return False
+
+    async def post(self, url, headers=None, json=None):
+        _FakeHttp.body = json
+        return _FakeResponse({"key": "sk-or-v1-SECRET", "data": {"hash": "h-1"}})
+
+    async def get(self, url, headers=None):
+        return _FakeResponse({"data": []})
+
+
+@pytest.fixture
+def mint_http(monkeypatch):
+    _FakeHttp.body = None
+    monkeypatch.setattr(openrouter.httpx, "AsyncClient", _FakeHttp)
+    return _FakeHttp
+
+
 # --- the MeshPilot guard ----------------------------------------------------
 
 def test_a_key_we_did_not_mint_is_refused():
@@ -131,20 +163,53 @@ def test_an_unknown_tier_gets_the_lowest_cap_never_the_highest():
     assert accounts.tier_cap(None) == accounts.TIER_CAPS["free"]
 
 
-def test_the_free_tier_mints_no_key_at_all():
-    """Admission is open by design; arriving must not hand a stranger a budget."""
-    assert accounts.tier_cap("free") is None
-
-
-def test_beta_testers_get_the_agreed_five_dollar_cap():
+def test_every_user_gets_five_free_dollars():
+    """Operator, 2026-07-27: "first $5 free per user, then we will paywall"."""
+    assert accounts.tier_cap("free") == Decimal("5.00")
     assert accounts.tier_cap("beta") == Decimal("5.00")
 
 
-async def test_a_free_account_is_not_an_error_it_is_the_platform_default(configured):
+def test_the_free_grant_is_once_and_not_five_dollars_a_month():
+    """The cap is meaningless without this.
+
+    A $5 cap that resets monthly is not "$5 free" — it is $5 every month
+    forever, and with admission open that is a standing invitation to anyone
+    willing to keep a phone number alive. `None` means OpenRouter treats the
+    limit as a total, because `limit_reset` is omitted entirely.
+    """
+    assert accounts.tier_reset("free") is None
+    assert accounts.tier_reset("beta") == "monthly"
+
+
+def test_an_unknown_tier_does_not_get_a_renewing_allowance():
+    # A typo must produce spend that stops, never spend that renews.
+    assert accounts.tier_reset("enterprise-unlimited") is None
+
+
+async def test_the_free_key_is_minted_as_a_total_not_an_allowance(configured, mint_http):
     conn = Conn({"from ai_keys": [], "from accounts": [("free",)]})
     out = await openrouter.mint(conn, account_id=1)
-    assert out["minted"] is False
-    assert not conn.wrote("insert into ai_keys")
+
+    assert out["minted"] is True
+    assert mint_http.body["limit"] == 5.0
+    assert "limit_reset" not in mint_http.body, \
+        "a free grant that resets monthly is not a free grant"
+
+
+async def test_a_beta_key_does_renew_monthly(configured, mint_http):
+    conn = Conn({"from ai_keys": [], "from accounts": [("beta",)]})
+    await openrouter.mint(conn, account_id=1)
+
+    assert mint_http.body["limit_reset"] == "monthly"
+
+
+async def test_the_minted_plaintext_is_never_stored_in_the_clear(configured, mint_http):
+    conn = Conn({"from ai_keys": [], "from accounts": [("free",)]})
+    await openrouter.mint(conn, account_id=1)
+
+    stored = [p for p in conn.all_params() if isinstance(p, str)]
+    assert not any("sk-or-v1-SECRET" in s for s in stored)
+    assert any(s.startswith("gAAAAA") for s in stored), "no Fernet ciphertext was stored"
 
 
 # --- key material never leaks -----------------------------------------------

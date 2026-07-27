@@ -365,3 +365,33 @@ we can join to an account id, or (b) we build our own metering that prices
 discovering it on the invoice. (b) is the more likely path and is worth doing
 anyway — `llm_calls` already records per-user model, tokens and latency; what it
 lacks is price.
+
+### D-T · Five dollars free per user, once, then a paywall · 2026-07-27
+Operator decision: "first $5 free per user then we will paywall." Supersedes the
+`free`-tier posture recorded earlier the same day, which minted no key at all.
+
+**The cap is not the decision — the reset is.** A $5 cap that resets monthly is
+not "$5 free", it is $5 every month in perpetuity, and admission is deliberately
+open. So the free grant is minted with **no `limit_reset`**, which makes it a
+lifetime total rather than an allowance: `TIER_RESET["free"] is None`. `beta`
+resets monthly, because those are testers an operator chose on purpose and wants
+to keep working.
+
+**Minting waits for onboarding to complete**, not first contact. The grant is
+real money and the door is open, so a number that probes us once and never
+answers gets an account row and nothing billable. Onboarding still makes no
+model call and no third-party call — the mint is *queued* onto `scheduled_turns`
+from the completion step, never performed inline.
+
+An unknown tier gets no reset at all, for the same reason it gets the lowest
+cap: a typo must produce spend that stops, not spend that renews.
+
+**What this decision does not yet include: the paywall itself.** When the $5 is
+gone the key simply stops authorising, and today that surfaces as a failed turn
+rather than as a conversation about paying. An elder being told nothing, or
+shown an error, at the moment their assistant stops working is a worse outcome
+than the spend. See PR-40.
+
+**Reverse it** by changing the grant to an allowance only with a deliberate
+decision about abuse: at $5 renewing monthly, the cost of a throwaway number is
+capped only by how many someone cares to acquire.

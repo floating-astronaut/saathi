@@ -2,9 +2,10 @@
 
 How a Saathi turn reaches a model, who pays for it, and where the data goes.
 
-Status: **designed, not built.** Nothing routes through OpenRouter today. This
-document exists before the code, because the change touches inference location,
-cost and a third-party processor — see `THE_METHOD.md` §1.
+Status: **built 2026-07-27, unproven against a funded account.** The document
+came before the code (`THE_METHOD.md` §1) and the code now follows it; §9 lists
+what has and has not been demonstrated. Nothing routes through OpenRouter in
+production yet.
 
 Owns: model routing, per-account key provisioning, spend caps, residency.
 Related: `DECISIONS.md` D-D (model choice), D-O (this routing change),
@@ -100,13 +101,16 @@ dormant handles re-verify at 60. A key per WhatsApp handle would mean thousands
 of upstream key objects, a rate-limited mint on a path an elder is waiting on,
 and a key stranded every time a number changes hands.
 
-**One key per paying account/household.** Free users run on the platform default.
+**One key per account/household**, free ones included — see D-T. A free account
+gets its own key with a one-time $5 on it, which is what makes the spend
+attributable from the first turn rather than only after someone pays.
 
 ### Tier → cap
 
-Unknown tier falls back to the **lowest** cap, never the highest. Fail safe, not
-open — the same shape as `tier_cap()` in the MeshPilot implementation this is
-modelled on.
+Unknown tier falls back to the **lowest** cap, never the highest, and to **no
+reset**, never a renewing one. Fail safe, not open — the same shape as
+`tier_cap()` in the MeshPilot implementation this is modelled on. A typo must
+produce spend that stops, not spend that renews.
 
 ## 5. Provisioning, in order
 
@@ -116,7 +120,10 @@ modelled on.
 2. **Refuse if unconfigured.** No master key, or no Fernet key → raise
    `ProvisioningDisabled`. Never mint and hope; never store a plaintext because
    encryption happened to be unavailable.
-3. Mint with the tier cap, `workspace_id` = Indofolk AI, `limit_reset: monthly`.
+3. Mint with the tier cap and `workspace_id` = Indofolk AI. `limit_reset` is
+   **omitted for a one-time grant** and set to `monthly` only for tiers meant to
+   renew — omitting it makes the cap a lifetime total. See D-T; this is the
+   difference between "$5 free" and "$5 a month forever".
 4. On upstream failure: write the audit row with the error text, **then**
    re-raise. "Did this account ever get a key, and why not" must be answerable
    months later.
@@ -174,11 +181,17 @@ A quiet downgrade to a shared key is how you find out at the end of the month.
   depends on it. **This is the only thing between the built machinery and a
   tester actually using it.**
 - ~~Whether free users get a shared platform key or no key at all.~~
-  **Settled 2026-07-27: neither — free mints nothing and runs on the platform
-  default.** `TIER_CAPS["free"]` is `None`, not a small number. The reason is
-  admission: the door is deliberately open and onboarding is model-free, so
-  merely arriving must not hand a stranger a budget. An operator promotes a
-  tester to `beta` explicitly, with `python -m saathi.admin.grant`.
+  **Settled 2026-07-27 (D-T): every user gets their own key with $5 on it,
+  once.** The cap is not the interesting half — the *reset* is. Minted with no
+  `limit_reset`, the $5 is a lifetime total; minted with `limit_reset: monthly`
+  it would be $5 every month forever, which with an open door is a standing
+  invitation. `TIER_RESET["free"]` is `None` and that is the whole paywall
+  today. `beta` renews monthly for testers an operator granted deliberately.
+
+  Minting fires when **onboarding completes**, not at first contact, because the
+  grant is real money and a number that probes once and never answers should
+  cost nothing. It is still queued rather than called inline, so onboarding
+  keeps its no-model-call, no-third-party-call property.
 
 ### Built, 2026-07-27 — and what is still unproven
 
