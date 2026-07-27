@@ -265,3 +265,78 @@ D-L). The signing rule was blocking runtime-box work from ever landing, which is
 itself how the SSH change went live with three docs still claiming no inbound
 port was open. `CONTRIBUTING.md` amended in the same commit so the docs and the
 practice agree.
+
+---
+
+## 2026-07-27 — Lane PR-4: reminders were never dispatched
+
+### Read
+
+`docs/PROD_READINESS.md` (PR-4), `docs/ARCHITECTURE.md`, `saathi/scheduling.py`,
+`saathi/worker/{__main__,turns,reminder_scheduler,send_reminder}.py`,
+`saathi/agent/tools/handlers.py`, `saathi/pipeline.py`, `saathi/wa/client.py`,
+`db/migrations/006_scheduled_turns.sql`, `tests/test_scheduling.py`.
+
+### What the lane actually found
+
+PR-4 said reminders had no *delivery guarantee*. They had no *delivery*.
+
+`_create_reminder` inserted into `reminder_fires`. The worker claims only from
+`scheduled_turns`. `worker/reminder_scheduler.py` — the sole reader of
+`reminder_fires` — is referenced **nowhere in the repo**. Migration 006 moved
+the queue and back-filled existing rows once, at migration time; the creation
+path was never moved with it. Every reminder created since would have been
+written to a table nothing reads.
+
+Latent, not live: both tables were empty, so nothing was actually dropped. The
+product's worst failure was one real user away and completely silent — no
+exception, no failed row, no log line.
+
+### Closed
+
+- Creation enqueues onto `scheduled_turns`; the write to `reminder_fires` is gone.
+- Recurring reminders book their next occurrence (dedupe-keyed), which nothing
+  did before — a daily reminder would have fired at most once.
+- A deliberate no-send (paused, or no active handle) is marked `skipped`, so the
+  sweep can distinguish it from a send that died.
+- `scheduling.sweep_stuck` reclaims turns claimed-but-unsent, guarded on
+  `wa_message_id is null` so a delivered reminder is never resent. `run_once`
+  sweeps before it claims.
+
+### Evidence
+
+- **301 tests passing** (294 before; 7 new in `tests/test_reminder_delivery.py`).
+- **End to end against the live database**, not fakes: a reminder created through
+  the real `Handlers._create_reminder` appeared on `scheduled_turns` as
+  `('reminder', 'pending', 'reminder:18:2026-07-27T02:30:00+00:00')` — 08:00 IST
+  correctly stored as UTC — with `reminder_fires` at 0 rows. Synthetic user,
+  reminder and turn deleted afterwards; re-queried at `(0, 0, 0)`.
+- Both new statements executed against real Postgres before being trusted.
+
+### Mistakes worth recording
+
+- **Shipped `sweep_stuck` with SQL Postgres rejects, while its tests were green.**
+  `set state = case ... end` yields `text`; the column is the `turn_state` enum.
+  The fake connection does not parse SQL, so it certified it. Caught only by
+  running the statement against the database. The path only executes *after a
+  worker has already crashed*, so this would have failed at the worst moment.
+  Recorded in `LANDMINES.md`.
+- **Broke two existing tests** by adding the sweep: their fake matched any
+  `returning id` and fed the four-column sweep a one-column row. Fixed the fake
+  rather than reshaping production SQL around it.
+
+### 🚩 Found while working, cut as its own lane
+
+**PR-4b — the ack path is unreachable**, three independent silent breaks:
+`wa.send_template` sends no button component, so the `ack:`/`snooze:` payloads
+`pipeline.handle_ack` parses are never produced by anything; `handle_ack`
+updates `reminder_fires`, which no longer receives fires; and nothing anywhere
+calls `enqueue(..., "nudge", ...)`, so the registered nudge handler is dead.
+§15's acknowledgement-rate metric is therefore structurally zero, not low.
+
+### Remains
+
+- PR-4 stays **P0** in `PROD_READINESS.md`: the sweep records a stranded turn,
+  but nothing tells a human. That is PR-3, blocked on `cloudwatch:PutMetricAlarm`
+  and SNS (PR-22).
+- PR-4b, above.

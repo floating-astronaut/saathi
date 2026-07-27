@@ -74,16 +74,51 @@ Notes: operator decision — not taken unilaterally, since the subscription was 
   classifier (R7). **Appeared in two separate supervisor `Queued` blocks and was
   never closed — this board exists because of failures like this one.**
 
-### PR-4 — reminders have no delivery guarantee   [OPEN]
-Owner: unassigned        Opened: 2026-07-26 (from PROD_READINESS)
-Reading: docs/PROD_READINESS.md (PR-4), docs/ARCHITECTURE.md, saathi/scheduling.py
-Acceptance: a stuck-fire sweep detects fires left in `sent` without an ack; an
-  alert fires when dispatch count is zero over a window where it should not be;
-  both covered by tests.
+### PR-4b — the reminder ack path is unreachable   [OPEN]
+Owner: unassigned        Opened: 2026-07-27
+Reading: docs/LANDMINES.md (Meta template rules), docs/PRD.md §C2, §15
+Acceptance: a fired reminder carries quick-reply buttons whose payload identifies
+  the turn; pressing one marks that `scheduled_turns` row `acked`; an
+  unacknowledged reminder enqueues a nudge; §15's acknowledgement metric reads a
+  table that actually receives fires.
 Write-back: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md
-Notes: P0. A missed cardiac dose is this product's worst failure and it is
-  currently invisible. Pairs naturally with PR-3 — the sweep is worthless if
-  nothing can page a human.
+Notes: found while working PR-4. Three separate breaks, all silent:
+  (1) `wa.send_template` sends only body variables — **no button component**, so
+  the `ack:{id}` / `snooze:{id}` payloads `pipeline.handle_ack` parses are never
+  produced by anything;
+  (2) `handle_ack` updates `reminder_fires`, but reminders now fire from
+  `scheduled_turns`, so the row that fired is never marked acked;
+  (3) nothing anywhere calls `enqueue(..., "nudge", ...)` — the handler is
+  registered and dead, so an unacknowledged reminder is never followed up.
+  Consequence: §15's acknowledgement metric is structurally zero, not low.
+  Needs a Meta-side decision first — dynamic button payloads require a `button`
+  component with `sub_type: quick_reply`, and the approved templates may need
+  resubmitting. **Do not delete a template to change it** (`docs/LANDMINES.md`).
+
+### PR-4 — reminders are never dispatched at all   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-26 · Closed: 2026-07-27
+Reading: docs/PROD_READINESS.md (PR-4), docs/ARCHITECTURE.md, saathi/scheduling.py
+Acceptance: a reminder created through the real handler lands on
+  `scheduled_turns`; recurring reminders book the next occurrence; a claimed-but-
+  unsent turn is reclaimed; all covered by tests **and** proven against the live
+  database. — MET.
+  Result: 301 tests passing (+7). End-to-end probe created a reminder, saw it
+  enqueued `pending` with dedupe key `reminder:18:2026-07-27T02:30:00+00:00`
+  (08:00 IST stored as UTC), `reminder_fires` untouched, synthetic rows deleted.
+  **Residual deliberately not in scope:** nothing pages a human yet (PR-3,
+  blocked on `PutMetricAlarm`/SNS), and acknowledgement is broken (PR-4b).
+Write-back: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md
+Notes: P0, and **worse than the PROD_READINESS row says**. Measured 2026-07-27:
+  `_create_reminder` (handlers.py:86) writes to `reminder_fires`; the worker
+  (`worker/__main__.py`) reads only `scheduled_turns`; and
+  `worker/reminder_scheduler.py` — the sole reader of `reminder_fires` — has
+  **zero references anywhere in the repo**. Migration 006 back-filled existing
+  fires once, at migration time. So a reminder created today is written to a
+  table nothing reads and **never fires**. Latent, not live: both tables are
+  currently empty, so nothing has been dropped yet.
+  Scope of this lane is the delivery core — create → enqueue → dispatch →
+  reschedule, plus a stuck-turn sweep and a dispatch heartbeat. Ack/nudge
+  wiring is cut out as PR-4b because it needs Meta-side template buttons.
 
 ### PR-3 — no alerting on anything   [OPEN]
 Owner: unassigned        Opened: 2026-07-26 (from PROD_READINESS)

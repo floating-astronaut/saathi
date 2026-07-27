@@ -14,6 +14,59 @@ Conventions:
 
 ---
 
+## 2026-07-27
+
+Control plane adopted; the reminder delivery path fixed. **301 tests passing.**
+
+### Broke
+
+- **A reminder created through the assistant would never fire.** No error, no
+  failed row, nothing in the logs — the reminder simply never arrived.
+  `_create_reminder` inserted into `reminder_fires`; the worker
+  (`worker/__main__.py`) claims only from `scheduled_turns`; and
+  `worker/reminder_scheduler.py`, the one module that reads `reminder_fires`,
+  is imported by nothing. Migration 006 moved the queue and back-filled the
+  existing rows once, but the *creation* path was never moved with it. Latent
+  rather than live only because no real reminder existed yet — both tables were
+  empty. Found by reading the dispatch path end to end while opening PR-4.
+- **A recurring reminder would have fired at most once.** Nothing walked the
+  RRULE after the first occurrence. `turns.reminder` now books the next one,
+  dedupe-keyed on (reminder, occurrence).
+- **A turn claimed by a worker that then died was stranded forever.**
+  `claim_due` marks `sent` and commits before the handler runs, so the row is
+  never retried (claiming reads only `pending`) and never failed (nothing
+  raised). `scheduling.sweep_stuck` reclaims them.
+- **`sweep_stuck`'s SQL was invalid Postgres while its unit tests were green.**
+  `set state = case ... end` yields `text`; the column is the `turn_state` enum.
+  The fake connection accepted it happily. Caught only by running the statement
+  against the real database. See `docs/LANDMINES.md`.
+
+### Fixed
+
+- `agent/tools/handlers.py` — `_create_reminder` enqueues onto `scheduled_turns`
+  and no longer writes to `reminder_fires`. Registration is imported locally to
+  break a cycle, and `enqueue` still refuses an unregistered kind loudly.
+- `worker/turns.py` — recurrence rescheduling; a deliberate no-send (paused user
+  or no active handle) is marked `skipped`, so the sweep can tell "chose not to
+  send" from "the send died".
+- `scheduling.py` — `sweep_stuck`, guarded on `wa_message_id is null` so a
+  delivered reminder is never resent. `run_once` sweeps before it claims.
+- `tests/test_scheduling.py` — the fake's `returning id` match was too broad and
+  fed `sweep_stuck` a one-column row. Narrowed to INSERTs.
+
+Tests: `tests/test_reminder_delivery.py` (7 new).
+
+### Known still broken
+
+- **The ack path is unreachable** — lane PR-4b. `wa.send_template` sends no
+  button component, so the `ack:`/`snooze:` payloads `handle_ack` parses are
+  never produced; `handle_ack` updates `reminder_fires`, which no longer
+  receives fires; and nothing calls `enqueue(..., "nudge", ...)`. §15's
+  acknowledgement metric is structurally zero, not low.
+- Nothing pages a human when dispatch stops (PR-3, blocked on IAM).
+
+---
+
 ## 2026-07-26
 
 First working session. PRD → live webhook. **82 tests passing**, 11 commits.
