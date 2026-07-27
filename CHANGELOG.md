@@ -14,6 +14,43 @@ Conventions:
 
 ---
 
+## 2026-07-27 (night) — every outbound message is now recorded
+
+**322 tests passing.**
+
+### Broke
+
+- **The first real user received five messages and none were recorded.** After a
+  complete onboarding — consent, name, reminders, improvement — `messages` held
+  5 inbound and **0 outbound**. Onboarding calls the transport directly, and only
+  `pipeline` and the reminder worker remembered to insert afterwards.
+
+  The sharp edge is consent. `users.consent_at` and `consent_version` said the
+  user agreed; nothing recorded *what they were shown*. The text lived only in a
+  source constant at some past commit, and `CONSENT_VERSION` is hardcoded in two
+  modules (PR-18), so the drift compounds. `messages` is the record the 6-hourly
+  backup actually protects, and the first exchange every user ever has was
+  outside it.
+
+### Fixed
+
+- `wa/client._send` — the documented "single wire path" — now records every
+  outbound message. Deliberately not fixed in `onboarding.py`: patching the one
+  caller that forgot leaves the next one free to forget too. `kind`, `body_text`
+  and `template_name` are derived from the wire payload rather than passed in, so
+  a new send helper cannot skip it either.
+- Recording never raises. The send already happened; failing the caller would
+  invite a resend of something the user has read. Failures log at ERROR.
+
+### Tests
+
+`tests/test_outbound_record.py` (8). Seven exercise the recorder directly — and
+would all stay green if the call were deleted from `_send`. The eighth drives the
+wire path with a stubbed transport and fails if it stops recording. Verified by
+removing the call: exactly that one goes red.
+
+---
+
 ## 2026-07-27 (evening) — Saathi moves to an Indian number
 
 No Python changed. Configuration and Meta-side state only, but it changes what

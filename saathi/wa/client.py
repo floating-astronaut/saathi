@@ -29,6 +29,59 @@ def _headers() -> dict[str, str]:
             "Content-Type": "application/json"}
 
 
+def _describe(payload: dict) -> tuple[str, str | None, str | None]:
+    """(kind, body_text, template_name) for the `messages` row.
+
+    Derived from the wire payload rather than passed in by the caller, so a new
+    send helper cannot quietly skip being recorded.
+    """
+    t = payload.get("type")
+    if t == "text":
+        return "text", (payload.get("text") or {}).get("body"), None
+    if t == "interactive":
+        inter = payload.get("interactive") or {}
+        return "interactive", (inter.get("body") or {}).get("text"), None
+    if t == "template":
+        tpl = payload.get("template") or {}
+        params: list[str] = []
+        for c in tpl.get("components", []):
+            if c.get("type") == "body":
+                params = [p.get("text") for p in c.get("parameters", []) if p.get("text")]
+        # The variables are what the user actually read; the fixed body lives in
+        # the approved template and is recoverable from its name.
+        return "template", (" · ".join(params) or None), tpl.get("name")
+    if t in ("audio", "image"):
+        return t, None, None
+    return "text", None, None
+
+
+async def _record_outbound(conn, user_id: int, wa_message_id: str, payload: dict) -> None:
+    """Record every outbound message. Here, not in the callers.
+
+    Onboarding sent five messages to the first real user and recorded none of
+    them: it calls the transport directly, and only `pipeline` and the reminder
+    worker remembered to insert afterwards. So the consent text a user was shown
+    was absent from `messages` — the table the 6-hourly backup actually protects
+    — while `consent_at` claimed they had agreed to it.
+
+    A record that depends on every caller remembering is a record with holes in
+    it. This is the single wire path; recording here cannot be forgotten.
+
+    Never raises: the message has already gone out. Failing the caller here would
+    invite a resend of something the user has read.
+    """
+    kind, body, template = _describe(payload)
+    try:
+        await conn.execute(
+            """insert into messages (user_id, direction, kind, wa_message_id,
+                                     body_text, template_name)
+               values (%s,'out',%s,%s,%s,%s)
+               on conflict (wa_message_id) do nothing""",
+            (user_id, kind, wa_message_id, body, template))
+    except Exception:  # noqa: BLE001 - the send succeeded; only the record failed
+        log.exception("outbound %s was sent but not recorded", wa_message_id)
+
+
 async def _send(conn, user_id: int, wa_id: str, payload: dict, channel: Channel) -> str:
     """The single wire path. Returns the WhatsApp message id."""
     await assert_can_send(conn, user_id, channel)
@@ -40,7 +93,9 @@ async def _send(conn, user_id: int, wa_id: str, payload: dict, channel: Channel)
         if r.status_code >= 400:
             log.error("cloud api %s: %s", r.status_code, r.text[:400])
         r.raise_for_status()
-        return r.json()["messages"][0]["id"]
+        mid = r.json()["messages"][0]["id"]
+    await _record_outbound(conn, user_id, mid, payload)
+    return mid
 
 
 async def send_text(conn, user_id: int, wa_id: str, text: str) -> str:
