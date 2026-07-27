@@ -14,11 +14,17 @@ Private repo. Live at **`saathi.n8nworld.store`** (webhook) and
 **In production since 2026-07-27.** Users reach it on **+91 8071 581 944**,
 where it answers as **Indofolk AI** — the Meta-approved display name on WABA
 `1687148075730227`, verified to Indofolk Wellness Private Limited, billed in INR.
-`Saathi` remains the name of the codebase, the services and this repo; the two
-are deliberately not the same, because "Saathi" was rejected under Meta's
+`Saathi` remains the name of the codebase, the services and this repo. The two
+are deliberately not the same: "Saathi" was rejected under Meta's
 [display-name guidelines](https://www.facebook.com/business/help/757569725593362)
-as a generic term. **User-facing copy says Indofolk AI. Everything internal says
-Saathi.** Do not "fix" one to match the other.
+as a generic term, so a display name had to be chosen separately.
+
+**The brand name is provisional and will be settled around beta. The internal
+name is not going to change.** Keeping them decoupled is what makes a rebrand a
+copy edit instead of a refactor — so do not thread the display name through
+config, module names, log lines or table names, and do not "fix" either one to
+match the other. Renaming the brand should touch user-facing copy, the policy
+pages, and the Meta display name. Nothing else.
 
 ---
 
