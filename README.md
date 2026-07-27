@@ -11,6 +11,15 @@ Private repo. Live at **`saathi.n8nworld.store`** (webhook) and
 **`n8nworld.store`** (public site). Runtime is a single box in **AWS ap-south-1
 (Mumbai)** — see [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
+**In production since 2026-07-27.** Users reach it on **+91 8071 581 944**,
+where it answers as **Indofolk AI** — the Meta-approved display name on WABA
+`1687148075730227`, verified to Indofolk Wellness Private Limited, billed in INR.
+`Saathi` remains the name of the codebase, the services and this repo; the two
+are deliberately not the same, because "Saathi" was rejected under Meta's
+[display-name guidelines](https://www.facebook.com/business/help/757569725593362)
+as a generic term. **User-facing copy says Indofolk AI. Everything internal says
+Saathi.** Do not "fix" one to match the other.
+
 ---
 
 ## Branch rules — read this first
@@ -19,7 +28,7 @@ Private repo. Live at **`saathi.n8nworld.store`** (webhook) and
 
 | Branch | Contains | Deploys to | How |
 |---|---|---|---|
-| **`main`** | The application — Python, FastAPI, worker, tests | the ap-south-1 box | S3 artifact + SSM, then `systemctl restart` |
+| **`main`** | The application — Python, FastAPI, worker, tests | the ap-south-1 box | `ops/deploy.sh` — S3 artifact + SSM from the dev box, or `--local` on the box itself |
 | **`site`** | The public site — Next.js static export, policy pages | Cloudflare Pages → `n8nworld.store` | git push (CF builds `site` only) |
 
 - **Application work goes on `main`.** Never put site code there.
@@ -33,9 +42,21 @@ Private repo. Live at **`saathi.n8nworld.store`** (webhook) and
   git push origin <branch> && git push gitlab <branch>
   ```
   origin = GitHub `Nuraveda-Labs/saathi` · gitlab = GitLab `nuraveda-lab/saathi`
-- Every commit is **SSH-signed**, authored
-  `Tejas Karan Agrawal <help.nuraveda@gmail.com>`. Verify with
-  `git log --pretty='%h %G? %s'` — `%G?` must be `G`.
+- Every commit is authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>`, and
+  **SSH-signed when authored on the dev box**, which holds the signing key.
+  Commits authored on the runtime box are unsigned by necessity — see
+  `DECISIONS.md` D-L. Signing is not a gate on landing work.
+- **`%G?` is not a usable check on either box.** SSH signature *verification*
+  needs `gpg.ssh.allowedSignersFile`, which is unset, so correctly signed commits
+  still report `N`. It has already sent one session chasing a phantom. To ask
+  whether a commit is signed at all:
+  ```
+  git cat-file commit HEAD | grep -q '^gpgsig' && echo signed
+  ```
+- The GitLab token is an OAuth grant that **expires every two hours** and its
+  credential helper does not refresh it, so a push can succeed on GitHub and fail
+  on GitLab, leaving them diverged. Refresh with `glab api user`, then verify
+  both by hash rather than trusting two exit codes.
 
 ---
 
@@ -78,10 +99,12 @@ flowchart TB
       direction TB
       S0["0 · safety — deterministic, pre-LLM"]
       S10["10 · onboarding — no model call"]
-      S20["20 · commands — stop / delete / help"]
-      S30["30 · media — image + PDF"]
+      S20["20 · erase_confirm"]
+      S21["21 · reminder_ack — button taps"]
+      S22["22 · commands — stop / delete / help / language"]
+      S30["30 · media — image + PDF, resource-capped"]
       S90["90 · agent — catch-all"]
-      S0 --> S10 --> S20 --> S30 --> S90
+      S0 --> S10 --> S20 --> S21 --> S22 --> S30 --> S90
     end
 
     CTX --> STT["Sarvam Saaras · indic-en<br/>+ local entity correction"]
@@ -112,8 +135,14 @@ register(simple("weather", 60,
                 handle_weather))
 ```
 
-Priority bands: `0–9` safety · `10–19` onboarding · `20–29` commands ·
-`30–49` media · `50–89` capabilities · `90–99` the agent.
+Priority bands: `0–9` safety · `10–19` onboarding · `20–29` commands and
+confirmations · `30–49` media · `50–89` capabilities · `90–99` the agent.
+
+Two things that look like details and are not. A capability that acts on user
+text must check `ctx.trusted` — omitting it is how a *forwarded* message once
+reached the deterministic command path. And match on anchored patterns, not
+substrings: `unsubscribe` contains `stop`, and both reached state-changing
+behaviour.
 
 ### The boundaries that matter
 
@@ -135,22 +164,29 @@ Priority bands: `0–9` safety · `10–19` onboarding · `20–29` commands ·
       web/            FastAPI — webhook (verify + signed receive), healthz
       wa/             Cloud API client, 24h window guard, templates, formatter
       channels/       Transport protocol + Capabilities as data
-      core/           MessageContext, the handler registry
+      core/           MessageContext, handler registry, backpressure gates
       capabilities.py the capability chain — read it top to bottom
       speech/         ffmpeg transcode, Saaras STT, entity correction
       agent/          tool loop, streaming, prompt + prefix budget, tools
       safety/         deterministic pre-LLM classifier
       vision.py       medicine packs, letters, photos
-      documents.py    PDF text layer first, rasterise as fallback
+      documents.py    PDF text layer first, rasterise as fallback — page, byte,
+                      wall-clock and rlimit caps, because a sender chooses this
       identity.py     users, handles, linking, dormancy
       provenance.py   trust of inbound content
       net_policy.py   SSRF blocking + secret redaction
       memory.py       facts, ASR bias vocabulary, erasure
-      onboarding.py   deterministic, button-driven, model-free
-      worker/         reminder scheduler + sender
-    db/               extensions.sql (superuser), schema.sql, migrations/
+      onboarding.py   deterministic, button-driven, model-free, language-first
+      scheduling.py   the `scheduled_turns` queue — enqueue, claim, sweep_stuck
+      worker/turns.py every kind of future work, registered: reminder, nudge,
+                      checkin, media_purge. Read it top to bottom.
+    db/               extensions.sql (superuser), schema.sql, migrations/,
+                      schema_migrations.sql + record_migration.sql (the ledger —
+                      deploy bookkeeping, deliberately not a migration)
+    ops/              deploy.sh (transport) · deploy_onbox.sh (everything that
+                      happens on the box, run by both transports) ·
+                      deploy_verify.sh · alerting/
     docs/             start at DOC_SYSTEM.md
-    evals/            Hinglish entity-accuracy corpus
 
 ---
 
@@ -177,6 +213,26 @@ On the box, secrets are fetched rather than typed: `saathi-env-sync`.
 **Never put a secret in an SSM command** — command text is retained and visible
 in the AWS console.
 
+## Deploying
+
+```bash
+ops/deploy.sh                  # from the dev box — artifact to S3, driven over SSM
+sudo ops/deploy.sh --local     # standing on the runtime box itself
+sudo ops/deploy.sh --local --check   # verify only, changes nothing
+```
+
+Both routes run the same `ops/deploy_onbox.sh`, so there is one copy of the
+install / migrate / test / restart logic and not two that can drift. `--local`
+must positively match the target instance id and refuses if it cannot read one;
+the SSM route refuses when run *on* the target. Both refuse a dirty tree or a
+branch other than `main`, snapshot the tree to `<repo>.prev/` first, and **stop
+before the restart** if a migration, `uv sync`, `saathi-env-sync` or the test run
+fails.
+
+Never hand-roll the tar/S3/SSM sequence, and never copy modules onto the box by
+hand. Both have been done, both are recorded, and the second is what left the box
+looking hand-edited for a day.
+
 ---
 
 ## Docs
@@ -202,6 +258,12 @@ in what order, before writing code.
 
 - **Existence is not function.** Prove behaviour with live evidence before
   calling it done. `ffmpeg -version` passed happily while every voice note failed.
+- **A green test is not evidence that the test is watching.** Five separate bugs
+  here shipped with passing tests that *agreed with the bug*, because the
+  assertion was written from the implementation instead of the contract. The
+  check that works is mechanical: delete the **call** from the production path —
+  not the function body — and require the test to go red. If it stays green, it
+  was never testing the thing.
 - **Value-blind secrets.** Never echo a token; verify by length and hash prefix.
   Delete synthetic test rows after verifying.
 - **Fail loudly, never fail open.** A control that degrades to "allow" on
