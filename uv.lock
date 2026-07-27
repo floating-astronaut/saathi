@@ -927,6 +927,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "google-auth" },
     { name = "httpx" },
@@ -952,6 +953,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "google-auth", specifier = ">=2.56.2" },
     { name = "httpx" },

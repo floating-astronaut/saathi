@@ -14,6 +14,69 @@ Conventions:
 
 ---
 
+## 2026-07-27 (evening) — per-account AI keys, and an account to hang them on
+
+**402 tests passing** (384 → 402). `tests/test_openrouter_keys.py`. AI-1.
+
+### Added
+
+- **An account tenant.** Migration 008: `accounts`, `users.account_id`,
+  `ai_keys`, `ai_key_events`. There wasn't one — the closest thing was `users`,
+  which is a person reached through a handle. Spend cannot hang off a handle:
+  India recycles numbers after ~90 days, so the next holder would inherit the
+  bill, and every number change would strand a vendor key.
+
+- **`saathi/openrouter.py`** — mint, revoke, resolve. One master provisioning
+  key mints a capped sub-key per account, so spend is attributable per household
+  and a runaway loop burns one tester's $5 rather than the platform balance.
+
+- **`saathi/crypto.py`** — Fernet at rest. A minted key never sits in a table as
+  plaintext and never reaches a log line, not even a prefix.
+
+- **`provision_key`** as a `scheduled_turns` kind, and **`saathi.admin.grant`**
+  as the operator command: `--tier beta` promotes an account and *enqueues* the
+  mint rather than doing it, because the queue already owns retries, idempotency
+  and the audit trail.
+
+### The decisions worth arguing with later
+
+- **Free mints nothing.** `TIER_CAPS["free"]` is `None`, not a small number.
+  Admission is deliberately open and onboarding is model-free; if merely
+  arriving minted something billable, that open door would stop being safe.
+- **An unknown tier gets the lowest cap, never the highest.** A tier added to
+  the enum and forgotten in `TIER_CAPS` must cost nothing rather than
+  everything.
+- **A broken account key never downgrades to the shared one.** Resolution raises
+  `runtime_ai_byok_missing`. A quiet downgrade is how you learn on the invoice,
+  a month later, about a tenant whose spend was never attributed.
+- **The `saathi:` prefix is asserted, not assumed.** This OpenRouter org also
+  holds MeshPilot's keys and `DELETE /keys/{hash}` works on all of them.
+  MeshPilot serves live customers from another box.
+
+### Proven, and not
+
+Verified: 008 is idempotent under a second run on a scratch copy (2 accounts
+before and after); the *database* enforces one active key per account via a
+partial unique index, so "calling twice mints once" survives a race and not just
+a tidy caller; a revoked key may coexist with a new active one, so rotation
+works. The admin CLI was exercised against a real schema, not a fake connection.
+
+Red-checked by deletion from the production path: the prefix guard (1 failure),
+refuse-if-unconfigured (1), lowest-cap fallback (1).
+
+**Not proven: no real key has ever been minted** — the account has 0 credits, so
+every test stops at the HTTP boundary and the response-shape fallback has never
+met a real response. PR-38. Do not put a tester on this before that round trip.
+
+### Also
+
+- **Sarvam is STT-only** (D-S), because its spend cannot be attributed to a
+  household — one key serves everyone, and there is no sub-key. STT is the one
+  path whose cost is bounded by something already measured, the length of an
+  audio file. PR-39.
+
+---
+
 ## 2026-07-27 (evening) — the same nudge, four times, every one of them a success
 
 **384 tests passing** (376 → 384). `tests/test_turn_settle.py`.

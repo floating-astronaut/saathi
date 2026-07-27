@@ -336,3 +336,32 @@ Consequences:
 
 **Reverse it** only by cutting a named locale out of v1 with the reason recorded;
 otherwise future work should assume all eleven locales are in scope.
+
+### D-S · Sarvam is STT-only until its spend can be attributed · 2026-07-27
+Operator decision. D-R records the expectation that Sarvam becomes Saathi's
+largest vendor; this bounds where it may be used until one specific problem is
+solved.
+
+**The problem: we cannot tell whose spend is whose.** A single Sarvam API key
+serves every user. There is no per-account sub-key, so there is no vendor-side
+way to attribute a rupee to a household, and no way to cap one household's
+usage without capping everyone's. That is exactly the gap AI-1 closes for
+OpenRouter — a minted sub-key per account gives attribution *and* a hard cap, so
+a runaway loop burns one tester's five dollars instead of the platform balance.
+Sarvam offers no equivalent today.
+
+So Sarvam stays on **speech-to-text only**. STT is the one path where cost is
+bounded by something we already measure and limit — the length of an audio file
+(`saathi_max_audio_bytes`) — rather than by a model's appetite for tokens. A
+per-turn cost that cannot exceed a known ceiling is attributable enough to run
+without sub-keys; a conversational one is not.
+
+Not adopted for: chat/LLM turns, translation, OCR, evaluation, or embeddings,
+however good the benchmarks are. This is not a quality judgement.
+
+**Reverse it** when either (a) Sarvam ships per-account keys or spend reporting
+we can join to an account id, or (b) we build our own metering that prices
+`llm_calls` rows per vendor and enforces a cap *before* the call rather than
+discovering it on the invoice. (b) is the more likely path and is worth doing
+anyway — `llm_calls` already records per-user model, tokens and latency; what it
+lacks is price.

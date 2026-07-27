@@ -28,6 +28,8 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from . import accounts
+
 log = logging.getLogger("saathi.identity")
 
 # A handle silent this long is not assumed to be the same human on its return.
@@ -96,6 +98,12 @@ async def resolve(conn, channel: str, channel_user_id: str,
         (channel_user_id if channel == "whatsapp" else f"{channel}:{channel_user_id}",
          display_name),
     )).fetchone())[0]
+
+    # Every user belongs to an account from the moment they exist, because
+    # spend has to hang off something that survives the number changing hands.
+    # It starts on the default tier, which mints nothing — arriving must not
+    # cost us money while the door is open. An operator promotes a tester.
+    await accounts.ensure_for_user(conn, user_id)
 
     # Under a pairing policy a brand-new handle starts pending: the identity
     # exists so we can count and rate-limit it, but the agent will not run.

@@ -24,7 +24,28 @@ class Settings(BaseSettings):
     # The agent asserts against this before every call.
     saathi_prefix_token_budget: int = 3000
 
+    #: Speech-to-text only. Operator decision 2026-07-27 (D-S): Sarvam is
+    #: likely to become our largest vendor, but it offers no per-account
+    #: sub-key, so spend on it cannot be attributed to a household or capped
+    #: per tenant. Until it can, it stays on the one path where the cost is
+    #: bounded by the length of an audio file rather than by a model's appetite.
     sarvam_api_key: str = ""
+
+    # --- OpenRouter: per-account keys (AI-1) --------------------------------
+    #: The *provisioning* key. It mints capped sub-keys and is never used to
+    #: serve a turn — see `docs/AI_ROUTING.md` §5. Empty means provisioning is
+    #: disabled and `provision.mint` refuses; it never falls back to spending
+    #: on this key directly, because that is the one credential with no cap.
+    openrouter_master_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    #: The Indofolk AI workspace minted keys belong to. Wrong workspace means a
+    #: key that works and bills the wrong ledger, which is worse than a failure.
+    openrouter_workspace_id: str = ""
+
+    #: Fernet key for secrets at rest — today, minted OpenRouter keys. Empty
+    #: means provisioning refuses rather than storing a plaintext, because an
+    #: unencrypted API key in a table is a worse outcome than no key at all.
+    saathi_secrets_key: str = ""
 
     #: Voice notes are kept briefly for debugging: India is not one language,
     #: and a transcript alone cannot tell you whether the model mis-heard or the

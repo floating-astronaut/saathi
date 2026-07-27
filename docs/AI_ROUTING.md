@@ -168,10 +168,35 @@ A quiet downgrade to a shared key is how you find out at the end of the month.
 
 ## 9. Open
 
-- **Credits are 0** on the OpenRouter account. Keys will mint and then fail on
-  first use — provisioning succeeds, spending does not. Fund before any real
-  user depends on it.
-- Whether free users get a shared platform key or no key at all.
+- **Credits are 0** on the OpenRouter account — re-checked live 2026-07-27:
+  `{"total_credits":0,"total_usage":0}`. Keys will mint and then fail on first
+  use — provisioning succeeds, spending does not. Fund before any real user
+  depends on it. **This is the only thing between the built machinery and a
+  tester actually using it.**
+- ~~Whether free users get a shared platform key or no key at all.~~
+  **Settled 2026-07-27: neither — free mints nothing and runs on the platform
+  default.** `TIER_CAPS["free"]` is `None`, not a small number. The reason is
+  admission: the door is deliberately open and onboarding is model-free, so
+  merely arriving must not hand a stranger a budget. An operator promotes a
+  tester to `beta` explicitly, with `python -m saathi.admin.grant`.
+
+### Built, 2026-07-27 — and what is still unproven
+
+Migration 008 adds `accounts`, `users.account_id`, `ai_keys` and
+`ai_key_events`. `saathi/openrouter.py` mints, revokes and resolves;
+`saathi/crypto.py` holds the Fernet wrapper; `provision_key` is a registered
+`scheduled_turns` kind; `saathi.admin.grant` is the operator command.
+
+Verified: the migration is idempotent under a second run on a scratch copy; the
+database itself enforces one active key per account (partial unique index), so
+"calling twice mints once" survives a race rather than merely a tidy caller; the
+`saathi:` prefix guard, refuse-if-unconfigured, and the lowest-cap fallback all
+go red when removed from the production path.
+
+**Not proven: a single real key has never been minted.** Every test stops at the
+HTTP boundary. With credits at 0 a real mint would create a live vendor object
+we cannot spend on and — if the response omitted the hash and the re-read missed
+it — could not revoke. That step waits for funding, deliberately.
 
 ---
 
