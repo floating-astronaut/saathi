@@ -24,7 +24,10 @@ class Conn:
         self.sql.append(" ".join(q.split()))
         if "update scheduled_turns t" in q:
             return Cur(self.claimed)
-        if "returning id" in q.lower():
+        # Only an INSERT ... returning id hands back a new row id. sweep_stuck
+        # also ends in `returning`, with four columns, and a looser match here
+        # feeds it a one-column row.
+        if q.lower().lstrip().startswith("insert") and "returning id" in q.lower():
             return Cur([(11,)])
         return Cur()
 

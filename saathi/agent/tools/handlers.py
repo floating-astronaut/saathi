@@ -82,10 +82,27 @@ class Handlers:
             (self.user_id, a["title"], rrule, self.tz, when),
         )).fetchone()
         rid = row[0]
-        await self.conn.execute(
-            """insert into reminder_fires (reminder_id, user_id, scheduled_for)
-               values (%s,%s,%s) on conflict do nothing""",
-            (rid, self.user_id, when),
+        # Onto the queue the worker actually reads.
+        #
+        # This used to insert into `reminder_fires`. Migration 006 made
+        # `scheduled_turns` the single dispatch queue and back-filled the
+        # existing fires once — but this write was never moved, and
+        # `worker/reminder_scheduler.py`, the only reader of `reminder_fires`,
+        # is not referenced anywhere. So every reminder created after that
+        # migration was written to a table nothing reads and never fired.
+        #
+        # Imported here rather than at module scope: `worker.turns` imports the
+        # rrule helpers above, so a top-level import would be circular. The
+        # import is what registers the kinds, and `enqueue` refuses an
+        # unregistered kind loudly — in the web process nothing else pulls
+        # `worker.turns` in.
+        from ...worker import turns  # noqa: F401
+        from ... import scheduling
+
+        await scheduling.enqueue(
+            self.conn, self.user_id, "reminder", when,
+            payload={"reminder_id": rid},
+            dedupe_key=f"reminder:{rid}:{when.isoformat()}",
         )
         return {"reminder_id": rid, "title": a["title"],
                 "next_fire_at_local": when.astimezone(ZoneInfo(self.tz)).strftime("%Y-%m-%d %H:%M"),

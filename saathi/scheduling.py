@@ -110,10 +110,66 @@ async def release(conn, turn_id: int, error: str, attempts: int) -> None:
         log.error("turn %s gave up after %s attempts: %s", turn_id, attempts, error[:200])
 
 
+#: How long a turn may sit claimed-but-unsent before we assume the worker died.
+#: Comfortably longer than the slowest send, short enough that a medication
+#: reminder is still worth delivering late.
+STUCK_AFTER_MINUTES = 15
+
+SWEEP_SQL = """
+update scheduled_turns
+   -- The cast is required, not decorative: `case` yields text and the column
+   -- is the turn_state enum. Postgres rejects it without one, and no fake
+   -- connection will ever tell you so.
+   set state      = (case when attempts >= %s then 'failed' else 'pending' end)::turn_state,
+       last_error = %s
+ where state = 'sent'
+   and wa_message_id is null
+   and sent_at < now() - make_interval(mins => %s)
+returning id, kind, attempts, state::text
+"""
+
+
+async def sweep_stuck(conn, stuck_after: int = STUCK_AFTER_MINUTES) -> list[tuple]:
+    """Reclaim turns that were claimed and then abandoned.
+
+    `claim_due` marks a row 'sent' and commits *before* the handler runs, so
+    the claim survives a crash. That is deliberate — it is what stops two
+    workers double-sending. The cost is that if the process dies between the
+    claim and the send, the row sits in 'sent' forever: never retried, because
+    claiming only looks at 'pending', and never failed, because nothing was
+    raised. For a reminder that is a silently missed dose.
+
+    The safety property is `wa_message_id is null`. It is set only after a send
+    returns a message id, so a row without one never reached WhatsApp and is
+    safe to retry. A row *with* one was delivered and is never resent here —
+    an unacknowledged-but-delivered reminder is the nudge's problem, not a
+    duplicate-send problem.
+
+    The residual risk is the narrow window where the send succeeded but the
+    process died before recording the id. That resends. For a medication
+    reminder a duplicate is the better failure than a miss, and it is bounded
+    by MAX_ATTEMPTS.
+    """
+    rows = await (await conn.execute(
+        SWEEP_SQL,
+        (MAX_ATTEMPTS, f"reclaimed: claimed but unsent for >{stuck_after}m", stuck_after),
+    )).fetchall()
+    for turn_id, kind, attempts, state in rows:
+        log.error("turn %s (%s) was stuck claimed-but-unsent after %s attempt(s) -> %s",
+                  turn_id, kind, attempts, state)
+    return rows
+
+
 async def run_once(pool) -> int:
-    """One scheduler tick. Returns how many turns were dispatched."""
+    """One scheduler tick: reclaim abandoned turns, then dispatch due ones.
+
+    Sweeping first means a turn abandoned by a previous tick is back to
+    'pending' in time to be claimed by this one.
+    """
     done = 0
     async with pool.connection() as conn:
+        async with conn.transaction():
+            await sweep_stuck(conn)
         async with conn.transaction():          # locks must outlive the SELECT
             claimed = await claim_due(conn)
         for turn_id, user_id, kind, payload, scheduled_for, attempts in claimed:

@@ -44,12 +44,22 @@ nobody reads `journalctl`.
 reaches a human. CloudWatch alarms on the instance plus a heartbeat from the
 worker would cover the realistic failures.
 
-### PR-4 · Reminders have no delivery guarantee
-`reminder_fires` retries on failure, but nothing watches for fires stuck in
-`sent` without an ack, and nothing pages if the scheduler stops. A missed
-cardiac dose is the product's worst failure and it would currently be invisible.
-**Fix:** a stuck-fire sweep, plus an alert when dispatch count is zero over a
-window where it should not be.
+### PR-4 · Reminders had no delivery guarantee — partly resolved 2026-07-27
+The original row understated it. Reminders were not merely unguaranteed, they
+were **never dispatched**: `_create_reminder` wrote to `reminder_fires`, the
+worker read only `scheduled_turns`, and `worker/reminder_scheduler.py` — the
+sole reader of `reminder_fires` — was referenced nowhere in the repo. Latent
+rather than live, because no real reminder had been created yet.
+
+**Resolved:** creation now enqueues onto `scheduled_turns`; recurring reminders
+book their next occurrence; a deliberate no-send (paused user, no active handle)
+is marked `skipped`; and `scheduling.sweep_stuck` reclaims turns claimed but
+never sent. Proven end to end against the live database, not only against fakes.
+
+**Still open, and the reason this row stays P0:** nothing yet pages a human when
+dispatch stops. The sweep records the failure; no one is told. Depends on PR-3,
+which is itself blocked on `cloudwatch:PutMetricAlarm` and SNS (see PR-22).
+Acknowledgement is separately broken — lane PR-4b.
 
 ### PR-5 · Meta app and WhatsApp number are borrowed
 The app (`1571039744742551`) and the ayurpet system-user token are MeshPilot's;

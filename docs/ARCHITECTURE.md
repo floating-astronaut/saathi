@@ -44,8 +44,21 @@ patch. Bias forms are extracted proper nouns; a whole sentence is worthless as a
 bias hint.
 
 **Recurrence and firing are separate tables.** `reminders` holds the RRULE
-definition; `reminder_fires` is the queue. Ack / snooze / nudge is then a state
-machine on one table, and §15's acknowledgement-rate metric falls out for free.
+definition; **`scheduled_turns` is the queue** — one queue for every kind of
+scheduled work, since migration 006. Firing a recurring reminder books its own
+next occurrence, dedupe-keyed on (reminder, occurrence), because nothing else
+walks the RRULE.
+
+`reminder_fires` is the **old** queue and is no longer written or read. It
+survives only as the table `pipeline.handle_ack` still updates, which is why the
+ack path is currently unreachable — see lane PR-4b. Do not add writes to it.
+
+**A claim is committed before the send.** `claim_due` marks a turn `sent` and
+commits, so two workers can never double-send. The cost is that a crash between
+claim and send strands the row: never retried, because claiming reads only
+`pending`, and never failed, because nothing raised. `scheduling.sweep_stuck`
+reclaims those, guarded on `wa_message_id is null` — set only after a send
+returns an id, so a reclaimed turn provably never reached WhatsApp.
 
 **Cost is linear in prompt size.** The chosen model has no prompt caching, so
 there is no cache to hide a bloated prefix behind. `agent/prompt.py` raises

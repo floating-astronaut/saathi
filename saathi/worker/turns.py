@@ -45,16 +45,54 @@ async def _handle(conn, user_id: int, template: str, variables: list[str]) -> st
 async def reminder(conn, *, turn_id, user_id, payload, scheduled_for):
     rid = payload.get("reminder_id")
     row = await (await conn.execute(
-        "select title from reminders where id = %s and status = 'active'", (rid,))).fetchone()
+        """select title, rrule, tz from reminders
+            where id = %s and status = 'active' and deleted_at is null""",
+        (rid,))).fetchone()
     if not row:
         await conn.execute(
             "update scheduled_turns set state='skipped' where id=%s", (turn_id,))
         return
-    mid = await _handle(conn, user_id, REMINDER_TEMPLATE, [row[0]])
+    title, rrule, tz = row
+
+    mid = await _handle(conn, user_id, REMINDER_TEMPLATE, [title])
     if mid:
         await conn.execute(
             "update scheduled_turns set wa_message_id=%s where id=%s", (mid, turn_id))
+    else:
+        # We decided not to send — the user is paused, or has no active handle.
+        # Mark it, because `sweep_stuck` reclaims turns left in 'sent' with no
+        # message id, and it must be able to tell "chose not to send" from "the
+        # send died halfway". Left as 'sent', a paused user's reminder would be
+        # reclaimed and retried forever.
+        await conn.execute(
+            "update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+
+    # A recurring reminder has to book its own next occurrence: nothing else
+    # walks the rrule. Without this a daily reminder fires exactly once.
+    if rrule:
+        await _schedule_next(conn, user_id, rid, rrule, tz, scheduled_for)
     log.info("fired reminder %s for user %s", rid, user_id)
+
+
+async def _schedule_next(conn, user_id: int, rid: int, rrule: str, tz: str,
+                         after) -> None:
+    """Book the next occurrence of a recurring reminder.
+
+    The dedupe key is (reminder, occurrence), so booking the same occurrence
+    twice is a no-op at the unique index. That matters because `sweep_stuck`
+    can reclaim a turn whose handler already got this far.
+    """
+    # Local import: `handlers` imports this module to register the kinds.
+    from ..agent.tools.handlers import next_fire
+
+    when = next_fire(rrule, tz, after=after)
+    await scheduling.enqueue(
+        conn, user_id, "reminder", when,
+        payload={"reminder_id": rid},
+        dedupe_key=f"reminder:{rid}:{when.isoformat()}",
+    )
+    await conn.execute(
+        "update reminders set next_fire_at = %s where id = %s", (when, rid))
 
 
 # --- nudge -------------------------------------------------------------------

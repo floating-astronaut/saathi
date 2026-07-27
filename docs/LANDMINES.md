@@ -180,3 +180,31 @@ happened, and invites someone to "fix" signing that was never broken.
 
 Configure `gpg.ssh.allowedSignersFile` on any box that needs to *verify* rather
 than merely produce signatures.
+
+---
+
+## Testing: a fake connection will certify SQL that Postgres rejects
+
+**Symptom:** unit tests green, statement fails the first time it runs for real.
+
+**Cause:** the suite's fake `Conn` records the SQL string and returns canned
+rows. It never parses anything. `sweep_stuck` shipped with
+
+    set state = case when attempts >= 5 then 'failed' else 'pending' end
+
+which Postgres refuses — `case` yields `text` and the column is the `turn_state`
+enum — while every test passed.
+
+**Why it is nasty:** the failure is invisible until the code path runs in
+production, and this particular path only runs *after a worker has already
+crashed*. The test suite reported 301 passing.
+
+**Fix:** the cast (`(...)::turn_state`), and more usefully the habit — run any
+new statement against the real database once:
+
+    sudo -u postgres psql -tA saathi <<'SQL'
+    \set ON_ERROR_STOP on
+    <the statement, parameters bound as the code binds them>
+    SQL
+
+Fakes prove shape. Only Postgres proves validity.
