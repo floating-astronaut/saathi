@@ -15,25 +15,33 @@ from decimal import Decimal
 
 log = logging.getLogger("saathi.accounts")
 
-#: Monthly spend ceiling per tier, in USD.
-#:
-#: `free` is **not** a small cap — it is no key at all. A free account runs on
-#: the platform default (Bedrock direct, as today), so admission staying open
-#: does not hand a stranger a budget. That matters: onboarding is deliberately
-#: open and model-free, and it would stop being safe if merely arriving minted
-#: something billable.
-#:
-#: `paid` is provisional — nobody pays yet, and the number should be set by a
-#: real price, not by symmetry with beta.
+#: Spend ceiling per tier, in USD. Operator decision 2026-07-27: "first $5 free
+#: per user, then we will paywall."
 TIER_CAPS: dict[str, Decimal | None] = {
-    "free": None,
+    "free": Decimal("5.00"),
     "beta": Decimal("5.00"),
     "paid": Decimal("20.00"),
 }
 
-#: New accounts start here. Not `beta`: the door is open by design, so the
-#: default must be the tier that costs nothing to hand to a stranger. An
-#: operator promotes a tester deliberately.
+#: **The cap means nothing without this.** A $5 cap that resets monthly is not
+#: "$5 free", it is $5 every month forever — and with admission open, that is a
+#: standing invitation to anyone willing to keep a number alive.
+#:
+#: So `free` has **no reset**: the $5 is a lifetime grant, spent once, and when
+#: it runs out the account has to be moved to a paying tier. That is the
+#: paywall. `beta` resets monthly because those are testers an operator chose
+#: deliberately and wants to keep working.
+#:
+#: `None` here means OpenRouter treats the limit as a total rather than a
+#: recurring allowance — the `limit_reset` field is simply omitted.
+TIER_RESET: dict[str, str | None] = {
+    "free": None,
+    "beta": "monthly",
+    "paid": "monthly",
+}
+
+#: New accounts start here. Every user gets the free grant; an operator promotes
+#: a tester to `beta` for a refreshing allowance.
 DEFAULT_TIER = "free"
 
 
@@ -48,6 +56,17 @@ def tier_cap(tier: str | None) -> Decimal | None:
         log.warning("unknown tier %r — falling back to %r", tier, DEFAULT_TIER)
         return TIER_CAPS[DEFAULT_TIER]
     return TIER_CAPS[tier]
+
+
+def tier_reset(tier: str | None) -> str | None:
+    """Reset period for a tier, or None for a one-time grant.
+
+    An unknown tier gets the default's reset, which is `None` — a typo must
+    produce a spend that stops, never one that renews.
+    """
+    if tier not in TIER_RESET:
+        return TIER_RESET[DEFAULT_TIER]
+    return TIER_RESET[tier]
 
 
 async def ensure_for_user(conn, user_id: int, tier: str = DEFAULT_TIER) -> int:

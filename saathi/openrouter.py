@@ -152,7 +152,13 @@ async def mint(conn, account_id: int) -> dict:
         return {"account_id": account_id, "minted": False, "name": None, "tier": tier}
 
     name = key_name(account_id, tier)
-    body = {"name": name, "limit": float(cap), "limit_reset": "monthly"}
+    body = {"name": name, "limit": float(cap)}
+    # Omitting `limit_reset` makes the cap a *total*, not an allowance. That is
+    # the difference between "$5 free" and "$5 every month forever", and with
+    # admission open the second one is a standing invitation.
+    reset = accounts.tier_reset(tier)
+    if reset:
+        body["limit_reset"] = reset
     if settings.openrouter_workspace_id:
         body["workspace_id"] = settings.openrouter_workspace_id
 

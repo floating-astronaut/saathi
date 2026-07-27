@@ -141,6 +141,36 @@ now by D-S: Sarvam is STT-only, where per-turn cost is limited by
 That work would also answer the same question for Bedrock, which has the
 identical gap and no sub-keys either.
 
+### PR-40 · There is no paywall, only a key that stops working
+D-T grants every user $5 once. Nothing handles the moment it runs out. The key
+stops authorising, the turn fails, and the person is told nothing useful — an
+elder whose assistant goes silent mid-conversation has no way to know that the
+reason is money, or what to do about it.
+
+Needs, in order of how badly they are missing: a balance check that can see the
+grant approaching exhaustion *before* it is gone; a deterministic, model-free
+reply for the exhausted state (it cannot be generated — that is the one turn
+that certainly cannot call the model); and a decision about what a lapsed
+account keeps. Reminders already scheduled are the hard part. Silently dropping
+a medication reminder because a bill went unpaid is not a product decision this
+codebase should make by omission.
+**Fix:** balance polling into `ai_key_events`, an exhausted-state capability at
+a priority above the agent, and an explicit rule for reminders on a lapsed
+account.
+
+### PR-41 · The free grant is mintable by anyone who completes onboarding
+Admission is open and onboarding is deterministic, so the only thing between a
+stranger and $5 of our money is answering a few buttons. The grant does not
+renew (D-T), which bounds the loss per number rather than per attacker — someone
+with a supply of numbers has a supply of grants.
+
+Bounded today by the fact that nothing is funded, so this costs nothing yet, and
+by minting at completion rather than first contact.
+**Fix:** decide whether the free grant requires something scarcer than a phone
+number before funding the account. Options, none chosen: an invite code (the
+`channel_link_codes` table already exists for pairing), a per-day mint ceiling,
+or keeping `saathi_dm_policy = "pairing"` for the funded period.
+
 ---
 
 ## P1 — before anyone pays

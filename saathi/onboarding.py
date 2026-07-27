@@ -25,6 +25,7 @@ is a different purpose from providing the service and must not ride along.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from . import training
 
@@ -169,6 +170,37 @@ def _buttons(*pairs: tuple[str, str]) -> list[tuple[str, str]]:
     return list(pairs)
 
 
+async def _grant_free_allowance(conn, user_id: int) -> None:
+    """Queue the free $5 key, now that someone has actually finished onboarding.
+
+    **Queued, never minted here.** Onboarding makes no model call and no
+    third-party call — that property is exactly what lets the door stay open —
+    and a blocking HTTP request to OpenRouter on this path would regress it.
+    The user's first turns run on the platform default; their own key takes
+    over when the worker gets to it.
+
+    Placed at *completion* rather than at first contact on purpose. The free
+    grant is real money, and a number that probes us once and never answers
+    should get an account row and nothing billable.
+
+    Failure here is swallowed deliberately: the person finished onboarding and
+    is waiting on a reply. Losing the key costs them nothing they can see —
+    the account still works on the platform default — while losing the reply
+    would be the last thing that happened to them.
+    """
+    from . import accounts, scheduling
+    from .worker import turns  # noqa: F401 — registers the `provision_key` kind
+    try:
+        account_id = await accounts.ensure_for_user(conn, user_id)
+        await scheduling.enqueue(
+            conn, user_id, "provision_key", datetime.now(timezone.utc),
+            payload={"account_id": account_id},
+            dedupe_key=f"provision:{account_id}")
+        log.info("queued free allowance for user %s (account %s)", user_id, account_id)
+    except Exception:
+        log.exception("could not queue the free allowance for user %s", user_id)
+
+
 async def begin(conn, transport, user_id: int, handle: str) -> dict:
     """First contact. Ask which language, before anything else.
 
@@ -268,6 +300,7 @@ async def handle_button(conn, transport, user_id: int, handle: str,
         await conn.execute(
             "update users set onboarding = 'done', onboarded_via = 'self' where id = %s",
             (user_id,))
+        await _grant_free_allowance(conn, user_id)
         name = await _name(conn, user_id)
         await transport.send_text(conn, user_id, handle, t(lang, "done", name=name))
         log.info("user %s finished onboarding (training=%s)", user_id, choice)
