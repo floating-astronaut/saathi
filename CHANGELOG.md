@@ -14,6 +14,58 @@ Conventions:
 
 ---
 
+## 2026-07-27 (night) — one captionless image broke that user's next four conversations
+
+**411 tests passing** (405 → 411). `tests/test_blank_history.py`.
+
+### Broke
+
+- **Four turns died with no reply at all**, 08:05 to 08:28:
+  `ValidationException: The text field in the ContentBlock object at
+  messages.N.content.0 is blank.` The exception escaped the whole turn, so the
+  user received nothing — no answer, no apology, no fallback. For an eldercare
+  assistant, silence is indistinguishable from being ignored.
+
+  **The `N` varied — 0, 1, 2 — and that was the clue.** It was not the incoming
+  message that was blank; the agent capability already refuses to run on empty
+  text (`lambda c: bool(c.text.strip())`). It was a row in the **history**
+  loaded ahead of it.
+
+  `messages.id = 55`: user 15 sent an image with no caption at 08:02:17, stored
+  with `body_text = ''`. `conversation.history` filtered on `is not null` — and
+  an empty string is not null. Every turn that user took for the next
+  twenty-six minutes loaded that row, built `{"text": ""}`, and had the whole
+  request rejected. It stopped when the row aged out of the twelve-message
+  window, which is why it looked intermittent.
+
+### Fixed
+
+Two guards, because there were two failures — the row should not have been
+written, *and* it should not have been loaded:
+
+- `conversation.history` now filters `btrim(...) <> ''`, not `is not null`.
+  Rows like 55 already exist, so filtering on read is the one that matters today.
+- `log_message` normalises blank body/transcript to `NULL` at the write path,
+  so the row cannot be created again.
+
+### A wrong diagnosis, recorded because it was nearly shipped
+
+I first blamed `pipeline`'s else-branch, which yields `ctx.text = ""` for any
+unhandled message type, and built a capability to catch empty turns before the
+agent. **An existing test failed and was right to** —
+`test_empty_text_does_not_call_the_model` already asserted that empty text never
+reaches the model, and it passes because the agent's matcher excludes it. The
+fix was reverted. The `N > 0` in the error message had been visible from the
+start and named the history rather than the message; I read it as noise.
+
+### Why it matters more this week
+
+WhatsApp Payments went live on this WABA (`1687148075730227` — the same number
+Saathi answers), which adds `order` and `payment` to the inbound types that
+arrive with no text body. Those would have joined captionless images as sources
+of blank rows. See D-U.
+
+
 ## 2026-07-27 (evening) — per-account AI keys, and an account to hang them on
 
 **405 tests passing** (384 → 405). `tests/test_openrouter_keys.py`. AI-1.

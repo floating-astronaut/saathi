@@ -66,11 +66,21 @@ async def history(conn, user_id: int, limit: int = 12) -> list[dict]:
     Someone who starts on WhatsApp and later arrives on Telegram should not be
     met by an assistant with amnesia.
     """
+    # `btrim(...) <> ''` and not merely `is not null`. An empty string is not
+    # null, and Bedrock rejects a blank ContentBlock outright:
+    #
+    #     ValidationException: The text field in the ContentBlock object at
+    #     messages.N.content.0 is blank.
+    #
+    # That exception escapes the whole turn, so the user gets *nothing* — and it
+    # keeps happening on every subsequent turn until the blank row falls out of
+    # this window. One image sent without a caption on 2026-07-27 08:02 stored
+    # `body_text = ''` and broke that user's next four conversations.
     rows = await (await conn.execute(
         """select direction::text, coalesce(transcript, body_text)
              from messages
             where user_id = %s and deleted_at is null
-              and coalesce(transcript, body_text) is not null
+              and btrim(coalesce(transcript, body_text)) <> ''
             order by created_at desc limit %s""",
         (user_id, limit),
     )).fetchall()

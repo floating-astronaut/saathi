@@ -79,6 +79,16 @@ async def log_message(conn, user_id: int, direction: str, kind: str, *,
     body = privacy.redact_for_storage(body)
     transcript = privacy.redact_for_storage(transcript)
     transcript_raw = privacy.redact_for_storage(transcript_raw)
+
+    # An image or sticker with no caption arrives here with body="". Stored as
+    # an empty string it is *not null*, so it passed `conversation.history`'s
+    # filter and became a blank ContentBlock, which Bedrock refuses — breaking
+    # every later turn until it aged out of the window. Normalise at the write
+    # path so the bad row cannot be created; `history` also filters blanks, for
+    # the rows that already exist.
+    body = body if (body and body.strip()) else None
+    transcript = transcript if (transcript and transcript.strip()) else None
+    transcript_raw = transcript_raw if (transcript_raw and transcript_raw.strip()) else None
     row = await (await conn.execute(
         """insert into messages (user_id, direction, kind, wa_message_id, body_text,
                                  transcript, transcript_raw, stt_ms, template_name)
