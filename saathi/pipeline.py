@@ -247,46 +247,91 @@ HELP_TEXT = (
 )
 
 
+# Command replies, per language. Onboarding stopped saying everything twice on
+# 2026-07-28; these still did, so a user who chose English got a Hindi paragraph
+# every time they said /stop. Same complaint, later in the journey.
+CMD_COPY = {
+    "hi": {
+        "stopped": ("Theek hai, main ab message nahi bhejungi. "
+                    "'chalu karo' kehkar wapas shuru kar sakte hain."),
+        "resumed": "Wapas shuru! Ab main pehle jaisi yaad dilaungi.",
+        "nothing_known": "Abhi mere paas aapke baare mein kuch bhi nahi hai.",
+        "known_intro": "Mere paas yeh hai:",
+        "known_outro": "Kuch hatana ho to bataiye.",
+        "cleared": ("Chat saaf kar di ({n} message). Aapke reminders aur "
+                    "yaadein waise hi hain."),
+        "confirm_delete": ("Kya aap sach mein sab kuch hataana chahte hain? "
+                           "Yeh wapas nahi aayega."),
+        "del_yes": "Haan, sab hatao", "del_no": "Nahi, rehne do",
+        "ask_lang": "Aap kis bhaasha mein baat karna chahenge?",
+    },
+    "en": {
+        "stopped": ("Stopped — I won't send you messages. Say \"resume\" "
+                    "whenever you'd like them back."),
+        "resumed": "Resumed. I'll remind you as before.",
+        "nothing_known": "I have nothing stored about you yet.",
+        "known_intro": "Here's what I have:",
+        "known_outro": "Tell me if you'd like anything removed.",
+        "cleared": ("Chat cleared ({n} messages). Your reminders and memories "
+                    "are untouched."),
+        "confirm_delete": "Delete everything? This cannot be undone.",
+        "del_yes": "Yes, delete all", "del_no": "No, keep it",
+        "ask_lang": "Which language would you like to use?",
+    },
+}
+
+
+def _c(lang: str, key: str, **fmt) -> str:
+    table = CMD_COPY.get(lang) or CMD_COPY["hi"]
+    out = table.get(key) or CMD_COPY["hi"][key]
+    return out.format(**fmt) if fmt else out
+
+
 async def _run_command(conn, transport, user_id: int, handle: str, cmd) -> dict | None:
     """Deterministic handling of unambiguous requests. No model, no cost."""
     from .agent.tools.handlers import Handlers
+    from .onboarding import _lang, ASK_LANG
     C = commands.Command
+    lang = await _lang(conn, user_id)
+
+    if cmd is C.LANGUAGE:
+        # Re-offer the same two buttons onboarding used. The choice was asked
+        # once and could not be revisited (PR-32); the person most likely to
+        # mistap it is the one this product is for.
+        await transport.send_buttons(conn, user_id, handle, ASK_LANG,
+                                     [("ob:lang:hi", "हिंदी"), ("ob:lang:en", "English")])
+        return {}
     if cmd is C.HELP:
         await transport.send_text(conn, user_id, handle, HELP_TEXT)
         return {}
     if cmd is C.STOP:
         await conn.execute("update users set paused = true where id = %s", (user_id,))
-        await transport.send_text(conn, user_id, handle,
-            "Theek hai, main ab message nahi bhejungi. 'chalu karo' kehkar wapas "
-            "shuru kar sakte hain.\n\nStopped. Say \"resume\" to start again.")
+        await transport.send_text(conn, user_id, handle, _c(lang, "stopped"))
         return {}
     if cmd is C.RESUME:
         await conn.execute("update users set paused = false where id = %s", (user_id,))
-        await transport.send_text(conn, user_id, handle, "Wapas shuru! / Resumed.")
+        await transport.send_text(conn, user_id, handle, _c(lang, "resumed"))
         return {}
     if cmd is C.WHAT_YOU_KNOW:
         known = await memory.describe(conn, user_id)
         if not known["count"]:
-            body = "Abhi mere paas aapke baare mein kuch bhi nahi hai.\n\nI have nothing stored about you yet."
+            body = _c(lang, "nothing_known")
         else:
             lines = [f"• {v}" for vals in known["known"].values() for v in vals]
-            body = ("Mere paas yeh hai:\n" + "\n".join(lines) +
-                    "\n\nKuch hatana ho to bataiye.")
+            body = (_c(lang, "known_intro") + "\n" + "\n".join(lines) +
+                    "\n\n" + _c(lang, "known_outro"))
         await transport.send_text(conn, user_id, handle, body)
         return {}
     if cmd is C.CLEAR_CHAT:
         n = await conversation.clear_conversation(conn, user_id)
-        await transport.send_text(conn, user_id, handle,
-            f"Chat saaf kar di ({n} message). Aapke reminders aur yaadein waise hi hain.\n\n"
-            f"Chat cleared. Your reminders and memories are untouched.")
+        await transport.send_text(conn, user_id, handle, _c(lang, "cleared", n=n))
         return {}
     if cmd is C.DELETE_ALL:
         # Confirm once — it cannot be undone. The confirmation is a button so
         # there is no ambiguity about what "yes" meant.
-        await transport.send_buttons(conn, user_id, handle,
-            "Kya aap sach mein sab kuch hataana chahte hain? Yeh wapas nahi aayega.\n\n"
-            "Delete everything? This cannot be undone.",
-            [("del:yes", "Haan, sab hatao"), ("del:no", "Nahi, rehne do")])
+        await transport.send_buttons(
+            conn, user_id, handle, _c(lang, "confirm_delete"),
+            [("del:yes", _c(lang, "del_yes")), ("del:no", _c(lang, "del_no"))])
         return {}
     if cmd is C.START:
         return None      # a bare greeting from an onboarded user is conversation
