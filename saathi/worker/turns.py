@@ -48,6 +48,35 @@ async def _handle(conn, user_id: int, template: str, variables: list[str],
                                   payloads=payloads or [])
 
 
+async def _settle(conn, turn_id: int, mid: str | None) -> None:
+    """Record how a send ended. **Every handler that sends must call this.**
+
+    `sweep_stuck` reclaims any turn left in 'sent' with no `wa_message_id`,
+    because that is what a worker dying mid-send looks like. It cannot tell
+    that from a handler that sent perfectly well and simply never wrote the id
+    down — so a handler that skips this step has its message re-delivered every
+    fifteen minutes until the attempt budget runs out.
+
+    That is not hypothetical. `nudge` and `checkin` called `_handle` and
+    discarded its return value, and on 2026-07-27 a live user received the same
+    "time to sleep" nudge four times, twenty-three seconds to fifteen minutes
+    apart, each one a genuine WhatsApp 200 OK. `reminder` had the write-back
+    and the comment explaining why; the other two were written without either.
+    Sharing the step is the point: it is no longer something a new handler can
+    forget to remember.
+
+    A `None` id means we *chose* not to send — the user is paused, or has no
+    active handle. That is marked 'skipped' rather than left 'sent', or the
+    sweep would retry a paused user's reminder forever.
+    """
+    if mid:
+        await conn.execute(
+            "update scheduled_turns set wa_message_id=%s where id=%s", (mid, turn_id))
+    else:
+        await conn.execute(
+            "update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+
+
 # --- reminder ----------------------------------------------------------------
 
 async def reminder(conn, *, turn_id, user_id, payload, scheduled_for):
@@ -66,17 +95,7 @@ async def reminder(conn, *, turn_id, user_id, payload, scheduled_for):
     # these the tap returns only the label and nothing ties it to this turn.
     mid = await _handle(conn, user_id, REMINDER_TEMPLATE, [title],
                         payloads=[f"ack:{turn_id}", f"snooze:{turn_id}:15"])
-    if mid:
-        await conn.execute(
-            "update scheduled_turns set wa_message_id=%s where id=%s", (mid, turn_id))
-    else:
-        # We decided not to send — the user is paused, or has no active handle.
-        # Mark it, because `sweep_stuck` reclaims turns left in 'sent' with no
-        # message id, and it must be able to tell "chose not to send" from "the
-        # send died halfway". Left as 'sent', a paused user's reminder would be
-        # reclaimed and retried forever.
-        await conn.execute(
-            "update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+    await _settle(conn, turn_id, mid)
 
     # Follow up if it goes unacknowledged. Nothing enqueued a nudge before, so
     # the handler below was registered and dead and a missed dose was silent.
@@ -132,7 +151,9 @@ async def nudge(conn, *, turn_id, user_id, payload, scheduled_for):
             await conn.execute(
                 "update scheduled_turns set state='skipped' where id=%s", (turn_id,))
             return
-    await _handle(conn, user_id, NUDGE_TEMPLATE, [payload.get("title", "aapka kaam")])
+    mid = await _handle(conn, user_id, NUDGE_TEMPLATE,
+                        [payload.get("title", "aapka kaam")])
+    await _settle(conn, turn_id, mid)
 
 
 # --- daily check-in ----------------------------------------------------------
@@ -146,7 +167,8 @@ async def checkin(conn, *, turn_id, user_id, payload, scheduled_for):
         """select count(*) from reminders
             where user_id = %s and status = 'active' and deleted_at is null""",
         (user_id,))).fetchone()
-    await _handle(conn, user_id, CHECKIN_TEMPLATE, [str(n[0] if n else 0)])
+    mid = await _handle(conn, user_id, CHECKIN_TEMPLATE, [str(n[0] if n else 0)])
+    await _settle(conn, turn_id, mid)
 
 
 # --- media retention ---------------------------------------------------------
