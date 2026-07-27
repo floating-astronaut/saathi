@@ -243,3 +243,60 @@ Beyond the language mismatch, it fails the same test as the Agent SDK: a
 framework that orchestrates agents and executes tools takes over the decision
 `provenance.allowed_tools()` and `assert_no_forbidden_tools()` exist to make.
 That gate stays ours.
+
+---
+
+# Standing rule: the loop stays ours
+
+**Any framework or SDK that executes tools on our behalf is refused.** Read them
+for ideas; never let one own the loop.
+
+The reason is not taste. PRD §12's guarantee — that prompt injection cannot cause
+harm — is not enforced by prompt engineering. It is enforced by **which tools
+exist in the list on this specific turn**:
+
+    provenance.allowed_tools()     withholds every mutating tool on RELAYED content
+    assert_no_forbidden_tools()    fails the suite if a tool could move money or read an OTP
+    safety classifier, priority 0  runs before the model is constructed
+
+A framework that runs the loop owns that list, and the guarantee moves into
+someone else's code where it holds by convention rather than by construction.
+
+And it is not hypothetical. **PR-23 was exactly this shape** — a path reaching
+state-changing behaviour without passing the provenance check, which paused a
+user's reminders because a relative forwarded an advert. That was inside code we
+control and took an afternoon to fix. Inside a vendored framework it is a fork or
+a wait.
+
+There is also a scale mismatch worth stating plainly, because it will keep
+looking like a gap: these frameworks solve multi-agent planning, RAG
+orchestration and autonomous task decomposition. Saathi's agent has one turn, one
+user, a handful of tools and a hard prefix budget, because the model has no
+prompt caching. It is deliberately the least autonomous agent in the room. **That
+is the product**, not a limitation to be grown out of.
+
+Asked and refused on this basis, 2026-07-27: the OpenRouter **Agent SDK**
+(TypeScript-only, and would be wrong in Python), **server-tools / fusion**,
+**LangChain**, **`lux`**, and three general agent frameworks
+(`Agentic-AI-Pipeline`, `agent-framework`, `AgentForge`).
+
+## The narrower version, for API clients
+
+The same instinct applies one level down, and has been settled three times:
+**Sarvam**, **OpenRouter inference**, and the **WhatsApp Cloud API** are all
+called with plain `httpx` rather than a vendor SDK, because in each case the
+traps live in the exact bytes and parameters on the wire — `mode=indic-en`, the
+WAV header, `allow_fallbacks: false`, the 24-hour window.
+
+`wa/client.py` states the test better than any rule could: it should be
+impossible to send free-form outside the window by forgetting to check, *because
+you cannot reach the wire without passing the check*. A library that documents a
+rule and one where the rule is structurally unavoidable are not the same
+guarantee.
+
+**Where an SDK does earn its place:** the OpenRouter **provisioning** client. It
+is generated from their OpenAPI spec, so it is authoritative where the prose docs
+are wrong by omission, it runs off the hot path on `scheduled_turns`, and it
+touches no safety boundary. Dependencies it adds — `httpx`, `pydantic` — were
+already present. That is the shape of an SDK worth taking: authoritative, off the
+critical path, and nowhere near the tool list.
