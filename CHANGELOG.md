@@ -14,6 +14,59 @@ Conventions:
 
 ---
 
+## 2026-07-27 (evening) — the same nudge, four times, every one of them a success
+
+**384 tests passing** (376 → 384). `tests/test_turn_settle.py`.
+
+### Broke
+
+- **A live user received the same nudge four times.**
+  `"Sone ka samay ho gaya hai 😴"` at 15:55:59, 15:56:29, 16:11:29 and 16:26:30,
+  and it would have gone on every fifteen minutes until the attempt budget ran
+  out. Every one of those sends was a genuine WhatsApp `200 OK`. Nothing failed,
+  nothing raised, and the log line that did appear —
+  `turn 6 (nudge) was stuck claimed-but-unsent` — described the *symptom* as
+  though it were the cause.
+
+  `sweep_stuck` reclaims any turn left in `state='sent'` with a null
+  `wa_message_id`, because that is exactly what a worker dying mid-send looks
+  like. `nudge()` called `_handle()` and **discarded its return value**, so a
+  perfectly delivered nudge was indistinguishable from an abandoned one. Every
+  sweep found it, reset it to pending, and sent it again. `checkin()` had the
+  identical hole.
+
+  The bitter detail: `reminder()` did it correctly *and carried a comment
+  explaining precisely this hazard* — "Left as 'sent', a paused user's reminder
+  would be reclaimed and retried forever." The defence was understood, written
+  down, and then simply not applied to two of the three senders. That is the
+  same failure shape as the `messages.kind` bug: one path got the care, its
+  siblings got copied without it.
+
+### Fixed
+
+- **`_settle(conn, turn_id, mid)` is now the shared last step of every sender**,
+  and all three call it. Not a tidy-up: the previous design required each new
+  handler to *remember* an invariant that only one of them documented. Three
+  outcomes, all distinguishable — delivered (record the id), chose not to send
+  because the user is paused or has no active handle (mark skipped), crashed
+  (leave it for the sweep, which is the one case that should retry).
+
+- **`MAX_ATTEMPTS` 5 → 3.** Operator decision: five deliveries felt like too
+  many on the receiving end. Note it only ever governs *undelivered* messages —
+  with the write-back fixed, a healthy reminder is sent exactly once and the
+  sweep never sees it again. Three is a floor chosen against "would an older
+  adult still want this dose flagged?", not a round number.
+
+### How the tests were checked
+
+Each guard was removed from the production path and the suite required to go
+red: nudge discarding its id → 3 failures, checkin → 2, `MAX_ATTEMPTS` back to
+5 → 1. The assertions are deliberately per-handler rather than one test of
+`_settle`, because what needs guarding is not that the helper works — it is
+that no sender is left out of it.
+
+---
+
 ## 2026-07-27 — the agent had no idea what day it was
 
 **376 tests passing** (366 → 376). `tests/test_clock.py`.

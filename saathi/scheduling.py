@@ -31,7 +31,13 @@ log = logging.getLogger("saathi.scheduling")
 
 POLL_SECONDS = 30
 BATCH = 50
-MAX_ATTEMPTS = 5
+#: Attempts before a turn is abandoned as failed. Operator decision, 2026-07-27:
+#: five felt like too many on the receiving end. It governs *undelivered*
+#: messages only — once a send records its `wa_message_id`, the sweep never
+#: touches it again, so a healthy reminder is sent exactly once regardless.
+#: The floor is "would an older adult still want this dose flagged?", which is
+#: why it is three and not one.
+MAX_ATTEMPTS = 3
 
 #: kind -> handler(conn, turn) -> None
 TurnHandler = Callable[..., Awaitable[None]]
