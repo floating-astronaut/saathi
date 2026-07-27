@@ -1089,3 +1089,36 @@ over fifteen minutes before the reclaim path caught it and delivered it.
 **Still unproven:** that a reminder created *today*, with a clock, lands at the
 right local time. The deploy proves the clock is in the prefix. It does not
 prove the next reminder is correct, and only a live one will.
+
+---
+
+## 2026-07-27 · `618ce84` deployed — and the resend loop stopped, observed
+
+Third self-deploy, `--local`, exit 0: zero migrations applied, 384 passed on the
+box, four units active, healthz ok locally and through the tunnel, unsigned
+webhook 403, zero errors since restart.
+
+**The evidence that matters is not the deploy.** Turn 6 was the nudge that had
+delivered itself four times. At 16:41:55 UTC, the first sweep after its
+fifteen-minute threshold, it went to `failed` with `attempts = 3` — and
+`messages` records **no further outbound row for user 14**. The loop stopped
+because the attempt budget caught it, and the underlying cause is gone: a nudge
+now records its `wa_message_id`, so the sweep will not mistake a delivered
+message for an abandoned one in the first place.
+
+Two separate things were wrong and both are fixed, which is worth separating:
+the *cause* (nudge and checkin discarded the message id, so every delivery
+looked abandoned) and the *blast radius* (five attempts, which the operator
+judged too many to be on the receiving end of). Fixing only the cause would have
+left the radius; fixing only the radius would have left every nudge sending
+three times instead of five.
+
+**What this run says about the method.** The bug was in production for as long
+as nudges have existed and the test suite was green throughout, because
+`reminder()` — the path everyone reads first — was correct, and its own comment
+described the exact hazard the other two handlers had. Reading the correct
+implementation is how you learn what the tests should have said; it is not
+evidence that they said it. Six occasions now.
+
+**Still open from this session:** the blank `ContentBlock` crash (four times
+this morning, kills the whole turn, not reproduced yet) and PR-37.
