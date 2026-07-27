@@ -865,3 +865,68 @@ in `conversational_automation` on the live number.
 `lang_pref` still holds legacy `'hi-en'` for users created before today, mapped
 to Hindi by `_lang()`. Whether to retire it or keep it as a third option is
 undecided.
+
+---
+
+## 2026-07-27 — Survey: sibling projects and the OpenRouter ecosystem
+
+No code. A day's worth of "is this useful to us" judgements, written down before
+they evaporated. The operator reviewed each one as it was made.
+
+### Read
+
+`Taurus-Ai-Corp/GRIDERA`, `Taurus-Ai-Corp/gridera-comply`,
+`Taurus-Ai-Corp/MONAD-Gate-`, `floating-astronaut/monad-project`,
+`OpenRouterTeam/{python-sdk, terraform-provider-openrouter, search-benchmarks,
+persona-hub, lux, docs}`, and the OpenRouter feature pages for ZDR, response
+caching, guardrails, classifiers, plugins, logging, broadcast and attribution.
+
+### Recorded
+
+- `PATTERNS_TO_BORROW.md` — the sibling-project survey, extended with the
+  OpenRouter ecosystem. Each entry says what to take **and why the
+  impressive-looking things are refused**, because in six months the badges will
+  still look impressive and the reasoning would be gone.
+- `AI_ROUTING.md` §10 — features considered, deferred and refused.
+- **D-O amended** — ZDR added as the mitigation for the transit residual.
+- **PR-33** — D-D's bakeoff was eight utterances.
+
+### The two findings that were not on the shopping list
+
+**MONAD-Gate has a verb Saathi is missing.** Its loop is Register → Policy →
+Gate → Attest. Saathi has the first three — the account is the liable principal,
+`MUTATING_TOOLS` is the policy, `allowed_tools()` is the gate — and **no
+attestation at all**. When tools are withheld because a turn was forwarded, no
+record survives. That is not academic: it is exactly why PR-23 went unnoticed, a
+forwarded advert pausing a user's reminders with nothing anywhere saying a
+boundary had been touched.
+
+**D-D rests on eight sentences.** Reading `search-benchmarks` — which grades 100
+tasks per cell and still refuses to name a winner because the intervals overlap —
+made the sample size in our own founding model decision impossible to unsee. The
+8/8 vs 7/8 gap is one utterance, and it is currently justifying a ~60% cost
+premium. PR-33.
+
+### Refused, with reasons, so they are not re-proposed
+
+- **Post-quantum crypto** (GRIDERA) — defends against harvesting traffic now to
+  break in 2035. Saathi's threats are a compromised box, a leaked backup, an
+  insider and DPDP. Impressive in a badge row, moves no risk.
+- **Blockchain-anchored consent** (GRIDERA/Hedera) — immutability and DPDP's
+  right to erasure are in direct conflict. Their subjects are enterprises proving
+  compliance; ours can say "sab kuch bhool jao" and must be obeyed. Take the
+  tamper-evidence, refuse the ledger: a hash-chained Postgres table.
+- **persona-hub for PR-9** — would scale up the synthetic data that already
+  invalidates the numbers, and would feel like progress while doing it.
+- **Agent SDKs, server-side tools, LangChain, `lux`** — all move tool execution
+  outside the code that enforces PRD §12's guarantee.
+- **Response caching** — it is *response* caching, not prompt caching, so D-D's
+  prefix budget is untouched. Also unverified whether the cache is scoped per
+  account; for elder health content a cross-user hit would be a leak.
+
+### Remains
+
+- Nothing here is scheduled. Each item needs its own lane, and the ones touching
+  a contract need a `DECISIONS.md` entry.
+- The ordering that actually matters is unchanged and is in
+  `PATTERNS_TO_BORROW.md`: PR-27, PR-22, PR-1, PR-7 come before any of it.

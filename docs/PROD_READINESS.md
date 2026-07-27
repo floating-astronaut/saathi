@@ -332,6 +332,35 @@ Cover in `tests/test_outbound_record.py` (8), including one that fails if `_send
 stops calling the recorder — the others exercise it directly and would stay green
 if the call were deleted.
 
+### PR-33 · D-D's model bakeoff was eight utterances
+D-D chose `zai.glm-5` — the model Saathi runs on, at roughly a 60% cost premium
+over the runner-up — on **8 code-mixed reminder utterances**:
+
+    zai.glm-5      8/8 time, 8/8 drug     ~₹220/user/mo est
+    deepseek.v3.2  7/8, 7/8               ~₹135
+    zai.glm-4.7    6/8, 8/8               ~₹133
+    qwen3-235b     4/8, 8/8               ~₹48
+    glm-4.7-flash  3/8, 8/8               ~₹16
+
+The gap between 8/8 and 7/8 is **one sentence**. At n=8 the confidence intervals
+on the top two overlap almost entirely; a single differently-mumbled `saade`
+flips the ranking. For comparison, `search-benchmarks` grades 100 tasks per cell
+and still declines to name a winner among its leaders because the intervals
+overlap.
+
+**This does not make D-D wrong.** The 3/8 versus 8/8 gap is almost certainly
+real, and the reasoning — that Hindi fractional time words are where a missed
+dose comes from — is sound. What is thin is the evidence separating **glm-5 from
+deepseek**, and that difference is currently justifying the premium.
+
+It matters now because AI-1 makes model routing configurable. The moment routing
+is a config value, "is glm-5 actually better than the ₹135 option" becomes a
+question someone will ask, and today the honest answer is "we measured eight
+sentences."
+**Fix:** fold into PR-9. Re-run the bakeoff on the real elder corpus, scored on
+D-D's metric (times and medicine names, not WER), reported with confidence
+intervals. See `PATTERNS_TO_BORROW.md` on the harness shape.
+
 ### PR-13 · Cloudflare token is IP-locked to the EIP
 `saathi-box-canonical` is locked to `15.252.75.191/32`. Correct, and it means
 **changing the EIP silently breaks the box's Cloudflare access**.

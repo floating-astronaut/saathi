@@ -147,3 +147,99 @@ The ranked list is already on the board:
 
 Encrypting columns while a compromised box can rewrite secrets and push to the
 source of truth is a strong lock on a door standing beside an open window.
+
+---
+
+# The OpenRouter ecosystem — surveyed 2026-07-27
+
+`OpenRouterTeam` publishes far more than the inference API. Most of it is for
+people who have not yet formed a product opinion. Saathi has one — safety at
+priority 0, capability defined by absence, inference in India, no silent
+fallback — so nearly every offering either duplicates a decision already made or
+asks us to hand one to a third party. That is the frame; the exceptions below
+are the useful part.
+
+## `terraform-provider-openrouter` — right idea, wrong moment
+
+Manages `api_key`, `byok_key`, `guardrail`, `observability_destination` as
+resources, with data sources for workspaces, budgets, members, credits and
+providers. Go, MIT-less (`licenseInfo: none`), 2 stars, created 2026-07-16.
+
+**Wrong for the per-account keys.** Those are minted at runtime when a household
+subscribes. Terraform is declarative and static; you cannot Terraform a key per
+user without an application generating thousands of resource blocks into state.
+Minting stays in the SDK, on `scheduled_turns` — see `AI_ROUTING.md` §5.
+
+**Right for the static scaffolding**, which today exists only because someone
+clicked it: the Indofolk AI workspace, the `amazon-bedrock` BYOK credential, the
+attached guardrail, the observability flags. Nothing in this repo records any of
+it — the same shape as **PR-2**, where the whole box was built by hand.
+
+**Revisit when PR-2 gets a lane**, not before. Saathi has no Terraform at all, so
+adopting it for three OpenRouter resources means a whole toolchain and state
+backend for a small win while an entire hand-built box stays unmanaged. If
+Terraform arrives it should arrive for the box, with OpenRouter riding along in
+the same state — then one apply reproduces the box *and* its routing.
+
+Two cautions when that day comes: the provider is days old with no licence file,
+and it manages **API keys as resources**, so key material lands in Terraform
+state. State would then need the same handling as Secrets Manager or it becomes
+the softest place to steal from.
+
+Also worth reading then: `workspace_budgets` may be a cleaner spend control than
+per-key caps alone.
+
+## `search-benchmarks` — steal the harness, and read the warning
+
+An eval framework (Python 3.12, `uv`, MIT, actively maintained), forked from
+Perplexity's `search_evals`. Runs a model+search configuration against
+BrowseComp, HLE, DeepSearchQA and WideSearch and emits quality, cost, latency,
+**confidence intervals** and run metadata into a self-contained report.
+Resumable sampled sweeps.
+
+The benchmarks are irrelevant — Saathi's question is Hinglish entity accuracy,
+not open-web retrieval. **The harness shape is exactly what PR-9 needs.**
+
+And their own README carries the warning we should have heard first:
+
+> The report includes confidence intervals; **the leading engine estimates
+> overlap** on these 100-task samples.
+
+100 tasks per cell, 4,793 graded, and they still decline to name a winner among
+the leaders. See PR-33 for what that implies about D-D.
+
+**What to build for PR-9**, when it gets a lane: real elder utterances through
+the actual `speech/correct.py` pipeline, scored on times and medicine names
+(D-D's metric, not WER), reported with confidence intervals, cost and latency,
+and resumable — a 100-utterance sweep across five models *will* be interrupted.
+
+## `persona-hub` — useful, and a trap
+
+Tencent's *"Scaling Synthetic Data Creation with 1,000,000,000 Personas"*, forked
+and untouched since 2024-10-15. Mine personas, generate diverse synthetic data at
+scale.
+
+**Do not use it for PR-9.** PR-9's complaint is not that the corpus is small — it
+is that entity accuracy was measured on **TTS-generated speech** rather than real
+elders, and that synthetic audio is cleaner and differently distorted than a
+70-year-old on a bad line with a television on. Generating more synthetic data
+scales up the exact thing that already invalidates the numbers, and it would feel
+like progress because the corpus grows and the score stays high. You would be
+measuring how well the model transcribes a language model's idea of an Indian
+elder.
+
+**Where it genuinely helps: attacking the classifier, not building the corpus.**
+Generating a thousand code-mixed phrasings of a hypoglycaemia episode or a
+digital-arrest scam tests whether a **regex** catches variants — a domain where
+synthetic diversity is the right tool, because nothing is being heard. Those
+patterns are hand-written today; a persona-driven sweep would find the gaps.
+
+## `lux` — no
+
+Elixir framework for multi-agent "swarmed intelligence" by Spectral Labs. A
+snapshot from Feb 2025, pushed the day it was created, never updated.
+
+Beyond the language mismatch, it fails the same test as the Agent SDK: a
+framework that orchestrates agents and executes tools takes over the decision
+`provenance.allowed_tools()` and `assert_no_forbidden_tools()` exist to make.
+That gate stays ours.
