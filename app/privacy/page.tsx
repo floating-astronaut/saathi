@@ -114,6 +114,33 @@ export default function Privacy() {
         <li>If you withdraw consent, everything you contributed is deleted.</li>
       </UL>
 
+      <H2>This website</H2>
+      <P>
+        Everything above is about the assistant itself. This website is separate, and it
+        does one thing worth telling you about: pages here load the Meta Pixel, which tells
+        Meta that a browser visited this site. That is how we find out whether people who
+        are shown Indofolk AI actually come and read about it.
+      </P>
+      <UL>
+        <li>
+          It runs on this website only. It is <strong>not</strong> part of the assistant,
+          and nothing you say in the chat is connected to it.
+        </li>
+        <li>
+          Meta receives your IP address, browser and the page you viewed. We receive counts,
+          not people — we cannot use it to identify you.
+        </li>
+        <li>
+          It never carries your name, phone number, medicines, reminders or anything the
+          assistant remembers about you.
+        </li>
+        <li>
+          To refuse it, block third-party scripts in your browser, or use its
+          &quot;Do Not Track&quot; or tracker-blocking setting. The site works exactly the
+          same without it.
+        </li>
+      </UL>
+
       <H2>Emergencies</H2>
       <P>
         Indofolk AI is not an emergency service and cannot call anyone for you. If you describe

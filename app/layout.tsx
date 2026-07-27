@@ -2,6 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { Cal_Sans as FontHeading, Plus_Jakarta_Sans as FontSans } from "next/font/google";
 import "./globals.css";
+import { MetaPixel } from "@/components/meta-pixel";
 
 const fontSans = FontSans({
     subsets: ["latin"],
@@ -39,6 +40,7 @@ export default function RootLayout({
       >
         <div className="bg-pattern"></div>
         {children}
+        <MetaPixel />
       </body>
     </html>
   );
