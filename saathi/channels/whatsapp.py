@@ -30,8 +30,10 @@ class WhatsAppTransport(Transport):
     async def send_buttons(self, conn, user_id, handle, body, buttons):
         return await wa.send_buttons(conn, user_id, handle, body, buttons)
 
-    async def send_template(self, conn, user_id, handle, name, lang="en", variables=None):
-        return await wa.send_template(conn, user_id, handle, name, lang, variables or [])
+    async def send_template(self, conn, user_id, handle, name, lang="en", variables=None,
+                            payloads=None):
+        return await wa.send_template(conn, user_id, handle, name, lang, variables or [],
+                                      payloads=payloads or [])
 
     async def fetch_media(self, media_id):
         return await wa.fetch_media(media_id)

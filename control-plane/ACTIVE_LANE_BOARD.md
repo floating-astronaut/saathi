@@ -209,8 +209,8 @@ Notes: design doc written first (THE_METHOD §1) — the code follows it, not th
   The SDK's `create()` takes `workspace_id`, `limit_reset` and `expires_at` — the
   prose docs omit all three, so trust `vendor/` and the generated client.
 
-### PR-4b — the reminder ack path is unreachable   [OPEN]
-Owner: unassigned        Opened: 2026-07-27
+### PR-4b — the reminder ack path is unreachable   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-28
 Reading: docs/LANDMINES.md (Meta template rules), docs/PRD.md §C2, §15
 Acceptance: a fired reminder carries quick-reply buttons whose payload identifies
   the turn; pressing one marks that `scheduled_turns` row `acked`; an

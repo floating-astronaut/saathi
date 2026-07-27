@@ -14,6 +14,38 @@ Conventions:
 
 ---
 
+## 2026-07-28 (later) — a fired reminder can come back
+
+**331 tests passing.**
+
+### Broke
+
+- **Acknowledgement never worked.** Not rarely — never. §15's acknowledgement
+  rate was structurally zero. Four independent breaks, none of which raised:
+  the template carried no per-message payload so a tap returned only its label;
+  the arriving `button` message type was never read; the pipeline routed it to
+  the model as text; and `handle_ack` updated `reminder_fires`, the table
+  migration 006 stopped writing.
+- **Nothing enqueued a nudge.** The handler was registered, tested and dead, so
+  an unacknowledged reminder was never followed up.
+- **Snooze did not snooze.** It marked the row and booked nothing — the user was
+  told "later" by a system that then forgot.
+
+### Fixed
+
+`send_template(payloads=[...])`, `button_id` reading both shapes, the pipeline
+treating `button` like `interactive`, `handle_ack` on `scheduled_turns` with the
+pending nudge cancelled, snooze re-enqueuing, and a nudge booked at +20 min
+dedupe-keyed on the origin turn. Replies localised now that language exists.
+
+### Note
+
+`tests/test_pipeline_order.py` contained a test asserting the **old** behaviour —
+`reminder_fires` and `acked`. It was holding the bug in place. That is the fourth
+time today a passing test agreed with a bug instead of catching it.
+
+---
+
 ## 2026-07-28 — ask the language first, then say it once
 
 **326 tests passing.**
