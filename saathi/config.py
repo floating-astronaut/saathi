@@ -52,6 +52,16 @@ class Settings(BaseSettings):
     #: The configuration *name* Meta knows this gateway by, sent in every
     #: order_details. Not the merchant id, and easy to confuse with it.
     wa_payment_configuration_name: str = ""
+    #: Razorpay server-side credentials. **Not used by the invoice** — Meta calls
+    #: Razorpay for that, using the gateway configuration linked on their side.
+    #: These are for the reconciliation half (PR-43): verifying the payment
+    #: webhook signature, reading payment status, and creating the customer that
+    #: `accounts.psp_customer_id` binds to.
+    #:
+    #: A `rzp_test_` key id means test mode: no real money can move, which is
+    #: the correct mode to build PR-43 in.
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
 
     #: Fernet key for secrets at rest — today, minted OpenRouter keys. Empty
     #: means provisioning refuses rather than storing a plaintext, because an
