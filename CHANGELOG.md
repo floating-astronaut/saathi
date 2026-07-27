@@ -14,6 +14,45 @@ Conventions:
 
 ---
 
+## 2026-07-27 (night) — the commands become visible
+
+No Python changed. Meta-side configuration on `1266402176549539`.
+
+`commands.py` has always parsed eight slash commands. **No user could discover
+any of them** — there was no menu, and nothing in the copy mentioned them. They
+are now registered with Meta, so typing `/` shows them. The handlers were already
+written and tested; this only makes them findable.
+
+Four ice breakers added, in Hinglish, emoji-free (the API rejects emoji):
+
+    Dawa ka reminder lagaayein
+    Is photo mein kya likha hai, bataayein
+    Mere baare mein kya jaante hain
+    Bas thodi baat karni hai
+
+### Checked before configuring, not after
+
+Every ice breaker was run through `commands.parse` and the safety classifier. An
+ice breaker that accidentally matched `\bunsubscribe\b` or a self-harm trigger
+would be a bad way to greet a first-time user, and STOP already matches
+substrings — see PR-23.
+
+That test also changed one of them. "Mere baare mein aapko kya yaad hai" routes
+to the **model**; "Mere baare mein kya jaante hain" matches the deterministic
+WHAT_YOU_KNOW handler. Asking what a system stores about you is a transparency
+feature and should return the actual list, not a generated approximation.
+
+### To test
+
+Ice breakers only appear on a **fresh** thread. Clear All Messages, delete the
+chat, then start a new one — see `docs/vendor/meta/conversational-components.md`.
+
+Also from that doc, and now a standing constraint: **a `wa.me` link carrying
+pre-filled text dismisses the ice breaker UI.** Ours has no `?text=`. Do not add
+one.
+
+---
+
 ## 2026-07-27 (night, later) — the assistant is called Indofolk AI
 
 Operator decision: **Indofolk AI** is the name, in chat as well as on the WhatsApp
