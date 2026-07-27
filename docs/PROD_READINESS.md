@@ -178,18 +178,6 @@ an un-onboarded user to the agent and break "onboarding never calls the model".
 Regression cover in `tests/test_relayed_commands.py`, verified to fail without
 the guard.
 
-### PR-25 · Deploy restarts services even when a migration fails
-`ops/deploy.sh` runs every migration with `psql -v ON_ERROR_STOP=1`, but the
-loop masks a nonzero exit with `|| echo ... FAILED`. The script then continues
-to install the artifact and restart `saathi-web` and `saathi-worker`.
-
-That is fail-open at the deployment boundary: code can be rolled forward against
-an incomplete schema. For this product, the realistic impact is silent breakage
-of reminder delivery, safety-event writes, onboarding/consent state, or erasure
-paths rather than a clean failed deploy.
-
-**Fix:** make any failed migration abort the deploy before service restart. Keep
-the migration output visible, but do not consume the nonzero exit status.
 
 ### PR-26 · Inbound PDFs have no size or concurrency limit before parsing
 A valid WhatsApp sender can send a document, and the webhook detaches processing
@@ -239,6 +227,40 @@ than one stolen. The box is the internet-facing machine.
 **Fix:** drop back to read-only once CallerDesk is wired. If the grant was
 `secretsmanager:*` rather than `PutSecretValue` on that one resource ARN, narrow
 it now — this needed exactly one action on one secret. Related: PR-22.
+
+### PR-28 · `ops/deploy.sh` cannot be run from the runtime box
+It is written to run on the **dev box** and reach in over SSM: it exports
+`AWS_PROFILE=mp-dev` and calls `ssm send-command`. On the runtime box neither
+exists — `ssm:SendCommand` is denied to `saathi-dev-box` (correctly), and there
+is no `mp-dev` profile.
+
+So an agent working on the runtime box cannot deploy, even though it is standing
+on the target. The 2026-07-27 deploy of `117896b` was done by copying the four
+changed modules into `/home/ubuntu/saathi` by hand, then `uv sync`, `pytest`,
+`systemctl restart`, and the same verification block `deploy.sh` runs. That is
+exactly the hand-rolling `CONTRIBUTING.md` warns against, done knowingly because
+the alternative was leaving a live forwarded-command vulnerability in place.
+
+**Fix:** either give `deploy.sh` a local mode that skips the S3/SSM transport
+when it is already on the target, or make deploying a dev-box-only action and
+say so in `CONTRIBUTING.md` instead of implying any session can run it.
+
+### PR-25 · Deploy restarts services even when a migration fails
+Confirmed in detail 2026-07-27 while reading the script. `remote.sh` runs with
+`set -uo pipefail` — **no `-e`** — and the migration loop is:
+
+    su - ubuntu -c "psql ... -f $m" >/dev/null 2>&1 \
+      && echo "  migration ok" || echo "  migration FAILED"
+
+Three separate problems: the failure does not stop the run, **stderr is
+discarded** so the reason is never seen, and `systemctl restart` executes
+regardless. Services then run against a schema they do not match.
+
+There is also no `schema_migrations` table — all migrations re-run on every
+deploy and rely on being idempotent, so a non-idempotent migration would fail
+on the second deploy and be swallowed by the same loop.
+**Fix:** `ON_ERROR_STOP=1`, surface stderr, abort before the restart, and record
+applied versions.
 
 ### PR-13 · Cloudflare token is IP-locked to the EIP
 `saathi-box-canonical` is locked to `15.252.75.191/32`. Correct, and it means
