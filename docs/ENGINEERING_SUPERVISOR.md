@@ -1122,3 +1122,31 @@ evidence that they said it. Six occasions now.
 
 **Still open from this session:** the blank `ContentBlock` crash (four times
 this morning, kills the whole turn, not reproduced yet) and PR-37.
+
+
+---
+
+## 2026-07-27 — Usage ledger design recorded
+
+Research question: whether Langfuse or LiteLLM should replace the planned
+OpenRouter approach for tracking Bedrock and Sarvam spend together.
+
+### Outcome
+
+- Keep OpenRouter for the Bedrock/GLM-5 hard-cap path described in
+  `AI_ROUTING.md`; it returns LLM usage/cost but does not know Sarvam or
+  WhatsApp template spend.
+- Build `docs/USAGE_LEDGER.md`: a Saathi-owned append-only
+  `vendor_usage_events` design for every paid vendor call.
+- Treat Langfuse as an optional dashboard/mirror after the local row exists.
+- Defer LiteLLM until Saathi needs to operate a self-hosted LLM gateway; it is
+  not the first answer to Sarvam credits.
+
+### Contract updates
+
+- `docs/USAGE_LEDGER.md` added.
+- `docs/DOC_SYSTEM.md` maps the new doc.
+- `docs/DECISIONS.md` D-S records the ownership decision.
+- `docs/AI_ROUTING.md` now points at the usage ledger.
+- `docs/PROD_READINESS.md` PR-15 now points to the ledger as the concrete design
+  for audio/text/template/search caps.

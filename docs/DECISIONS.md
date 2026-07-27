@@ -366,6 +366,11 @@ discovering it on the invoice. (b) is the more likely path and is worth doing
 anyway — `llm_calls` already records per-user model, tokens and latency; what it
 lacks is price.
 
+**(b) now has a design: D-V and `docs/USAGE_LEDGER.md`.** Written independently
+the same day and arriving at the same conclusion from the other direction — no
+gateway can meter what it does not route, so the ledger has to be ours. Treat
+that document as the implementation path for reversing this decision.
+
 ### D-T · Five dollars free per user, once, then a paywall · 2026-07-27
 Operator decision: "first $5 free per user then we will paywall." Supersedes the
 `free`-tier posture recorded earlier the same day, which minted no key at all.
@@ -441,3 +446,20 @@ takes money without delivering or promises without charging.
 
 **Reverse it** by disabling the flag; the copy degrades to an explanation with
 no invoice, which is a safe resting state.
+
+
+### D-V · Paid-vendor usage is Saathi-owned, not gateway-owned · 2026-07-27
+Build `docs/USAGE_LEDGER.md` into the product before relying on any one vendor's
+meter for user spend. OpenRouter remains the Bedrock/GLM-5 router and hard cap
+for model calls, but it cannot account for Sarvam STT/TTS/OCR or WhatsApp
+paid templates. Langfuse is a good mirror/dashboard once local rows exist.
+LiteLLM is deferred until Saathi actually needs to operate its own LLM gateway.
+
+The invariant: every paid vendor call gets one Saathi row with user/message
+attribution, vendor/service/operation, units, cost, request id, status and
+latency. Vendor dashboards reconcile invoices; they do not define product
+causality.
+
+This is the concrete implementation path for PR-15's widened requirement: rate
+limits must cover audio, text, templates and future paid search, not just model
+turns.
