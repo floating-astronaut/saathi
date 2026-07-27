@@ -14,6 +14,39 @@ Conventions:
 
 ---
 
+## 2026-07-28 (later still, again) — the dead reminder path is gone
+
+**337 tests passing.**
+
+### Broke
+
+- **Reading `worker/` told you a lie about how reminders fire.** Two modules
+  sat there describing a queue that no longer exists: `send_reminder.py` and
+  `reminder_scheduler.py`, both built around `reminder_fires`. Migration 006
+  moved dispatch to `scheduled_turns`; neither module was deleted, and neither
+  was imported by anything.
+- **The cost was paid in reading, not in runtime.** A previous session read
+  `reminder_scheduler.py`, believed it was the live scheduler, and had to
+  prove by grep that it was never invoked. Dead code that reads like live code
+  is a trap laid for the next person.
+
+### Fixed
+
+Deleted `saathi/worker/send_reminder.py` and
+`saathi/worker/reminder_scheduler.py`. Nothing imported either — verified by
+grepping the whole tree for `import`/`from` statements naming them, and by
+checking `ops/`, the systemd units and `pyproject.toml`. The only surviving
+mentions are historical ones in `CHANGELOG.md`, `docs/` and the docstring of
+`tests/test_reminder_delivery.py`, which is the test that exists *because* of
+this confusion and should keep naming it.
+
+The live path is unchanged: `saathi/worker/__main__.py` imports `turns` for the
+side effect of registering kinds, and polls `scheduling.run_once`. After the
+deletion `scheduling.registered()` still returns
+`['checkin', 'media_purge', 'nudge', 'reminder']`.
+
+---
+
 ## 2026-07-28 (later still) — the language can be changed
 
 **337 tests passing.**
