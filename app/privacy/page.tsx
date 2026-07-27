@@ -3,22 +3,22 @@ import { PolicyPage, H2, P, UL } from "@/components/policy-page";
 import { OperatorBlock } from "@/components/operator";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Saathi",
+  title: "Privacy Policy — Indofolk AI",
   description:
-    "What Saathi stores, where it is stored, how long it is kept, and how to have it deleted.",
+    "What Indofolk AI stores, where it is stored, how long it is kept, and how to have it deleted.",
 };
 
 export default function Privacy() {
   return (
     <PolicyPage title="Privacy Policy" updated="26 July 2026">
       <P>
-        Saathi is an AI companion for older adults in India, on WhatsApp. This policy describes exactly
+        Indofolk AI is a companion for older adults in India, on WhatsApp. This policy describes exactly
         what we store, where, for how long, and how to have it removed. It is written to be
-        read by the person using Saathi, not only by lawyers.
+        read by the person using Indofolk AI, not only by lawyers.
       </P>
-      <H2>Who operates Saathi</H2>
+      <H2>Who operates Indofolk AI</H2>
       <P>
-        Saathi is operated by the business below, which is the data fiduciary for your
+        Indofolk AI is operated by the business below, which is the data fiduciary for your
         personal data under India&rsquo;s Digital Personal Data Protection Act.
       </P>
       <OperatorBlock />
@@ -42,7 +42,7 @@ export default function Privacy() {
       <H2>What we never do</H2>
       <UL>
         <li>
-          <strong>We never take payments or place orders.</strong> Saathi has no ability to
+          <strong>We never take payments or place orders.</strong> Indofolk AI has no ability to
           spend money. This is not a policy promise — the software simply has no such
           function.
         </li>
@@ -78,7 +78,7 @@ export default function Privacy() {
       <H2>Your rights</H2>
       <P>
         Under India&rsquo;s Digital Personal Data Protection Act, you may access, correct
-        and erase your personal data, and withdraw consent. In Saathi you can do all of it
+        and erase your personal data, and withdraw consent. In Indofolk AI you can do all of it
         by asking, in your own words, in the chat:
       </P>
       <UL>
@@ -93,7 +93,7 @@ export default function Privacy() {
 
       <H2>Improving the service</H2>
       <P>
-        Saathi can learn to understand Indian speech better over time — for example, that a
+        Indofolk AI can learn to understand Indian speech better over time — for example, that a
         particular medicine name is often misheard. This is <strong>optional and off by
         default</strong>, and asked separately from the consent needed to use the service.
       </P>
@@ -116,7 +116,7 @@ export default function Privacy() {
 
       <H2>Emergencies</H2>
       <P>
-        Saathi is not an emergency service and cannot call anyone for you. If you describe
+        Indofolk AI is not an emergency service and cannot call anyone for you. If you describe
         what looks like a medical emergency, it will show you emergency numbers (112, 108)
         and urge you to call someone. Always call a person.
       </P>

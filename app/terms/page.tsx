@@ -3,15 +3,15 @@ import { PolicyPage, H2, P, UL } from "@/components/policy-page";
 import { OperatorBlock } from "@/components/operator";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Saathi",
-  description: "The terms on which Saathi is provided.",
+  title: "Terms of Service — Indofolk AI",
+  description: "The terms on which Indofolk AI is provided.",
 };
 
 export default function Terms() {
   return (
     <PolicyPage title="Terms of Service" updated="26 July 2026">
       <P>
-        Saathi is an AI companion for older adults in India, on WhatsApp. By messaging Saathi you agree to
+        Indofolk AI is a companion for older adults in India, on WhatsApp. By messaging Indofolk AI you agree to
         these terms. The service is operated by:
       </P>
       <OperatorBlock />
@@ -20,43 +20,43 @@ export default function Terms() {
         jurisdiction.
       </P>
 
-      <H2>What Saathi does</H2>
+      <H2>What Indofolk AI does</H2>
       <P>
-        Saathi remembers things you ask it to remember, sets reminders, answers questions,
+        Indofolk AI remembers things you ask it to remember, sets reminders, answers questions,
         and helps make sense of confusing messages. It works in Hindi and English, by text
         or voice note.
       </P>
 
-      <H2>What Saathi cannot do</H2>
+      <H2>What Indofolk AI cannot do</H2>
       <P>
-        Saathi cannot take any action on your behalf outside the chat. It cannot pay for
+        Indofolk AI cannot take any action on your behalf outside the chat. It cannot pay for
         anything, place an order, book a ticket, or sign in to any account. It has no such
         capability, by design.
       </P>
 
       <H2>Not medical, legal or financial advice</H2>
       <P>
-        Saathi can remind you to take a medicine. It will not tell you which medicine to
-        take, what dose, or whether to change one — only your doctor can. Nothing Saathi
+        Indofolk AI can remind you to take a medicine. It will not tell you which medicine to
+        take, what dose, or whether to change one — only your doctor can. Nothing Indofolk AI
         says is medical, legal or financial advice.
       </P>
 
       <H2>Not an emergency service</H2>
       <P>
-        Saathi cannot call an ambulance, a doctor or a family member. In an emergency,
+        Indofolk AI cannot call an ambulance, a doctor or a family member. In an emergency,
         call 112 or 108, or ask someone near you for help.
       </P>
 
       <H2>Accuracy</H2>
       <P>
-        Saathi uses speech recognition and an AI model, and both can be wrong. It will read
+        Indofolk AI uses speech recognition and an AI model, and both can be wrong. It will read
         back times, dates, doses and names before acting on them — please check them. Do
-        not rely on Saathi as your only reminder for anything critical.
+        not rely on Indofolk AI as your only reminder for anything critical.
       </P>
 
       <H2>Acceptable use</H2>
       <UL>
-        <li>Use Saathi for yourself or for a family member who has agreed to it.</li>
+        <li>Use Indofolk AI for yourself or for a family member who has agreed to it.</li>
         <li>Do not use it to harass anyone or to break the law.</li>
         <li>Do not attempt to make it act as a payment, medical or emergency service.</li>
       </UL>

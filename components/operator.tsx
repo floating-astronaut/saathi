@@ -5,7 +5,8 @@ import React from "react";
  * never drift apart on who is legally responsible.
  *
  * These details deliberately mirror the business verified in Meta Business
- * Manager (`ayurpetofficial`, which owns the WhatsApp Business Account). A
+ * Manager — portfolio label `ayurpetofficial`, legal entity Indofolk Wellness
+ * Private Limited, which owns the WhatsApp Business Account. A
  * reviewer cross-checks the entity named in the privacy policy against the
  * verified business, and a mismatch reads as impersonation.
  *
@@ -21,6 +22,12 @@ export const OPERATOR = {
   website: "https://indofolkwellness.com/",
   gstin: "07AAHCI7432A1ZV",
   email: "help.nuraveda@gmail.com",
+  // The WhatsApp number people actually reach the assistant on. Stated in full
+  // international form, and given as a wa.me link: saving a contact by hand is
+  // how people end up typing an Indian number without the country code and
+  // seeing "Invite to WhatsApp" instead of a chat.
+  whatsapp: "+91 80715 81944",
+  whatsappLink: "https://wa.me/918071581944",
 };
 
 export function OperatorBlock() {
@@ -35,6 +42,11 @@ export function OperatorBlock() {
         GSTIN: {OPERATOR.gstin}
         <br />
         Phone: {OPERATOR.phone}
+        <br />
+        WhatsApp:{" "}
+        <a className="underline" href={OPERATOR.whatsappLink}>
+          {OPERATOR.whatsapp}
+        </a>
         <br />
         Email: {OPERATOR.email}
         <br />

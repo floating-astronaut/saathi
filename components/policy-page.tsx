@@ -16,7 +16,7 @@ export function PolicyPage({
         <Link
           href="/"
           className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white">
-          ← Saathi
+          ← Indofolk AI
         </Link>
         <h1 className="mt-6 font-heading text-4xl text-gray-900 dark:text-white">{title}</h1>
         <p className="mt-2 text-sm text-gray-500">Last updated {updated}</p>
