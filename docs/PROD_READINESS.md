@@ -345,6 +345,20 @@ free-tier STT minutes; nothing enforces it.
 By design (k-anonymity), but it means the learning loop is unmeasurable during
 internal testing and will look broken to anyone who does not know why.
 
+### PR-32 · Language is asked once and never revisited
+Onboarding asks Hindi or English, stores it in `users.lang_pref`, and there is no
+way to change it afterwards — no `/language` command, and nothing in the copy
+says it is changeable. A user who taps the wrong button on first contact is stuck
+in the wrong language, and the person most likely to mistap is the one this
+product is for.
+
+Also: `lang_pref` is free text with an old default of `'hi-en'`. Users created
+before 2026-07-28 carry that value; `_lang()` maps anything unrecognised to Hindi,
+so they get Hindi rather than an error. Fine, but it means the column now holds
+two vocabularies.
+**Fix:** a `/language` command reusing the same buttons, and a decision on
+whether `hi-en` is retired or kept as a third option.
+
 ### PR-18 · Onboarding consent version is hardcoded
 `CONSENT_VERSION = "2026-07-26.v1"` in two modules. When the policy text
 changes, nothing forces a re-consent or notices the drift.

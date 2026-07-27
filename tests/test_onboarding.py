@@ -12,12 +12,15 @@ class Cur:
 
 
 class Conn:
-    def __init__(self, name="Kamala"):
-        self.sql = []; self.name = name
+    def __init__(self, name="Kamala", lang="hi"):
+        self.sql = []; self.name = name; self.lang = lang
     async def execute(self, q, params=None):
         self.sql.append(" ".join(q.split()))
-        if "select display_name" in q.lower():
+        low = q.lower()
+        if "select display_name" in low:
             return Cur((self.name,))
+        if "select lang_pref" in low:
+            return Cur((self.lang,))
         return Cur(None)
 
 
@@ -39,13 +42,40 @@ def test_no_model_import_anywhere_in_onboarding():
         assert forbidden not in src, f"onboarding references {forbidden!r}"
 
 
+async def test_first_message_asks_the_language_and_nothing_else():
+    """One bilingual message, then never repeat yourself. A wall of text is the
+    interface complexity PRD §2 names as the barrier."""
+    conn, t = Conn(), T()
+    out = await onboarding.begin(conn, t, 1, "91")
+    body, btns = t.buttons[0]
+    assert out == {"onboarding": "new"}        # language is not consent
+    assert btns == ["हिंदी", "English"]
+    assert "consent" not in " ".join(conn.sql)
+
+
 async def test_welcome_states_what_we_never_do():
     conn, t = Conn(), T()
-    await onboarding.begin(conn, t, 1, "91")
+    await onboarding.handle_button(conn, t, 1, "91", "ob:lang:hi", None)
     body, btns = t.buttons[0]
     assert "OTP" in body and "paisa" in body
     assert len(btns) <= 3                      # WhatsApp quick-reply limit
     assert all(len(b) <= 20 for b in btns)     # label length limit
+
+
+async def test_english_welcome_is_english_only():
+    """The point of the language step: no Hindi tail on an English welcome."""
+    conn, t = Conn(lang="en"), T()
+    await onboarding.handle_button(conn, t, 1, "91", "ob:lang:en", None)
+    body, _ = t.buttons[0]
+    assert "OTP" in body
+    for hindi in ("Namaste", "maangti", "hoon"):
+        assert hindi not in body, f"English welcome still carries {hindi!r}"
+
+
+async def test_language_choice_is_stored():
+    conn, t = Conn(), T()
+    await onboarding.handle_button(conn, t, 1, "91", "ob:lang:en", None)
+    assert "update users set lang_pref" in " ".join(conn.sql)
 
 
 async def test_consent_is_recorded_before_anything_is_stored():
@@ -59,7 +89,15 @@ async def test_declining_leaves_the_door_open():
     conn, t = Conn(), T()
     out = await onboarding.handle_button(conn, t, 1, "91", "ob:consent:no", None)
     assert out == {"onboarding": "declined"}
-    assert "start" in t.texts[0].lower()
+    # The restart phrase must actually restart. In Hindi it said "shuru karein",
+    # which matched no command until 2026-07-27 — a dead end for exactly the
+    # users this product is for, hidden while the copy was bilingual.
+    from saathi import commands
+    said = t.texts[0]
+    phrase = "shuru karein" if "shuru" in said else "start"
+    assert phrase in said.lower()
+    assert commands.parse(phrase).command is not None, (
+        f"declined message tells the user to type {phrase!r}, which does nothing")
     assert "onboarding = 'new'" in " ".join(conn.sql)   # can restart later
 
 
@@ -71,8 +109,19 @@ async def test_reminders_are_opt_in_not_default():
     # after consent we confirm the name; drive on to the reminders question
     await onboarding.handle_button(conn, t, 1, "91", "ob:name:yes", "Kamala")
     body, btns = t.buttons[-1]
-    assert "reminder" in body.lower()
-    assert any("nahi" in b.lower() for b in btns)      # declining is offered
+    # The contract is that declining is offered, not that the copy contains an
+    # English word — the Hindi asks "kya main aapko cheezein yaad dilaaun".
+    assert "yaad" in body.lower() or "remind" in body.lower()
+    assert len(btns) == 2, "opt-in needs a real choice, not one button"
+    assert any(x in " ".join(btns).lower() for x in ("nahi", "not now"))
+
+
+async def test_reminders_are_opt_in_in_english_too():
+    """The same guarantee must survive the translation."""
+    conn, t = Conn(lang="en"), T()
+    await onboarding.handle_button(conn, t, 1, "91", "ob:rem:no", "Kamala")
+    assert "paused = true" in " ".join(conn.sql).lower().replace("%s", "true")  \
+        or "set paused" in " ".join(conn.sql).lower()
 
 
 async def test_training_consent_is_asked_last_and_separately():

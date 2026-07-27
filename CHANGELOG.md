@@ -14,6 +14,54 @@ Conventions:
 
 ---
 
+## 2026-07-28 — ask the language first, then say it once
+
+**326 tests passing.**
+
+### Broke
+
+- **Every onboarding message was sent twice** — Hindi, then English, in one
+  bubble. The welcome was **615 characters**. PRD §2 finds the barrier for this
+  user is interface complexity, not device access, and the first thing a
+  70-year-old reads while deciding whether to trust this was twice as long as it
+  needed to be. Reported from a real handset.
+- **The Hindi restart phrase did nothing.** The declined message tells a Hindi
+  reader to type *"shuru karein"* — which matched no command. It had been broken
+  the whole time and was hidden by the bilingual copy: the same message also said
+  *"just say start"*, so an English-capable reader could recover. Making the copy
+  single-language turned a soft failure into a dead end, for exactly the users
+  this product exists for.
+
+### Fixed
+
+- Onboarding now asks the language first — the **only** bilingual message — then
+  speaks one language throughout. Welcome is **299 chars in Hindi (51% shorter)**
+  and **221 in English (64%)**.
+- Copy moved into per-language tables (`COPY`, `BTN`) with `t()` / `b()` helpers
+  that fall back rather than raise, so a missing key degrades to Hindi instead of
+  breaking onboarding for a real user.
+- `commands.py` START now matches `shuru`, `shuru karein`, `shuru karo`,
+  `shuru kariye`. **Anchored, not substring** — PR-23 showed what substring
+  matching costs, and `"reminder shuru kar do"` correctly still does not match.
+- `consent_log.lang` records the language the consent was actually read in,
+  instead of a hardcoded `'hi-en'`.
+- `CONSENT_VERSION` → `2026-07-27.v2`, because the consent text changed.
+
+### Tests
+
+`tests/test_onboarding.py` 9 → 13. New: the first message asks only the language;
+an English welcome carries no Hindi tail; the choice is stored; and — the one that
+would have caught the dead end — **the declined message's restart phrase must
+actually parse to a command.**
+
+### Note
+
+The Hindi is Latin-script, as it has always been. Whether an elder reads
+Devanagari more comfortably than Latin-script Hindi is a real question this does
+not answer, and worth deciding separately.
+
+---
+
 ## 2026-07-27 (night) — the commands become visible
 
 No Python changed. Meta-side configuration on `1266402176549539`.

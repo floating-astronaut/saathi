@@ -65,7 +65,12 @@ _PATTERNS: list[tuple[Command, list[str]]] = [
     (Command.HELP, [
         r"^\s*help\s*$", r"\bwhat can you do\b", r"\baap kya kar sakt", r"^\s*madad\s*$",
     ]),
-    (Command.START, [r"^\s*(start|hi|hello|namaste|namaskar)\s*[!.]?\s*$"]),
+    # "shuru karein" is what the declined-onboarding message tells a Hindi
+    # reader to type. It matched nothing until 2026-07-27 — the bilingual copy
+    # hid it, because the same message also said "just say start". Anchored, not
+    # a substring: STOP already showed what substring matching costs (PR-23).
+    (Command.START, [r"^\s*(start|hi|hello|namaste|namaskar)\s*[!.]?\s*$",
+                     r"^\s*shuru( kar(ein|en|o|na|iye|o na)?)?\s*[!.]?\s*$"]),
 ]
 
 _COMPILED = [(c, [re.compile(p, re.I) for p in pats]) for c, pats in _PATTERNS]
