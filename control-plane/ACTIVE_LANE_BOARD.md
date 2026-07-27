@@ -233,7 +233,7 @@ Notes: app `1019173634258664`, system user `122098890723360160`, token
   round-tripped through the new app. Signatures, tokens and API reads are all
   verified; a live message is not.
 
-### AI-1 — per-account OpenRouter keys   [BUILT, BLOCKED ON CREDITS]
+### AI-1 — per-account OpenRouter keys   [BUILT; MINT/REVOKE PROVEN]
 Owner: Claude (runtime box)        Opened: 2026-07-27 · Built: 2026-07-27
 Reading: docs/AI_ROUTING.md, docs/DECISIONS.md (D-D, D-O), docs/vendor/, PR-15
 Acceptance: a paying account gets a capped key minted from `scheduled_turns`;
@@ -247,9 +247,15 @@ Notes: design doc written first (THE_METHOD §1) — the code follows it, not th
   Residency is **settled**, not open — operator decision 2026-07-27, and the
   privacy policy already draws the stored-data / message-text line correctly.
 
-  **Blocked on credits only.** The OpenRouter account has 0. Keys will mint cleanly
-  and fail on first use — provisioning succeeds, spending does not. Build and
-  test the machinery, but do not put a real user on it until funded.
+  ~~**Blocked on credits only.**~~ **Never was — corrected 2026-07-27.** Routing
+  is BYOK onto our own Bedrock credential, so a minted key spends on our AWS bill
+  and `total_credits: 0` is the expected steady state. This lane, PR-38 and
+  AI_ROUTING §9 all named funding as the gate; none of them should have.
+
+  **Mint and revoke are now proven against the live vendor**, unintentionally: a
+  user finished onboarding at 22:39 and `provision_key` minted a real key with a
+  usable hash. `DELETE /keys/{hash}` then returned `{"deleted": true}`. The
+  remaining gap is that no turn yet *routes* through the key.
 
   Confirmed live: workspace `718e8438-…` (Indofolk AI), BYOK `amazon-bedrock`
   "Indian Box" at sort_order 0, `z-ai/glm-5` available, provisioning key valid.

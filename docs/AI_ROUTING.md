@@ -2,10 +2,10 @@
 
 How a Saathi turn reaches a model, who pays for it, and where the data goes.
 
-Status: **built 2026-07-27, unproven against a funded account.** The document
-came before the code (`THE_METHOD.md` §1) and the code now follows it; §9 lists
-what has and has not been demonstrated. Nothing routes through OpenRouter in
-production yet.
+Status: **built 2026-07-27; mint and revoke proven against the live vendor.**
+The document came before the code (`THE_METHOD.md` §1) and the code now follows
+it; §9 lists what has and has not been demonstrated. Nothing *routes* through
+OpenRouter in production yet — that is the remaining gap, not funding.
 
 Owns: model routing, per-account key provisioning, spend caps, residency.
 Related: `DECISIONS.md` D-D (model choice), D-O (this routing change),
@@ -176,11 +176,11 @@ A quiet downgrade to a shared key is how you find out at the end of the month.
 
 ## 9. Open
 
-- **Credits are 0** on the OpenRouter account — re-checked live 2026-07-27:
-  `{"total_credits":0,"total_usage":0}`. Keys will mint and then fail on first
-  use — provisioning succeeds, spending does not. Fund before any real user
-  depends on it. **This is the only thing between the built machinery and a
-  tester actually using it.**
+- ~~**Credits are 0** on the OpenRouter account.~~ **Not a blocker — corrected
+  2026-07-27.** Routing is BYOK onto our own Bedrock credential (§2, D-O), so a
+  minted key spends on our AWS bill and never on an OpenRouter balance.
+  `total_credits: 0` is the expected steady state. This document, PR-38 and the
+  AI-1 lane all treated it as the gating item; none of them should have.
 - ~~Whether free users get a shared platform key or no key at all.~~
   **Settled 2026-07-27 (D-T): every user gets their own key with $5 on it,
   once.** The cap is not the interesting half — the *reset* is. Minted with no

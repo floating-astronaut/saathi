@@ -185,7 +185,7 @@ timezone confirmation. Evidence required is a live reminder that actually
 arrives, not a passing test: no reminder has yet been proven end-to-end from a
 voice note.
 
-### PR-38 · A tester's key has never actually been minted
+### PR-38 · A tester's key has never actually been minted — RESOLVED 2026-07-27
 AI-1's machinery is built, tested and deployed, and **no real key exists**. The
 OpenRouter account holds 0 credits (`total_credits: 0`, checked 2026-07-27), so
 a minted key would authenticate and fail on first spend. Every test stops at the
@@ -199,6 +199,50 @@ later, when someone wants it gone.
 **Fix:** fund the account, mint exactly one key for one operator-owned handle,
 confirm a real turn spends against it, then revoke it and confirm the revoke
 lands upstream. Until that round trip is done, do not put a tester on this.
+
+**RESOLVED 2026-07-27, and the premise of this row was wrong twice over.**
+
+*Wrong once:* "fund the account" was never a prerequisite. Routing is **BYOK onto
+our own Bedrock credential** (D-O, `AI_ROUTING.md` §2), so a minted key spends on
+our AWS bill, not an OpenRouter balance. `total_credits: 0` is the expected
+steady state, not a blocker. Every row and lane that said "blocked on credits"
+was reading an irrelevant number.
+
+*Wrong twice:* the round trip was completed **without anyone running it
+deliberately**. A user finished onboarding at 22:39 and the `provision_key` turn
+minted `saathi:account:6:plan:beta:env:dev` — real, present at OpenRouter, limit
+5, hash stored. The feared failure did not occur: the response carried a hash, so
+`_find_hash_by_name` was never needed, and the key was revocable. Revocation was
+then exercised for real — `DELETE /keys/{hash}` returned `{"deleted": true}` and
+the key list is empty.
+
+So mint → store → revoke is proven end to end against the live vendor. What is
+**still** unproven is a turn actually *spending* through the key, because
+resolution is written and nothing routes through OpenRouter yet.
+
+### PR-46 · Six accounts were backfilled with a renewing allowance
+Migration 008 backfilled every pre-existing account as `beta`. It was written
+before D-T made `free` the universal **one-time** $5 grant and left `beta` as the
+renewing tier an operator hands a tester. The backfill was never revisited, so
+six live accounts carried $5 *per month* instead of $5 once.
+
+Not theoretical, and not cheap: because spend is BYOK onto our own Bedrock
+credential, a renewing cap is a renewing charge on our AWS bill. The key minted
+at 22:39 carried `limit_reset: monthly` in its OpenRouter record, which is how it
+was caught — by reading the vendor, not the tests. Every test passed throughout,
+because the tests assert `TIER_CAPS` and `TIER_RESET`, and both were correct. The
+*data* was wrong.
+
+**Fixed** by migration 010 — backfilled rows to `free`, the mis-tiered key marked
+revoked, and the upstream key deleted for real. 008 was deliberately **not**
+edited: it is recorded in `schema_migrations` with its checksum and editing it
+would abort the next deploy with `CHECKSUM MISMATCH`. That guard is PR-25 working
+as designed, on its author.
+
+**What this row is really about:** a schema migration can encode a product
+decision, and then the decision can change without the migration following. There
+is no test that catches that, because the migration is not code the suite runs.
+The only thing that caught it was looking at production rows.
 
 ### PR-39 · Sarvam spend cannot be attributed to a household
 One API key serves every user, so there is no way to tell whose rupees these
