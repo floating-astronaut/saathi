@@ -245,3 +245,35 @@ copy".
 
 **Reverse it** by pointing the client back at `boto3`. The model, region and
 account are unchanged, so reversal costs nothing but the metering.
+
+### D-P · Deploying is transport-agnostic; the on-box half is one file · 2026-07-27
+`ops/deploy.sh` gained `--local` so the runtime box can deploy itself (PR-28).
+The reversible part is the flag. The part worth recording is the shape.
+
+**Everything that happens on the target is `ops/deploy_onbox.sh`**, run from the
+tree being installed, by both transports. The alternative — a local branch that
+re-implements sync, migrate, test, restart — was rejected outright: PR-25's
+migration ledger was verified against real Postgres across seven scenarios, and
+a second copy of it would drift. The copy that drifts is always the one nobody
+tested. A pleasant side effect is that the SSM heredoc shrank from ~120 delicate
+`\$`-escaped lines to five with no dollar signs and no backticks at all, which
+is the class of bug that once made the heredoc run `su - ubuntu` on the *dev*
+box at generation time.
+
+**Mode is an explicit flag, checked against the machine.** Autodetection alone
+would deploy from a guess; a flag alone would let `--local` run on the dev box.
+So: `--local` must positively match the instance ID from IMDS, and an unreadable
+ID refuses — only the affirmative claim needs proof. The default transport
+refuses *on* the target, where it would otherwise fail with
+`AccessDenied: ssm:SendCommand` and read as a broken setup.
+
+**Rehearsal is bound to the target, not to a flag.** `--repo` anywhere other
+than `/home/ubuntu/saathi` skips `saathi-env-sync` and the restart, because both
+are global and would reach production from a scratch directory. Inverted — a
+`--no-restart` flag — the same mechanism would let someone ask for a production
+deploy that skips the restart, and a deploy control that can be talked out of
+its own safety step is not a control.
+
+**Reverse it** by deleting the flag and the two instance-ID branches;
+`deploy_onbox.sh` is what the artifact path runs either way, so nothing about
+the remote deploy depends on local mode existing.

@@ -65,30 +65,111 @@ journalctl -u saathi-worker -f
 
 ## Deploy
 
+**Two transports, one deploy.** Which one you use depends only on which box you
+are sitting on. Everything that happens *on the target* is in
+`ops/deploy_onbox.sh` and `ops/deploy_verify.sh`, and both transports run those
+same two files — so "deployed" and "verified" mean the same thing either way.
+
+From the **dev box** (us-east-2):
+
 ```bash
 ops/deploy.sh              # package, migrate, test on the box, restart, verify
 ops/deploy.sh --no-test    # skip the on-box test run
 ops/deploy.sh --check      # verify only, change nothing
 ```
 
-It **refuses to deploy a dirty tree or a branch other than `main`**, because a
+From the **runtime box itself** (this box), add `--local`:
+
+```bash
+ops/deploy.sh --local          # same deploy, no S3 and no SSM
+ops/deploy.sh --local --check  # verify only; makes no AWS call at all
+```
+
+`--local` skips the tar/S3/presign/SSM transport and **nothing else**: same
+clean-tree gate, same `uv sync`, same tests, same ledgered migrations with the
+same abort semantics, same restart, same verification. It needs `sudo` (it drops
+to `ubuntu` for anything touching the app or the database, exactly as the SSM
+path does, because SSM also runs as root).
+
+You do not choose the mode wrong twice: `--local` is checked against the
+instance ID from IMDS and refuses if this is not `i-01b2c27883acb25ca`, and the
+default transport refuses *on* the box rather than returning `AccessDenied:
+ssm:SendCommand`, which reads like a broken setup and is not.
+
+Both modes **refuse a dirty tree or a branch other than `main`**, because a
 deploy that does not correspond to a commit cannot be reproduced or rolled back,
-and nobody can tell afterwards what is actually running.
+and nobody can tell afterwards what is actually running. `--local` additionally
+refuses a source with no git remote naming saathi, and refuses to deploy
+`/home/ubuntu/saathi` onto itself — see the warning below about the `.git` in
+there.
 
-Why an artifact rather than editing on the box, or running an agent there: the
-box has **no SSH by design** (SSM only), and every commit must be SSH-signed
-with a key that lives on the dev box. Authoring on the box would mean copying
-that key onto a second machine or committing unsigned. So the sequence is
-author and sign here, ship an artifact, restart there.
+Why an artifact at all, from the dev box: the box has **no SSH by design** (SSM
+only), and every commit must be SSH-signed with a key that lives on the dev box.
+Authoring on the box would mean copying that key onto a second machine or
+committing unsigned. So the sequence is author and sign there, ship an artifact,
+restart here.
 
-Under the hood: tar → `s3://saathi-dev-artifacts-559896294326/saathi.tar.gz` →
-presigned GET fetched over SSM → migrations → `saathi-env-sync` → `uv sync` →
-tests → restart → verify.
+Under the hood, remote: tar →
+`s3://saathi-dev-artifacts-559896294326/saathi.tar.gz` → presigned GET fetched
+over SSM → `ops/deploy_onbox.sh` from the unpacked artifact. Local: the same
+staged tree, handed to the same script directly. Then, identically: snapshot →
+install → migrations → `saathi-env-sync` → `uv sync` → tests → restart → verify.
 
 Migrations are ledgered in `schema_migrations` and only applied once; anything
 that fails there prints `MIGRATION ABORT` and stops the deploy **before** the
 restart, so the services are never brought up against a schema they do not
-match. Nothing about the test step is that careful — see PR-25.
+match. A failing test run, a failed `uv sync` and a failed `saathi-env-sync` now
+stop it in the same place, which they did not before 2026-07-27.
+
+### Putting the previous tree back
+
+Every install first writes `/home/ubuntu/saathi.prev/<utc>.tar.gz` (0600, newest
+three kept) and prints the restore command:
+
+```bash
+sudo tar xzf /home/ubuntu/saathi.prev/<utc>.tar.gz -C /home/ubuntu
+sudo saathi-env-sync                       # .env is excluded from the snapshot
+sudo systemctl restart saathi-web saathi-worker
+```
+
+**That is the code and only the code.** It does not undo a migration, and two of
+them are backfills that cannot be undone. If the deploy that broke things also
+migrated, read `PROD_READINESS.md` PR-35 before you restore.
+
+### Rehearsing a deploy without deploying
+
+```bash
+ops/deploy.sh --local --target /tmp/rehearsal
+```
+
+A `--target` that is not `/home/ubuntu/saathi` is a **rehearsal**: real install,
+real migrations against whatever `SAATHI_DB_DSN` that target's `.env` names, real
+`uv sync`, real tests — but no `saathi-env-sync` and no restart, because those
+two are global and would hit production from a scratch directory. That is bound
+to the target, not to a flag, so there is no way to ask for a production deploy
+that skips them. Point it at a scratch database, not the live one.
+
+> **The `.git` inside `/home/ubuntu/saathi` is a stub. Ignore it.**
+> Deploys unpack a tarball over the tree; nothing there ever pulls or commits.
+> Its `.git` is three commits from before the application existed, with **no
+> remotes**, and `git status` in that directory reports ~70 modified and
+> untracked files that are simply the deployed code it has never heard of. It
+> is not evidence of hand-edits, and it says `main` while being nothing of the
+> kind. It cost a session an afternoon on 2026-07-27.
+>
+> To find out what is actually deployed, compare the tree to a commit — do not
+> ask its `.git`:
+>
+> ```bash
+> git -C ~/saathi-checkout archive <sha> | tar x -C /tmp/at-sha
+> diff -rq --exclude=__pycache__ /tmp/at-sha/saathi /home/ubuntu/saathi/saathi
+> ```
+>
+> Deleting the stub would be an improvement and nobody has, because nothing
+> depends on it either. `ops/deploy.sh --local` refuses to treat it as a source.
+>
+> Same reason `evals/` exists there and in no commit: a deploy copies files in
+> and never takes any out. See PR-36.
 
 ## Secrets
 

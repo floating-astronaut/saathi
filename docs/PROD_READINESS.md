@@ -308,8 +308,8 @@ than one stolen. The box is the internet-facing machine.
 `secretsmanager:*` rather than `PutSecretValue` on that one resource ARN, narrow
 it now — this needed exactly one action on one secret. Related: PR-22.
 
-### PR-28 · `ops/deploy.sh` cannot be run from the runtime box
-It is written to run on the **dev box** and reach in over SSM: it exports
+### PR-28 · `ops/deploy.sh` cannot be run from the runtime box — RESOLVED 2026-07-27
+It was written to run on the **dev box** and reach in over SSM: it exports
 `AWS_PROFILE=mp-dev` and calls `ssm send-command`. On the runtime box neither
 exists — `ssm:SendCommand` is denied to `saathi-dev-box` (correctly), and there
 is no `mp-dev` profile.
@@ -321,9 +321,55 @@ changed modules into `/home/ubuntu/saathi` by hand, then `uv sync`, `pytest`,
 exactly the hand-rolling `CONTRIBUTING.md` warns against, done knowingly because
 the alternative was leaving a live forwarded-command vulnerability in place.
 
-**Fix:** either give `deploy.sh` a local mode that skips the S3/SSM transport
-when it is already on the target, or make deploying a dev-box-only action and
-say so in `CONTRIBUTING.md` instead of implying any session can run it.
+**Resolved: `ops/deploy.sh --local`.** It skips the tar/S3/presign/SSM transport
+and nothing else. The rest of the deploy is not a second implementation — the
+on-box half now lives in `ops/deploy_onbox.sh` and `ops/deploy_verify.sh`, and
+both transports run those same two files. The migration section of
+`deploy_onbox.sh` is PR-25's, moved out of the heredoc unchanged (`diff` after
+un-escaping `\$` shows only the removal of a comment about the heredoc and one
+added pair of quotes around `"$REPO/.env"`).
+
+Three things were designed against rather than assumed:
+
+- **The mode is explicit and then checked.** `--local` is a flag, not a guess,
+  but it is verified against the instance ID from IMDS and refuses on
+  disagreement — including when the ID cannot be read at all, because only the
+  affirmative claim needs proof. Running the default transport *on* the box now
+  says so instead of returning `AccessDenied: ssm:SendCommand`, which reads like
+  a broken setup.
+- **Local mode is gated harder than remote, not less.** Remote gets "this is a
+  commit" free from the artifact build; local asserts it — git checkout, clean
+  tree, on `main` — and adds two checks only it needs, both aimed at the
+  vestigial `.git` inside `/home/ubuntu/saathi` (see below): the source must
+  have a remote naming saathi, and must not be the deploy target itself.
+- **A non-canonical `--repo` is a rehearsal**, and that is bound to the target
+  rather than to a flag. `saathi-env-sync` and `systemctl restart` are global —
+  they act on the real `.env` and the real units whichever directory you point
+  the script at — so a rehearsal must not run them, and there is deliberately no
+  way to ask for a *production* deploy that skips them.
+
+**Fixed in passing, because a test whose result is discarded is a test that was
+skipped:** the on-box `uv run pytest -q | tail -2` ran under `su - ubuntu`,
+which is a login shell without `pipefail`, so the pipeline's status was `tail`'s
+and a red suite deployed silently. This was the loose end PR-25 named and left.
+`uv sync` and `saathi-env-sync` are now checked too. All three abort before the
+restart.
+
+**Rollback is only half in scope, deliberately.** `deploy_onbox.sh` now
+snapshots the tree it is about to overwrite to `<repo>.prev/<utc>.tar.gz`
+(0600, newest three kept, `.env` excluded so runtime secrets do not accumulate
+in tarballs on disk) and prints the restore command. That is a *code* rollback.
+Rolling back a migration is a different problem — see PR-35.
+
+Verified against a scratch target and a scratch Postgres database, never the
+live ones: six migrations applied from a base schema and recorded with
+checksums; a second run skipped all six; an edited applied migration aborted on
+checksum; a failing migration aborted with the database unchanged and nothing
+recorded; a failing test aborted; a staged tree missing one file refused before
+overwriting anything; a target with no `SAATHI_DB_DSN` refused. `--local
+--check` was run against production, which is read-only and passed. What could
+not be verified without deploying: the real restart, `saathi-env-sync`, and the
+remote SSM transport end to end.
 
 ### PR-25 · Deploy restarts services even when a migration fails — RESOLVED 2026-07-27
 Confirmed in detail 2026-07-27 while reading the script. `remote.sh` runs with
@@ -393,10 +439,12 @@ nothing, and never reaches the restart.
   002–007 will therefore never be caught on the ap-south-1 box, only on a
   database that saw them applied. This decays on its own as new migrations
   arrive.
-- **A deploy still restarts when the on-box test run fails.** Same missing `-e`,
-  same shape, different line — `uv run pytest -q | tail -2` cannot fail the
-  script. Out of scope for this change and left as-is rather than fixed
-  silently.
+- ~~**A deploy still restarts when the on-box test run fails.** Same missing
+  `-e`, same shape, different line — `uv run pytest -q | tail -2` cannot fail
+  the script. Out of scope for this change and left as-is rather than fixed
+  silently.~~ **Closed 2026-07-27 by PR-28**, which had to rewrite that line
+  anyway. The pipe is gone; the suite's exit status now aborts before the
+  restart. `uv sync` and `saathi-env-sync` are checked as well.
 - The ledger is deploy bookkeeping, so `db/schema_migrations.sql` is not itself
   a migration; a database bootstrapped by hand from `README.md` gets its ledger
   on the first deploy, via the baseline.
@@ -597,6 +645,49 @@ retired or kept as a third option is still undecided.
 ### PR-18 · Onboarding consent version is hardcoded
 `CONSENT_VERSION = "2026-07-26.v1"` in two modules. When the policy text
 changes, nothing forces a re-consent or notices the drift.
+
+### PR-35 · There is no rollback, only a code snapshot
+PR-28 made deploying from the box easy, which by the same stroke made breaking
+production easy, so it left something to put back: `<repo>.prev/<utc>.tar.gz`,
+taken before every install, newest three kept, restore command printed on the
+way out. That is the **code** and nothing else.
+
+What it deliberately does not do, because half a rollback is worse than an
+honest gap:
+
+- **Migrations do not come back.** There are no down-migrations in
+  `db/migrations`, and two of the files are backfills whose inverse is not
+  expressible (`003` cannot tell which `user_channels` rows it flipped from
+  `pending`). Restoring last week's code onto this week's schema is a *new*
+  untested combination, not a return to a known one.
+- **The `.env` is excluded from the snapshot**, on purpose — a tarball on disk
+  is a worse place for the runtime secrets than Secrets Manager. A restored tree
+  therefore needs `saathi-env-sync` before it will start.
+- **The database is not snapshotted.** The 6-hourly dump is the answer there and
+  it is a different lane.
+
+**Fix:** a real rollback is "deploy the previous commit", which the artifact
+path can already do and nobody has ever exercised. Rehearse it — `ops/deploy.sh
+--local --target /tmp/somewhere` against a scratch database will tell you what
+breaks — and write down what a schema-forward/code-back deploy actually does.
+
+### PR-36 · A deploy copies files in and never takes any out
+Both transports install with `cp -r <staged>/. <repo>/`, which merges. A file
+deleted from `main` stays on the box for ever. This has always been true; the
+empty `evals/` on the box exists in no commit for exactly this reason, and it is
+what made a session believe the tree was full of hand-edits.
+
+It became interesting during PR-28's verification: a *migration* deleted from
+`db/migrations` survives on the target, so it is still found by the migration
+loop and still applied — or, if it had already failed once, still fails, on
+every subsequent deploy, from a file that no longer exists in the repo anyone is
+reading. Reproduced on a scratch target. The live tree has no stale files today
+(checked against the deployed commit, byte for byte).
+
+**Fix:** install with `rsync --delete`, or unpack into `<repo>.new` and swap the
+symlink. Both change what a deploy *is* and neither belongs in a lane about
+transport. Until then: after deleting anything from `db/migrations`, check the
+box.
 
 ---
 

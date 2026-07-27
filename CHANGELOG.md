@@ -14,6 +14,74 @@ Conventions:
 
 ---
 
+## 2026-07-27 (deploy) — the box could not deploy itself, and a red suite shipped anyway
+
+**366 tests passing** (unchanged; no application code was touched). PR-28.
+
+### Broke
+
+- **`ops/deploy.sh` did nothing but fail when run on the box it deploys to.** It
+  exports `AWS_PROFILE=mp-dev` and calls `ssm send-command`; on the runtime box
+  there is no such profile and `ssm:SendCommand` is denied to `saathi-dev-box`,
+  correctly. So a session standing on the target could not deploy, and the
+  2026-07-27 deploy of `117896b` was done by copying four modules in by hand —
+  the exact hand-rolling `CONTRIBUTING.md` warns against, chosen because the
+  alternative was leaving a live forwarded-command vulnerability in place.
+
+  Fixed with `ops/deploy.sh --local`, which skips the tar/S3/presign/SSM
+  transport and nothing else. Everything that happens on the target moved into
+  `ops/deploy_onbox.sh` and `ops/deploy_verify.sh`, which **both** transports
+  now run, so there is still exactly one copy of PR-25's migration ledger.
+
+- **A failing test run deployed silently.** `su - ubuntu -c "... uv run pytest
+  -q | tail -2"` — `su -` is a login shell without `pipefail`, so the pipeline's
+  exit status was `tail`'s, which is always 0. The suite could go red and the
+  restart happened anyway. This is the loose end PR-25 named and deliberately
+  left; it had to be rewritten here regardless. `uv sync` and `saathi-env-sync`
+  were unchecked in the same way and now abort too, all of them before the
+  restart.
+
+  Proved by committing a deliberately failing test to a scratch checkout and
+  watching the deploy stop: `1 failed, 366 passed` → `ABORT: tests failed on the
+  box. Services not restarted.`
+
+- **A migration deleted from `db/migrations` stays on the box for ever** and is
+  still picked up by the migration loop, because a deploy merges files in and
+  never takes any out. Found while verifying this change, not fixed here — it is
+  what a deploy *is*, and changing it is a different lane. `PROD_READINESS.md`
+  PR-36. The live tree has no stale files today.
+
+### Fixed — one deploy, two transports (PR-28)
+
+- `--local` is checked against the instance ID from IMDS and refuses if this is
+  not `i-01b2c27883acb25ca`; an unreadable ID also refuses, because only the
+  affirmative claim needs proof. The default transport refuses *on* the target
+  instead of returning an IAM error that reads like a broken setup.
+- Local mode is gated harder than remote, not less: git checkout, clean tree, on
+  `main`, plus a remote naming saathi and a source that is not the deploy target
+  — the last two aimed at the vestigial three-commit `.git` inside
+  `/home/ubuntu/saathi`, which reports `main`, has no remotes, and misled a
+  session into believing the box was full of hand-edits.
+- A `--repo` other than the canonical tree is a **rehearsal**: real install,
+  migrations, `uv sync` and tests, but no `saathi-env-sync` and no restart. Bound
+  to the target rather than to a flag, so it cannot be used to skip those on a
+  real deploy.
+- Every install now snapshots the tree it is about to overwrite to
+  `<repo>.prev/<utc>.tar.gz` (0600, newest three, `.env` excluded so runtime
+  secrets do not accumulate in tarballs) and prints the restore command. Code
+  only — migrations do not come back. `PROD_READINESS.md` PR-35.
+- The SSM heredoc went from ~120 `\$`-escaped lines to five containing no
+  dollar signs and no backticks at all. It is unquoted and expands on the
+  authoring box; a previous session put backticks in a comment in it and the
+  heredoc ran `su - ubuntu` on the *dev* box at generation time and hung.
+
+No Python changed. Verified against a scratch target directory and a scratch
+Postgres database — never the live tree, the live database or the live `.env`;
+the deployed tree was confirmed byte-identical to its commit before and after.
+`--local --check`, which is read-only, was run against production and passed.
+The real restart, `saathi-env-sync` and the SSM transport can only be proven by
+a real deploy and were not.
+
 ## 2026-07-28 (hardening) — an inbound document had no limit, and never arrived
 
 **366 tests passing** (337 before). PR-26.
