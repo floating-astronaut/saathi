@@ -76,7 +76,7 @@ The loop is closed end to end: created → enqueued → dispatched → acknowled
 nudged → rescheduled, with a sweep for turns abandoned mid-flight. What remains
 is not a gap in the machinery but the absence of real users to run through it.
 
-### PR-45 · The live WhatsApp token expires on 2026-09-25
+### PR-45 · The live WhatsApp token expires on 2026-09-25 — RESOLVED 2026-07-27
 The migration to Saathi's own Meta app left the number running on a **USER**
 token, not a system user token. It is valid for 60 days and then outbound
 sending stops — silently, in the way this product keeps getting hurt by: the
@@ -99,6 +99,23 @@ Rollback values are kept in the secret as `WA_ACCESS_TOKEN_OLD_MESHPILOT` and
 subscribed**, so restoring them alone will not restore inbound — the MeshPilot
 app would have to be re-subscribed too.
 
+**RESOLVED the same evening.** The operator created a second system user
+(`122098890723360160`) in Business Manager with the Indofolk AI app assigned and
+generated a permanent token. `WA_ACCESS_TOKEN` is now `type: SYSTEM_USER`,
+`expires_at: 0` — **never** — carrying `whatsapp_business_messaging` and
+`whatsapp_business_management`, verified against the live phone number
+(`+91 8071 581 944`, GREEN) and the subscribed-apps list before it was promoted.
+
+The dated outage is gone, so the CloudWatch alarm on `expires_at` this row asked
+for is no longer load-bearing — though an alarm on **token validity** rather
+than expiry would still catch a revoked or rotated token, which is the failure
+that remains possible and would present identically: healthz green, no log line,
+a missed reminder.
+
+The 60-day user token is kept as `WA_ACCESS_TOKEN_USER_60DAY`. It is **not** a
+rollback target — it is a thing that expires on 2026-09-25, and should be
+deleted from the secret rather than left to look like an option.
+
 ### PR-5 · Meta app and WhatsApp number are borrowed
 The app (`1571039744742551`) and the ayurpet system-user token are MeshPilot's;
 the number is **+1 Canadian** and the WABA sits under `ayurpetofficial`
@@ -116,8 +133,10 @@ MeshPilot `1571039744742551` is unsubscribed and no longer receives anything.
 The number is Indian and was already ours: **+91 8071 581 944**, quality GREEN.
 
 **Still borrowed:** the WABA sits under the `ayurpetofficial` business
-(`935287898727459`), and the token is a 60-day user token rather than a system
-user token — PR-45. So the app is ours, the business is not.
+(`935287898727459`). The token question is settled — a permanent system user
+token on our own app (PR-45) — so what remains of this row is the business
+itself, and §14's cost model, which keys off the sender's country and is now
+finally being read from an Indian number.
 
 ### PR-6 · Meta Business Agent is one toggle from taking over
 `GET /{waba}/subscribed_apps` shows Meta's Business Agent app
