@@ -34,13 +34,14 @@ reminders, speech, privacy, pricing or the WhatsApp channel.
 
 | Box | Region | Can |
 |---|---|---|
-| Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` |
+| Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` (remote) |
 | Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
 
 The runtime box's checkout has no remotes and no signing key. Anything you edit
 there is committed nowhere and is overwritten by the next deploy. Fine for
-debugging; never for real work. Deploys are authored on the dev box and shipped
-with `ops/deploy.sh` — never hand-roll the tar/S3/SSM sequence.
+debugging; never for real work. Deploys go through `ops/deploy.sh` — from the
+dev box over SSM, or **from this box with `--local`** (PR-28, 2026-07-27).
+Never hand-roll the tar/S3/SSM sequence.
 
 ## Working a lane
 
@@ -101,8 +102,11 @@ not a refactor. Full reasoning in `docs/ARCHITECTURE.md` and `docs/DECISIONS.md`
 - **Delete synthetic test rows** after verifying — `users`, `messages`,
   `scheduled_turns`.
 - Ask before destructive actions; back up config before replacing it.
-- Every commit is SSH-signed, authored `Tejas Karan Agrawal
-  <help.nuraveda@gmail.com>`, and pushed to **both** remotes. See `CONTRIBUTING.md`.
+- Commits are authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>` and
+  pushed to **both** remotes. Signed *when authored on the dev box*; commits from
+  this box are unsigned by necessity and that is fine — D-L settled that signing
+  is not a gate here. Pushing to both remotes is the rule that still bites.
+  See `CONTRIBUTING.md`.
 
 ## Execution rule
 

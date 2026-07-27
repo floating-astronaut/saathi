@@ -49,7 +49,7 @@ Notes: measured 2026-07-27 — `sshd` listens on `0.0.0.0:22` and an SSH handsha
   closed: it changed infrastructure and never wrote back.**
 
 ### CRED-1 — runtime box now holds write credentials for both forges   [OPEN]
-Owner: unassigned        Opened: 2026-07-27
+Owner: unassigned        Opened: 2026-07-27 · Reviewed: 2026-07-27 (evening)
 Reading: docs/PROD_READINESS.md, CONTRIBUTING.md, docs/DECISIONS.md
 Acceptance: a PROD_READINESS row exists for the credential surface; a decision
   is recorded on whether the runtime box keeps forge write access or is reduced
@@ -63,6 +63,20 @@ Notes: `gh` 2.46.0 and `glab` 1.53.0 installed on `i-01b2c27883acb25ca` and
   credential helpers, so the internet-facing runtime box can now push to `main`
   on both remotes. It has **no signing key**, so anything it pushed would violate
   `CONTRIBUTING.md:44`. Read access is proven; write is authorised but untested.
+
+  **Untested no longer — 2026-07-27 evening.** 51 commits and 4 `--local`
+  deploys were authored, pushed and shipped from this box in one day. The
+  signing half of the concern is settled and was never a violation: D-L records
+  the operator's decision that signing is cosmetic for a single-author repo, and
+  `CONTRIBUTING.md:61` already said runtime-box commits are unsigned by
+  necessity.
+
+  **The credential half is not settled and is now larger, not smaller.** An
+  internet-facing box that runs the product also holds GitHub `repo` and GitLab
+  Owner (level 50) on both remotes, and has demonstrated it can push to `main`
+  unattended. The acceptance criterion above — a recorded decision on whether it
+  keeps write access or drops to read-only — is still unmet. Deciding it by
+  continuing to use it is how the question stops being asked.
 
 ### SEC-1 — Meta Business Agent is subscribed to our WABA   [OPEN]
 Owner: unassigned        Opened: 2026-07-26 (migrated from supervisor Queued)
@@ -219,6 +233,52 @@ Notes: design doc written first (THE_METHOD §1) — the code follows it, not th
   Two design questions closed while building: free tier mints nothing (a small
   cap would have made an open door billable), and the account tenant had to be
   built first because none existed.
+
+### LANG-1 — a user who chose हिंदी was answered in Latin   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
+Reading: docs/DECISIONS.md (D-W), docs/LANDMINES.md (Meta templates)
+Acceptance: `hi` is answered in Devanagari, `hi-en` keeps romanised Hindi, `en`
+  unchanged; the script is a stored choice rather than mirrored from the user's
+  typing; commands parse in all three scripts. — MET at `0f46069`, deployed.
+Write-back: DECISIONS.md (D-W), PROD_READINESS.md (PR-44), CHANGELOG.md
+Notes: three defects surfaced by the conversion, all worse than cosmetic —
+  `commands.parse` was Latin-only, so "सब कुछ भूल जाओ" (the phrase the consent
+  screen tells a Hindi reader to use for erasure) matched nothing; `\bchalu kar\b`
+  never matched "chalu karo", making RESUME unreachable by its own advertised
+  words; and the safety replies used masculine verb forms for a persona the
+  SYSTEM prompt defines as female. Devanagari costs ~1.77x the tokens, measured.
+  **Reminders still arrive romanised** — templates are Meta-approved and cannot
+  be edited. That is PR-44 and it is the largest remaining gap.
+
+### PAY-1 — the paywall, in-thread   [BUILT, INERT]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Built: 2026-07-27
+Reading: docs/DECISIONS.md (D-T, D-U), docs/AI_ROUTING.md
+Acceptance: an exhausted account is answered deterministically above the agent;
+  no payment tool is reachable by the model; rights (safety, onboarding,
+  erasure, ack, STOP) survive the paywall; reminders keep firing. — MET.
+Write-back: DECISIONS.md (D-T, D-U), PROD_READINESS.md (PR-40..43), CHANGELOG.md
+Notes: inert in both directions on purpose. Nothing sets `status='exhausted'`
+  (PR-42) and the payment webhook is unhandled (PR-43), so a user who paid would
+  stay locked out. **Do not set `SAATHI_PAYMENTS_ENABLED=true` before PR-43.**
+  The boundary that had to be argued rather than coded: Saathi can now ask for
+  money, which is a real reduction in "it never transacts". It is bounded to one
+  deterministic path — `order_details` and friends are in
+  `FORBIDDEN_TOOL_NAMES`, so the model cannot invoice and cannot be
+  prompt-injected into it.
+
+### FIX-1 — three live defects found by reading logs, not tests   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
+Reading: docs/CHANGELOG.md 2026-07-27 entries
+Acceptance: each reproduced, fixed, red-checked by deleting the guard, deployed.
+  — MET (`fa6bfc1`, `618ce84`, `c40d21a`).
+Write-back: CHANGELOG.md, PROD_READINESS.md (PR-37)
+Notes: (1) the agent had no clock, so a reminder asked for "in 5 minutes" was
+  dated 2025-01-09 and fired 18 months late, 23 seconds after creation;
+  (2) `nudge()` and `checkin()` discarded the WhatsApp message id, so the sweep
+  re-sent every delivered nudge every 15 minutes — one user got the same message
+  four times; (3) a captionless image stored `body_text=''`, which passed
+  `history`'s `is not null` filter and became a blank ContentBlock, killing that
+  user's next four turns. All three were green in the suite throughout.
 
 ### PR-4b — the reminder ack path is unreachable   [CLOSED]
 Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-28
