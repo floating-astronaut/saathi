@@ -1,0 +1,7 @@
+[Unit]
+Description=Publish a Saathi alert for %i
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/saathi-alert %i

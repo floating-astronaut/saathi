@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Publish one CloudWatch datapoint. Used by systemd units that are not Python.
+# Never fails its caller: a metrics outage must not mark a good backup failed.
+set -uo pipefail
+aws cloudwatch put-metric-data --region ap-south-1 \
+    --namespace Saathi --metric-name "${1:?metric name}" --value "${2:-1}" \
+    2>/dev/null || logger -t saathi-metric "failed to publish ${1}"
+exit 0

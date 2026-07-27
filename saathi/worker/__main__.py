@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from psycopg_pool import AsyncConnectionPool
 
+from .. import metrics
 from .. import net_policy
 from ..config import settings
 from . import turns  # noqa: F401 - registers the scheduled kinds
@@ -35,6 +36,14 @@ async def main() -> None:
                 n = await scheduling.run_once(pool)
                 if n:
                     log.info("dispatched %s scheduled turn(s)", n)
+                # Heartbeat *after* a successful tick, so it means "the worker
+                # did its job", not merely "the process is alive". A worker
+                # looping on a dead database would still be alive.
+                #
+                # In a thread because boto3 is synchronous, and blocking the
+                # event loop here delays every reminder in the batch.
+                await asyncio.to_thread(metrics.emit, "WorkerHeartbeat")
+                await asyncio.to_thread(metrics.emit, "TurnsDispatched", n)
             except Exception:  # noqa: BLE001
                 log.exception("scheduler tick failed")
             elapsed = (datetime.now(timezone.utc) - started).total_seconds()

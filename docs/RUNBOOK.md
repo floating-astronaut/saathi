@@ -107,9 +107,58 @@ rule disabling Browser Integrity Check for this hostname.
 
 **If the EIP ever changes, the box token stops working** — it is IP-locked.
 
+## Alerting
+
+Two mechanisms, because neither sees the other's blind spot.
+
+| | Catches | Blind to |
+|---|---|---|
+| `OnFailure=saathi-alert@%N.service` drop-ins | a unit entering `failed` | a timer that never fired; a unit that is `active` but wedged |
+| CloudWatch alarms → SNS `saathi-alerts` | silence — no heartbeat, no backup | anything faster than the evaluation window |
+
+    ops/alerting/install.sh          # idempotent; run as root on the box
+    /usr/local/bin/saathi-alert      # OnFailure publisher
+    /usr/local/bin/saathi-metric     # one-shot datapoint, for non-Python units
+
+| Alarm | Fires when | Measured latency |
+|---|---|---|
+| `saathi-worker-heartbeat-missing` | no `Saathi/WorkerHeartbeat` for 2×300s | **~21 min**, not the 10 the config implies |
+| `saathi-backup-stale` | no `Saathi/BackupSuccess` for 8×3600s | not separately measured |
+
+**The heartbeat alarm takes ~21 minutes to fire, not 10.** Measured 2026-07-27:
+worker stopped 01:44:05Z, alarm reached ALARM 02:04:59Z. CloudWatch will not
+declare a period definitively empty until ingestion for it has settled, which
+costs roughly an extra evaluation cycle beyond `Period × EvaluationPeriods`.
+Quote the measured number, not the arithmetic one — and if 21 minutes is too
+slow for a medication product, tune `Period` down and **re-measure**, because
+the same overhead will apply to whatever you choose.
+
+**Both alarms treat missing data as BREACHING.** If the metric pipeline itself
+breaks, the alarm fires for a service that is actually healthy. That false alarm
+is deliberate — an alarm that goes quiet when its own plumbing breaks is
+indistinguishable from a healthy system, which is exactly how a dead worker goes
+unnoticed for a week.
+
+**`OnFailure` barely applies to `saathi-worker`.** It is `Restart=always` with
+`StartLimitBurst=5`, so it re-enters `active` rather than `failed` on a crash,
+and a crash-looping worker looks alive. The heartbeat alarm is what actually
+catches that, because the heartbeat is published *after* a successful tick — it
+means "the worker did its job", not "the process exists".
+
+**Alerts carry no log content, on purpose.** `journalctl` output is redacted only
+inside the Python entrypoints (`net_policy.RedactingFilter`); the backup script
+and anything else under systemd are not. An alert is a summons — it names the
+unit and the host, and the operator runs `journalctl` themselves.
+
+Recipients are SNS email subscriptions on `arn:aws:sns:ap-south-1:559896294326:saathi-alerts`.
+A subscription delivers nothing until the recipient clicks the confirmation
+link, so **check `list-subscriptions-by-topic` for `PendingConfirmation` before
+believing alerting works.**
+
 ## Known gaps
 
-- Postgres is on default local-only config with **no backup**. Must move to
-  managed (RDS/Aurora ap-south-1) before external users.
-- No TTS yet; replies are text only.
-- No onboarding or consent flow yet.
+- No TTS yet; replies are text only (`PROD_READINESS.md` PR-8).
+- Reminders dispatch and are swept, but acknowledgement is unreachable (PR-4b).
+- Postgres is a single instance on the box. Backups are 6-hourly and **verified
+  by restoring into a scratch database**, but recovery point is up to 6 hours
+  and there is no PITR or failover (PR-7). Managed Postgres before paid users.
