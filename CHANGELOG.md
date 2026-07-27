@@ -16,7 +16,7 @@ Conventions:
 
 ## 2026-07-27 (evening) — per-account AI keys, and an account to hang them on
 
-**402 tests passing** (384 → 402). `tests/test_openrouter_keys.py`. AI-1.
+**405 tests passing** (384 → 405). `tests/test_openrouter_keys.py`. AI-1.
 
 ### Added
 
