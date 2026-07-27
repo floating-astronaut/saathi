@@ -1040,3 +1040,52 @@ Operator set v1 language focus to eleven locales: Hindi (`hi-IN`), Bengali
 Sarvam may become Saathi's biggest vendor, but vendor examples do not move
 runtime guarantees out of Saathi. Budgeting, redaction, deterministic safety,
 per-turn tool authorization, and per-locale evidence stay ours.
+
+---
+
+## 2026-07-27 · `6082daa` deployed — and the reminder bug had already left a body
+
+The clock lane shipped (`fa6bfc1`, `6082daa`). Second self-deploy, `--local`,
+exit 0: six migrations `already applied (baselined)`, **zero applied**, 376
+passed on the box, all four units active, healthz ok locally and through the
+tunnel, unsigned webhook 403, zero errors since restart. Live tree then compared
+against `git archive 6082daa` — every `.py` identical. The running interpreter
+renders `Now, where the user is: Mon 27 Jul 2026, 21:57 (Asia/Kolkata).`, which
+is existence *and* function.
+
+**The overnight logs closed the open question, in the worst possible way.**
+
+`reminders.id = 20`, `"Sone ka samay ho gaya hai 😴"` — the sleep reminder from
+the screenshot — *was* created, at `2026-07-27 15:55:36`. Its `next_fire_at` was
+`2025-01-09 18:05`: eighteen months in the past. The worker did exactly what it
+should with an overdue row and fired it twenty-three seconds after creation, and
+the nudge followed at 16:11 via the reclaim path.
+
+This is PR-37's predicted failure, observed rather than reasoned about. A
+clockless model was asked for a one-off reminder, `recurrence: once` requires a
+`date`, and so it produced one. Note what did *not* happen: no exception, no
+warning, no failed insert. The only artefact was a row that looked entirely
+well-formed and carried the wrong year. The reminder that "never fired" had in
+fact fired, immediately, for the wrong reason — which is why "no reminder has
+ever fired" was the wrong question to have been asking.
+
+`reminders.id = 20` is still `active` with a past `next_fire_at`. Left alone
+deliberately: it is a real user's data, not a synthetic row.
+
+**Two live defects found in the same logs, neither fixed here.**
+
+- **A blank `ContentBlock` kills the turn.** Four times between 08:05 and 08:28:
+  `ValidationException: The text field in the ContentBlock object at
+  messages.N.content.0 is blank`. The index varied (0, 1, 2), so it is a blank
+  block anywhere in the assembled history, not only the newest message. The user
+  gets nothing back at all. Not reproduced yet; do that before touching it.
+- **PR-34 is no longer theoretical.** Messages 124 and 125 are the same outbound
+  reply stored twice, identical timestamp and identical length.
+
+Benign, both self-healed: Postgres was restarted by an administrator command at
+06:07 and the worker reconnected on its own; turn 6 sat claimed-but-unsent for
+over fifteen minutes before the reclaim path caught it and delivered it.
+
+**Still unproven:** that a reminder created *today*, with a clock, lands at the
+right local time. The deploy proves the clock is in the prefix. It does not
+prove the next reminder is correct, and only a live one will.
