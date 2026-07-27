@@ -76,6 +76,29 @@ The loop is closed end to end: created → enqueued → dispatched → acknowled
 nudged → rescheduled, with a sweep for turns abandoned mid-flight. What remains
 is not a gap in the machinery but the absence of real users to run through it.
 
+### PR-45 · The live WhatsApp token expires on 2026-09-25
+The migration to Saathi's own Meta app left the number running on a **USER**
+token, not a system user token. It is valid for 60 days and then outbound
+sending stops — silently, in the way this product keeps getting hurt by: the
+health check stays green, `/healthz` stays green, and the first symptom is an
+elder not getting a medication reminder.
+
+Minting a never-expiring system user token was attempted and refused:
+`(#10) … requires that you can GENERATE_TOKEN_AUDIT_NEEDED for this business
+account`. The system user available (`122180456624889373`, "Conversions API
+System User") is not a WhatsApp admin, and business verification for
+`ayurpetofficial` may also be a gate.
+**Fix:** create a Saathi system user in Business Manager with the Indofolk AI
+app assigned, generate a non-expiring token with `whatsapp_business_messaging`
+and `whatsapp_business_management`, and set `WA_ACCESS_TOKEN` to it. Until then
+**this is a dated outage**, so it also wants a CloudWatch alarm on
+`debug_token`'s `expires_at` rather than a calendar reminder.
+
+Rollback values are kept in the secret as `WA_ACCESS_TOKEN_OLD_MESHPILOT` and
+`WA_APP_SECRET_OLD_MESHPILOT`. They belong to an app that is **no longer
+subscribed**, so restoring them alone will not restore inbound — the MeshPilot
+app would have to be re-subscribed too.
+
 ### PR-5 · Meta app and WhatsApp number are borrowed
 The app (`1571039744742551`) and the ayurpet system-user token are MeshPilot's;
 the number is **+1 Canadian** and the WABA sits under `ayurpetofficial`
@@ -84,6 +107,17 @@ template pacing all key off the sender's country, so §14's cost model does not
 hold on this number.
 **Fix:** Saathi's own Meta app, its own system user scoped to WhatsApp only, and
 an **Indian** phone number before pricing means anything.
+
+**Half resolved 2026-07-27 (evening).** The app is now Saathi's own — **Indofolk
+AI `1019173634258664`**, sole subscriber to WABA `1687148075730227`, its own app
+secret verifying every inbound webhook (proven: a payload signed with the new
+secret returns 200, the same payload signed with MeshPilot's returns 403).
+MeshPilot `1571039744742551` is unsubscribed and no longer receives anything.
+The number is Indian and was already ours: **+91 8071 581 944**, quality GREEN.
+
+**Still borrowed:** the WABA sits under the `ayurpetofficial` business
+(`935287898727459`), and the token is a 60-day user token rather than a system
+user token — PR-45. So the app is ours, the business is not.
 
 ### PR-6 · Meta Business Agent is one toggle from taking over
 `GET /{waba}/subscribed_apps` shows Meta's Business Agent app
