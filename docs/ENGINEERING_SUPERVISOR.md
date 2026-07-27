@@ -149,3 +149,119 @@ this lane. See `LANDMINES.md`.
 - Replace the landing page's template waitlist copy with real product copy.
 - Managed Postgres before external users — still no backups.
 - TTS, onboarding + consent flow, real eval corpus.
+
+---
+
+## 2026-07-27 — Lane OPS-1: forge CLIs on the runtime box
+
+Operator instruction: authenticate `gh` and `glab` on the runtime box by device
+approval flow.
+
+### Closed
+
+- **`gh` 2.46.0 and `glab` 1.53.0 installed** from Ubuntu `resolute/universe`
+  rather than the vendors' apt repos, so no third-party signing key was added to
+  the box.
+- **GitHub — true OAuth device flow.** Authenticated as `floating-astronaut`,
+  scopes `gist, read:org, repo, workflow`.
+- **GitLab — no device flow exists in this build.** `glab auth login` offers
+  `Token` or `Web`, and `Web` is an OAuth authorization-code + PKCE flow with a
+  `http://localhost:7171/auth/redirect` callback. Completed on operator
+  instruction by delivering the authorization code to the waiting process over
+  the box's own loopback. Stored as an OAuth grant (`is_oauth2: true`) with a
+  refresh token, not a PAT.
+
+### Evidence
+
+- `git ls-remote` over HTTPS to **both** remotes returned the same SHA for
+  `main` (`c497c5ab`) — git transport works through both credential helpers, and
+  the two forges are in sync under the existing manual dual-push discipline.
+- GitHub repo permissions `admin/maintain/push/pull/triage`; GitLab group access
+  level 50 (Owner).
+- Both credential stores are `0600`; the transient `*:7171` listener closed when
+  the flow completed.
+
+### Mistakes worth recording
+
+- **Drove the device flow through `script(1)` first and it hung silently with a
+  zero-byte log.** `gh`'s prompt library emits a cursor-position query (`ESC[6n`)
+  and blocks until the terminal answers; a pipe never does. It looked like a
+  network stall. `tmux` emulates the response and the flow ran. Recorded in
+  `LANDMINES.md`.
+- **Reported the repo's commits as unsigned** on the strength of `%G?` returning
+  `N`. They are signed — `git cat-file commit HEAD` shows a `gpgsig` block. `N`
+  meant git could not *verify* the SSH signature because
+  `gpg.ssh.allowedSignersFile` is unset on these boxes. Configuring it is worth
+  a lane; until then `%G?` is not a usable check here.
+
+### 🚩 Open risk created by this lane
+
+The runtime box — the internet-facing one — can now push to `main` on both
+remotes, and has no signing key, so anything it pushed would violate
+`CONTRIBUTING.md:44`. Tracked as **CRED-1** on the board and PR-22 in
+`PROD_READINESS.md`.
+
+---
+
+## 2026-07-27 — Lane SETUP-1: adopt the vibe-coding-kit control plane
+
+Operator instruction: adopt `github.com/floating-astronaut/vibe-coding-kit` and
+work its protocol, after the previous session did not hold doc discipline.
+
+### Read
+
+`vibe-coding-kit`: `THE-METHOD.md`, `AGENT-SYNC-PROTOCOL.md`, `LANE-LIFECYCLE.md`,
+`ROLES.md`, `DOC-SYSTEM.md`, `agent-configs/claude-code/CLAUDE.md`, both
+control-plane templates, `INSTALL-PROMPT.md`, `bin/vibe-scaffold`. Saathi:
+`DOC_SYSTEM.md`, `PRD.md` §0, `DECISIONS.md`, `LANDMINES.md`,
+`PROD_READINESS.md`, the tail of this log, `CONTRIBUTING.md`.
+
+### Closed
+
+- **Merged, not scaffolded.** `bin/vibe-scaffold .` would have written
+  `docs/DOC-SYSTEM.md` and `control-plane/ENGINEERING_SUPERVISOR.md` alongside
+  the existing `docs/DOC_SYSTEM.md` and `docs/ENGINEERING_SUPERVISOR.md` —
+  hyphen vs underscore, different directory — leaving **two doc-system maps and
+  two supervisor logs**. Installing the anti-drift kit that way would itself
+  have been a drift event, and would have broken the kit's own "amend, don't
+  fork" rule.
+- **Method docs added** as `docs/THE_METHOD.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+  `docs/ROLES.md`, `docs/LANE_LIFECYCLE.md` — renamed to Saathi's `UPPER_SNAKE`
+  convention, with every cross-reference rewritten to Saathi's real paths.
+- **Control plane added**: `control-plane/ACTIVE_LANE_BOARD.md` (the live queue)
+  and `control-plane/SESSION_COORDINATION.md`.
+- **Agent configs committed to the repo**: `CLAUDE.md`, `AGENTS.md`, `KIMI.md`.
+  Saathi's rules previously lived only in `~/.claude/CLAUDE.md` — per-box,
+  user-global, and read by Claude Code alone. Codex and Kimi never saw the
+  contract. That is the structural reason three agents held three different
+  ideas of the rules.
+- **`DOC_SYSTEM.md` amended**: the control plane is registered, inserted into the
+  precedence ladder above historical evidence, and added to the mandatory
+  write-back list.
+
+### The queue moved off the append-only log
+
+Seven open items were migrated from scattered `### Queued` blocks in this log
+onto the board: `DOC-1`, `CRED-1`, `SEC-1`, `PR-3`, `PR-4`, `PR-8`, `PR-9`.
+
+`AGENT_SYNC_PROTOCOL.md` §6 names this anti-pattern directly. The proof it was
+biting: **"unsubscribe the Business Agent app" appears in two separate `Queued`
+blocks and is still open.** An append-only log cannot represent a queue, because
+nothing in it is ever struck off.
+
+### Remains
+
+- Nothing in this lane. `DOC-1` is the natural next lane and is the oldest
+  unwritten-back change on the board.
+- **Not rewritten, deliberately:** SAATHI-0 above records "zero inbound rules,
+  SSM-only access, no SSH key". That was true when written. This log is
+  historical evidence and does not get corrected — `DOC-1` fixes the
+  *current-state* docs (`README.md`, `ARCHITECTURE.md`, `RUNBOOK.md`) instead.
+
+### Addendum — how this lane landed
+
+Pushed **from the runtime box, unsigned**, on operator instruction (decision
+D-L). The signing rule was blocking runtime-box work from ever landing, which is
+itself how the SSH change went live with three docs still claiming no inbound
+port was open. `CONTRIBUTING.md` amended in the same commit so the docs and the
+practice agree.

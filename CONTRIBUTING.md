@@ -41,7 +41,15 @@ branch on purpose.
 ## Every commit
 
 - Authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>`
-- **SSH-signed.** `git log --pretty='%h %G? %s'` — `%G?` must show `G`.
+- **SSH-signed when authored on the dev box**, which holds the signing key.
+  Commits from the runtime box are unsigned by necessity — see `DECISIONS.md`
+  D-L. Signing is not a gate on landing work here.
+- `%G?` is **not** a usable check on either box: SSH signature *verification*
+  needs `gpg.ssh.allowedSignersFile`, which is unset, so correctly signed commits
+  report `N`. To test whether a commit is signed at all:
+  ```
+  git cat-file commit HEAD | grep -q '^gpgsig' && echo signed
+  ```
 - Pushed to **both** remotes:
   ```
   git push origin <branch> && git push gitlab <branch>
