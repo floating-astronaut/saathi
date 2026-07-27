@@ -45,11 +45,40 @@ Conventions:
   watching the deploy stop: `1 failed, 366 passed` → `ABORT: tests failed on the
   box. Services not restarted.`
 
+- **The post-restart verification could not fail.** It printed `is-active` and
+  healthz and always exited 0, so a deploy that left `saathi-web` in `failed`
+  still ended with `== done`. Byte-identical to the old inline block, so not a
+  regression — but verification that cannot fail is skipped by another name. It
+  now asserts every unit active, healthz `"ok":true`, a zero
+  `traceback`/`critical` count, 200 through the tunnel and 403 on an unsigned
+  webhook, and exits 1 if any of those is wrong. The message says plainly that
+  the exit code prevented nothing: the restart already happened, so it is an
+  outage report, not an abort. Proved by pointing a copy at a closed port and at
+  a 404 route and watching both surface, without skipping the public-surface
+  probes on the way.
+
+- **A flag given without its value hung the deploy instead of refusing it.**
+  `--repo` last means `$#` is 1, `shift 2` shifts nothing, and with no `set -e`
+  in `deploy_onbox.sh` the `while` loop re-read the same argument for ever. Over
+  SSM that is a 900-second `TimedOut` that reads like a sick box. Pre-mutation,
+  so never dangerous — just the exact opposite of failing loudly, in the file
+  whose thesis is failing loudly. `deploy.sh` had the same shape, where `set -e`
+  exited but said nothing.
+
+- **`chown -R ubuntu:ubuntu` was the one unchecked command left**, and it is the
+  one that decides whether the services can read the code they are about to be
+  restarted into. A partial chown leaves a half-root-owned tree that imports
+  fine as root and fails as `ubuntu`. Now aborts before the restart.
+
 - **A migration deleted from `db/migrations` stays on the box for ever** and is
   still picked up by the migration loop, because a deploy merges files in and
   never takes any out. Found while verifying this change, not fixed here — it is
   what a deploy *is*, and changing it is a different lane. `PROD_READINESS.md`
-  PR-36. The live tree has no stale files today.
+  PR-36. The live tree has no stale files today, but this branch deletes
+  `worker/send_reminder.py` and `worker/reminder_scheduler.py`, which are on the
+  box; after the next deploy they will still be there, in a `worker/` whose
+  `main` version does not contain them. Harmless at runtime — nothing
+  auto-discovers them — and recorded so the next reader is not misled by them.
 
 ### Fixed — one deploy, two transports (PR-28)
 
@@ -74,6 +103,13 @@ Conventions:
   dollar signs and no backticks at all. It is unquoted and expands on the
   authoring box; a previous session put backticks in a comment in it and the
   heredoc ran `su - ubuntu` on the *dev* box at generation time and hung.
+- `--repo /` passed every containment check — `/` is not "inside" anything — and
+  would have tarred the filesystem into `/.prev` and copied the staged tree over
+  it. System directories are now named and refused.
+- `--check --target` contradicted itself and the target was silently ignored;
+  it now refuses. The IMDS lookup gets a second attempt, because failing closed
+  is right but the moment `--local` matters most is an incident, and one blip on
+  the token PUT should not turn "deploy the fix" into "refusing --local".
 
 No Python changed. Verified against a scratch target directory and a scratch
 Postgres database — never the live tree, the live database or the live `.env`;

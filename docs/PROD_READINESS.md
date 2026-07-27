@@ -348,12 +348,24 @@ Three things were designed against rather than assumed:
   the script at — so a rehearsal must not run them, and there is deliberately no
   way to ask for a *production* deploy that skips them.
 
-**Fixed in passing, because a test whose result is discarded is a test that was
+**Fixed in passing, because a step whose result is discarded is a step that was
 skipped:** the on-box `uv run pytest -q | tail -2` ran under `su - ubuntu`,
 which is a login shell without `pipefail`, so the pipeline's status was `tail`'s
 and a red suite deployed silently. This was the loose end PR-25 named and left.
-`uv sync` and `saathi-env-sync` are now checked too. All three abort before the
-restart.
+`uv sync`, `saathi-env-sync` and `chown -R ubuntu:ubuntu` are now checked too —
+the last of those is the command that decides whether the services can read the
+code they are about to be restarted into. All four abort before the restart.
+
+**And the same argument applied to verification, on review.** The post-restart
+block printed `is-active` and healthz and always exited 0, so a deploy that left
+`saathi-web` in `failed` still ended with `== done`. It now asserts: every unit
+active, healthz `"ok":true`, no `traceback`/`critical` in the last 90 seconds,
+200 through the tunnel, 403 on an unsigned webhook. What its exit code means is
+stated in the file and in `RUNBOOK.md`, because it is easy to misread: the
+deploy has **already** restarted by then, so a failure is the loudest available
+report of an outage in progress, not an abort that prevented anything. It does
+not skip the public-surface probes on the way to failing — which of the two is
+broken is the first thing you want to know.
 
 **Rollback is only half in scope, deliberately.** `deploy_onbox.sh` now
 snapshots the tree it is about to overwrite to `<repo>.prev/<utc>.tar.gz`
@@ -681,8 +693,19 @@ It became interesting during PR-28's verification: a *migration* deleted from
 `db/migrations` survives on the target, so it is still found by the migration
 loop and still applied — or, if it had already failed once, still fails, on
 every subsequent deploy, from a file that no longer exists in the repo anyone is
-reading. Reproduced on a scratch target. The live tree has no stale files today
-(checked against the deployed commit, byte for byte).
+reading. Reproduced on a scratch target.
+
+**It is not hypothetical, and the next deploy will demonstrate it.** The live
+tree matches its deployed commit byte for byte today, so there are no stale
+files *yet* — but `main` has since deleted `saathi/worker/send_reminder.py` and
+`saathi/worker/reminder_scheduler.py` (the dead path removed in `1430905`), and
+both are on the box right now. After the next deploy they will still be there,
+in a `worker/` whose `main` version does not contain them, beside their
+`__pycache__`. Not a runtime hazard — `worker/__main__.py` imports `turns`
+explicitly and nothing auto-discovers modules — but it is exactly the "code that
+exists in no commit" trap that cost a session an afternoon on 2026-07-27, and it
+will be sitting in the directory the next reader opens. Delete them on the box
+after that deploy, or fix this row properly.
 
 **Fix:** install with `rsync --delete`, or unpack into `<repo>.new` and swap the
 symlink. Both change what a deploy *is* and neither belongs in a lane about

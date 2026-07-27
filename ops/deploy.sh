@@ -37,22 +37,26 @@ REGION=ap-south-1
 PROFILE=mp-dev
 CANONICAL_REPO=/home/ubuntu/saathi
 
+say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
+die() { echo "$*" >&2; exit 1; }
+
 RUN_TESTS=1
 CHECK_ONLY=0
 LOCAL=0
 TARGET=""
+# `shift 2` on a flag given last shifts nothing. Here `set -e` would end the run
+# rather than spin, but silently and with no message, which is the same failure
+# to say what is wrong. Check the value is present before consuming it.
+need_value() { [ "$1" -ge 2 ] || die "$2 needs a value"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-test) RUN_TESTS=0; shift ;;
     --check)   CHECK_ONLY=1; shift ;;
     --local)   LOCAL=1; shift ;;
-    --target)  TARGET="${2:-}"; shift 2 ;;
+    --target)  need_value $# --target; TARGET="$2"; shift 2 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
-
-say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
-die() { echo "$*" >&2; exit 1; }
 
 # --- which box am I on? ------------------------------------------------------
 # The mode is an explicit flag, not a guess — but the flag is checked against
@@ -66,13 +70,24 @@ die() { echo "$*" >&2; exit 1; }
 #
 # So `--local` needs *positive* identification. An unreadable instance ID is
 # not permission to continue; only the affirmative claim has to be proved.
-this_instance() {
+#
+# Retried once. Failing closed is right, but the moment --local matters most is
+# an incident, and one blip on the token PUT should not turn "deploy the fix"
+# into "refusing --local".
+imds_once() {
   local tok
   tok=$(curl -sS -m 3 -X PUT http://169.254.169.254/latest/api/token \
           -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null) || return 1
   [ -n "$tok" ] || return 1
   curl -sS -m 3 -H "X-aws-ec2-metadata-token: $tok" \
        http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null
+}
+this_instance() {
+  local id
+  id=$(imds_once) && [ -n "$id" ] && { printf '%s' "$id"; return 0; }
+  sleep 2
+  id=$(imds_once) && [ -n "$id" ] && { printf '%s' "$id"; return 0; }
+  return 1
 }
 IID=$(this_instance || true)
 
@@ -99,6 +114,9 @@ else
 fi
 
 [ -z "$TARGET" ] || [ "$LOCAL" -eq 1 ] || die "--target only means anything with --local"
+[ -z "$TARGET" ] || [ "$CHECK_ONLY" -eq 0 ] || die \
+"--check and --target contradict each other: --check installs nothing, so there
+is no target to install into. It verifies the box that is running."
 
 ssm() {  # run a script on the box and stream back its output
   local script="$1" timeout="${2:-900}"
@@ -236,12 +254,36 @@ REMOTE
 fi
 
 # --- verify: active is not the same as working -------------------------------
+# Deliberately not `set -e`'d away: a failure here must not skip the public
+# surfaces, because which of the two is broken is the first thing you want to
+# know. The status is carried to the end instead.
 say "verify"
-on_box "$VERIFY_SCRIPT" 300
+BAD=0
+on_box "$VERIFY_SCRIPT" 300 || BAD=1
 
 say "public surfaces"
-printf '  %-34s %s\n' "healthz (through tunnel)" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://saathi.n8nworld.store/healthz)"
-printf '  %-34s %s\n' "webhook unsigned (want 403)" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST https://saathi.n8nworld.store/webhook/whatsapp -d '{}')"
-printf '  %-34s %s\n' "site" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://n8nworld.store/)"
+TUNNEL=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://saathi.n8nworld.store/healthz || true)
+HOOK=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST https://saathi.n8nworld.store/webhook/whatsapp -d '{}' || true)
+SITE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://n8nworld.store/ || true)
+printf '  %-34s %s\n' "healthz (through tunnel)" "$TUNNEL"
+printf '  %-34s %s\n' "webhook unsigned (want 403)" "$HOOK"
+printf '  %-34s %s\n' "site" "$SITE"
+# The first two are Saathi and are asserted. `site` is the `site` branch on
+# Cloudflare Pages — informational here, and not something this deploy changed.
+[ "$TUNNEL" = "200" ] || { BAD=1; echo "  FAIL: healthz through the tunnel returned $TUNNEL, not 200"; }
+[ "$HOOK" = "403" ] || { BAD=1; echo "  FAIL: an unsigned webhook POST returned $HOOK, not 403"; }
+
+if [ "$BAD" -ne 0 ]; then
+  say "VERIFY FAILED"
+  if [ "$CHECK_ONLY" -eq 1 ]; then
+    echo "Nothing was changed by this run — --check only looks." >&2
+  else
+    echo "The deploy already installed, migrated and restarted. This is a report" >&2
+    echo "on the box you have just changed, not a deploy that was prevented." >&2
+    echo "Putting the previous tree back: docs/RUNBOOK.md, and the snapshot path" >&2
+    echo "printed above. It restores code only — migrations do not come back." >&2
+  fi
+  exit 1
+fi
 
 say "done"
