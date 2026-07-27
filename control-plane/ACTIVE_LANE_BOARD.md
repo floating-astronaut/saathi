@@ -146,6 +146,36 @@ Notes: the WIX_API_KEY is stored and its account covers the site (site id
   The product cost of waiting is real: an elder currently receives medication
   reminders from a company name, not from the companion they talk to.
 
+### WA-3 — surface commands and ice breakers   [OPEN]
+Owner: unassigned        Opened: 2026-07-27
+Reading: docs/vendor/meta/conversational-components.md, saathi/commands.py, docs/PRD.md §2
+Acceptance: `GET /{phone_number_id}?fields=conversational_automation` returns our
+  commands and prompts; a fresh thread shows tappable ice breakers; tapping one
+  produces a normal `messages` webhook that the pipeline handles.
+Write-back: docs/ARCHITECTURE.md, CHANGELOG.md
+Notes: **the handlers already exist.** `commands.py` parses eight slash commands
+  (`/start /help /stop /resume /delete /forget /whatyouknow /clear`) that no user
+  can discover — registering them with Meta only makes them visible. Currently
+  `conversational_automation` is unset on `1266402176549539`.
+
+  Ice breakers matter more than they look here. PRD §2 argues the hard part for
+  this user "was never the transaction — it was **articulating the request**".
+  Ice breakers replace a blank compose box with up to four tappable openings,
+  which is that problem solved directly, for the exact moment a 70-year-old opens
+  the thread for the first time.
+
+  Constraints from the vendor doc: 4 ice breakers max, 80 chars each; 30 commands
+  max, name ≤32, hint ≤256; **no emoji in either**; and a `wa.me` link carrying
+  pre-filled text dismisses the ice breaker UI. Ours (`wa.me/918071581944`) has no
+  `?text=`, so it is safe — do not add one.
+
+  One design question to settle first: an un-onboarded user tapping an ice breaker
+  hits the onboarding capability at priority 10, which matches on
+  `not is_onboarded` and will swallow the text. That is correct — onboarding must
+  come first — but it means the tap's *intent* is lost. Either carry it through
+  onboarding, or accept it and word the ice breakers as openings rather than
+  instructions.
+
 ### PR-4b — the reminder ack path is unreachable   [OPEN]
 Owner: unassigned        Opened: 2026-07-27
 Reading: docs/LANDMINES.md (Meta template rules), docs/PRD.md §C2, §15
