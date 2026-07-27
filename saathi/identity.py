@@ -186,9 +186,9 @@ async def redeem_link_code(conn, code: str, channel: str, channel_user_id: str,
 # --- admission ---------------------------------------------------------------
 
 ADMISSION_REPLY = (
-    "Namaste! Main Saathi hoon. Aapko shuru karne ke liye ek code chahiye — "
+    "Namaste! Main Indofolk AI hoon. Aapko shuru karne ke liye ek code chahiye — "
     "jis family member ne yeh set up kiya hai, unse poochh lijiye.\n\n"
-    "Hello! I'm Saathi. To get started you need a code — please ask the family "
+    "Hello! I'm Indofolk AI. To get started you need a code — please ask the family "
     "member who set this up."
 )
 

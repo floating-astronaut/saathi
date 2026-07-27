@@ -173,3 +173,25 @@ supplies a number; nothing else.
 Their embedded-signup flow did briefly subscribe Vobiz's app to the WABA's
 webhooks, giving them a copy of every inbound message. Removed the same day — see
 `PROD_READINESS.md` PR-29.
+
+### D-N · The assistant is named Indofolk AI, in chat as well as on the header · 2026-07-27
+Operator decision, made after "Indofolk AI" was approved as the WhatsApp display
+name (D-M). A user was otherwise shown three names at once: the sender header,
+the greeting, and the policy pages each said something different.
+
+**Scope: user-facing copy only.** `onboarding.py`, `identity.py`, `agent/prompt.py`,
+and the policy pages. The repo, database, box, GCP project, prefix-budget env var
+and the CloudWatch namespace stay `saathi` — no user sees them, and renaming the
+metrics namespace in particular would break the alarms silently, since the IAM
+grant is scoped to it by condition.
+
+**The Hindi keeps `saathi` as a common noun.** It means *companion*, so
+"Main *Indofolk AI* hoon — aapki saathi" reads naturally where a bare substitution
+would have a company introducing itself in the first person. PRD §2 argues the
+product's value is a familiar companion; the name changed, the register did not.
+
+**Cost, accepted knowingly:** "Saathi" was a warm Hindi word an elder recognises.
+"Indofolk AI" is a company name. D-M records why — the display name had to relate
+to the verified business, and the business's registered site is a pet-products
+company with no mention of Saathi. Reversible if that site ever presents Saathi
+as its product.
