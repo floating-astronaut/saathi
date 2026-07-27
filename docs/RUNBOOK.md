@@ -182,6 +182,35 @@ that skips them. Point it at a scratch database, not the live one.
 >
 > Same reason `evals/` exists there and in no commit: a deploy copies files in
 > and never takes any out. See PR-36.
+>
+> **It is still where work gets lost.** On 2026-07-27 a session wrote two
+> operator decisions (D-Q, D-R) and two vendor notes straight into that tree.
+> Nothing there is under version control, and because a deploy *merges* rather
+> than replaces, the next one would have overwritten them without a conflict, an
+> error, or a diff. Recovered in `2a11443`. Edit the checkout, never `~/saathi`.
+
+## Pushing to GitLab — "HTTP Basic: Access denied" with a valid token
+
+`git push gitlab main` can fail with `HTTP Basic: Access denied` while
+`glab auth status` reports a healthy login and `glab api user` succeeds. The
+token is fine. The problem is the **username**: `glab auth login` stores an
+OAuth token, and GitLab only accepts those over HTTPS with the literal username
+`oauth2`, but glab's credential helper offers the account name instead. The
+`glab auth git-credential: "erase" is an invalid operation` line printed
+alongside is a symptom of the same helper, not the cause.
+
+Push with the username corrected, taking the token from the helper so it is
+never typed, echoed or stored anywhere new:
+
+```bash
+git -c credential.https://gitlab.com.helper= \
+    -c credential.https://gitlab.com.helper='!f(){ [ "$1" = get ] || exit 0; echo username=oauth2; /usr/bin/glab auth git-credential get | grep "^password="; }; f' \
+    push gitlab main
+```
+
+The empty first value is required: git *appends* helpers, so without it the
+broken one still runs first. Making this permanent means the same two lines in
+`git config --global`, which is worth doing and has not been done.
 
 ## Secrets
 
