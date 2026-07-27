@@ -50,9 +50,13 @@ branch on purpose.
   ```
   git cat-file commit HEAD | grep -q '^gpgsig' && echo signed
   ```
-- Pushed to **both** remotes:
+- Pushed to **both** remotes, and **verified on both** — the GitLab token is an
+  OAuth grant that expires every two hours and its git credential helper does
+  not refresh it, so a push can succeed on GitHub and fail on GitLab, leaving
+  them diverged. See `docs/LANDMINES.md`.
   ```
-  git push origin <branch> && git push gitlab <branch>
+  glab api user >/dev/null && git push origin <branch> && git push gitlab <branch>
+  git ls-remote origin <branch> | cut -c1-7; git ls-remote gitlab <branch> | cut -c1-7
   ```
 - Never a token in a remote URL. Never a secret in a commit, a log line, or an
   SSM command.
