@@ -37,13 +37,14 @@ CONSENT_VERSION = "2026-07-26.v1"
 # phone, often at arm's length.
 
 WELCOME = (
-    "Namaste! 🙏 Main *Saathi* hoon.\n\n"
+    "Namaste! 🙏 Main *Indofolk AI* hoon — aapki saathi.\n\n"
     "Main aapke saath hoon — baat karne ke liye bhi, aur yaad rakhne ke liye bhi. "
     "Dawa ka time, doctor ka appointment, saamaan ki list. Aap mujhse Hindi ya "
     "English mein, likh kar ya bol kar baat kar sakte hain.\n\n"
     "Main kabhi paisa nahi maangti, kabhi OTP nahi maangti, aur kabhi aapke "
     "account mein kuch nahi karti.\n\n"
-    "*I'm Saathi.* I'm here for company as much as for reminders — medicines, "
+    "*I'm Indofolk AI* — your companion. I'm here for company as much as for "
+    "reminders — medicines, "
     "appointments, lists, or just a chat. Talk to me in Hindi or English, by "
     "typing or voice note. I never ask for money or OTPs, and never touch your "
     "accounts.\n\n"

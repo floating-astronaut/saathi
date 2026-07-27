@@ -14,6 +14,45 @@ Conventions:
 
 ---
 
+## 2026-07-27 (night, later) — the assistant is called Indofolk AI
+
+Operator decision: **Indofolk AI** is the name, in chat as well as on the WhatsApp
+header. Until now a user saw three: "Indofolk AI" as the sender, "Main Saathi
+hoon" in the greeting, and "Saathi" 32 times across the policy pages.
+
+### Changed
+
+- `onboarding.py` WELCOME and `identity.py`'s admission-control message — the
+  first words an unknown number and a new user respectively ever read.
+- `agent/prompt.py` SYSTEM — how the assistant refers to itself in every
+  generated reply.
+
+The Hindi keeps **saathi** as the common noun it actually is — *companion*:
+
+    Namaste! 🙏 Main *Indofolk AI* hoon — aapki saathi.
+
+A literal substitution would have produced "Main Indofolk AI hoon" alone, which
+is a company introducing itself in the first person. Using the word for its
+meaning rather than as a name keeps the warmth §2 argues for.
+
+**Needs a native-speaker check before real users.** I am confident about the
+English and not about the gender agreement in "aapki saathi".
+
+### Deliberately unchanged
+
+- **`metrics.py: NAMESPACE = "Saathi"`.** The IAM grant is conditioned on that
+  namespace and both CloudWatch alarms query it. Renaming it would have silently
+  broken the alerting proved working hours earlier — the metrics would publish to
+  a namespace nothing watches, and `treat_missing_data: breaching` would then
+  fire an alarm about a healthy worker.
+- Repo, database, box, GCP project, `SAATHI_PREFIX_TOKEN_BUDGET`, the FastAPI
+  title and the Wikipedia User-Agent. Internal identifiers no user sees; renaming
+  them buys nothing and breaks infrastructure.
+
+Prefix budget re-checked — still inside `SAATHI_PREFIX_TOKEN_BUDGET`.
+
+---
+
 ## 2026-07-27 (night) — every outbound message is now recorded
 
 **322 tests passing.**
