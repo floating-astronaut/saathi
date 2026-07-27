@@ -46,6 +46,25 @@ Edits made in the runtime box's checkout are committed nowhere and are
 overwritten by the next deploy. If you are working there, say so in your row —
 otherwise the next agent will assume your changes exist in git and they do not.
 
+**Check which checkout you are in before believing anything.** There are usually
+several on the runtime box at different commits, and only one is current:
+
+    /home/ubuntu/saathi        the deployed artifact. Its files are live, but its
+                               git metadata is fossilised — HEAD reads far behind
+                               main and that is expected, not a problem to fix.
+    scratch clones             created by sessions for a clean base. Stale within
+                               hours. Delete when the lane closes.
+
+This has already misled once: on 2026-07-27 the deployed tree read three commits
+behind, and the honest conclusion from `git log` there was that work was missing
+when it was not. **Trust `git ls-remote`, not a local HEAD:**
+
+    git ls-remote https://github.com/Nuraveda-Labs/saathi.git main
+    git ls-remote https://gitlab.com/nuraveda-lab/saathi.git main
+
+If you create a scratch clone, remove it when you are done. A clone nobody owns
+is a tree the next session will read and believe.
+
 ## Recent handoffs
 
 > When you hand a lane to another agent, note it here so they have context.
