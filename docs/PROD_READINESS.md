@@ -171,6 +171,35 @@ number before funding the account. Options, none chosen: an invite code (the
 `channel_link_codes` table already exists for pairing), a per-day mint ceiling,
 or keeping `saathi_dm_policy = "pairing"` for the funded period.
 
+### PR-42 · Nothing marks an account exhausted
+The paywall is built, tested and gated, and **no code path sets
+`status = 'exhausted'`**. `accounts.mark_exhausted` exists and has no caller, so
+today the paywall can never fire on its own. That is a safe direction to be
+incomplete in — nobody is wrongly charged — but it means the feature is inert.
+
+The trigger needs a spend signal we do not yet have. Two routes, and the second
+is better: read the minted key's usage from OpenRouter (only works once turns
+actually route through it), or price `llm_calls` rows locally and enforce the
+cap *before* the call. `llm_calls` already records per-user model, tokens and
+latency; it lacks price. The local route also covers Bedrock and Sarvam, which
+have the same gap and no sub-keys — see PR-39.
+**Fix:** a price table per model, a running per-account total, and the call to
+`mark_exhausted` when the grant is spent.
+
+### PR-43 · The payment webhook is not handled
+`extract_messages` reads only `value["messages"]`, so a WhatsApp payment-status
+notification arrives, is ignored, and returns 200. Nothing sets
+`account_payments.status = 'captured'`, nothing calls `accounts.mark_paid`, and
+`psp_customer_id` is never populated — so a user who pays stays paywalled.
+
+The row is written before the invoice is sent and the reference is unique, so
+the reconciliation data will be there when the handler is written; a replayed
+webhook cannot double-credit. But until then payment is a dead end for the
+person who just paid, which is worse than not offering it.
+**Fix:** handle the `payments` webhook field, verify it, mark the payment
+captured and the account paid, and record the PSP customer id. Do not enable
+`SAATHI_PAYMENTS_ENABLED` before this exists.
+
 ---
 
 ## P1 — before anyone pays

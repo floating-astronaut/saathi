@@ -101,6 +101,50 @@ async def ensure_for_user(conn, user_id: int, tier: str = DEFAULT_TIER) -> int:
     return settled
 
 
+#: The price of continuing, in paise. One number, in the smallest unit, because
+#: money in a float is how you end up off by a rupee at the worst moment.
+CONTINUE_PRICE_MINOR = 19900   # ₹199
+
+
+async def status_of(conn, user_id: int) -> str:
+    """Where this user's account stands against its allowance.
+
+    Keyed by user rather than account because every caller in the chain has a
+    `user_id` and none of them should have to know the tenant model to ask a
+    question this simple.
+
+    Returns `'active'` when there is no account row at all. That is the safe
+    direction: a missing row must not lock someone out of an assistant they
+    already trust — it should look like an unfinished migration, which is what
+    it is.
+    """
+    row = await (await conn.execute(
+        """select a.status from accounts a
+             join users u on u.account_id = a.id
+            where u.id = %s and a.deleted_at is null""", (user_id,))).fetchone()
+    return row[0] if row else "active"
+
+
+async def mark_exhausted(conn, account_id: int) -> None:
+    """The allowance is spent. Idempotent — `exhausted_at` records the first time.
+
+    Never applied to an account already marked `paid`: someone who has paid and
+    then spends again is a pricing problem, not a locked door.
+    """
+    await conn.execute(
+        """update accounts
+              set status = 'exhausted', exhausted_at = coalesce(exhausted_at, now())
+            where id = %s and status = 'active'""", (account_id,))
+    log.info("account %s exhausted its allowance", account_id)
+
+
+async def mark_paid(conn, account_id: int, reference: str | None = None) -> None:
+    await conn.execute(
+        """update accounts set status = 'paid', paid_at = now() where id = %s""",
+        (account_id,))
+    log.info("account %s paid (ref %s)", account_id, reference)
+
+
 async def tier_of(conn, account_id: int) -> str:
     """The account's tier, or the default if the row has vanished."""
     row = await (await conn.execute(

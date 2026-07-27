@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from . import (commands, conversation, documents, identity, memory,
+from . import (accounts, commands, conversation, documents, identity, memory,
                media_store, onboarding, privacy, provenance, training, vision)
 from .config import settings
 from .agent import loop
@@ -564,6 +564,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         user_id=who.user_id, display_name=who.display_name, tz=who.tz,
         voice_pref=who.voice_reply_pref,
         onboarding=await _onboarding_state(conn, who.user_id),
+        account_status=await accounts.status_of(conn, who.user_id),
         wa_message_id=wa_mid, kind=kind, conversation_id=convo_id,
         provenance=provenance.detect(msg, kind).value,
     )

@@ -395,3 +395,49 @@ than the spend. See PR-40.
 **Reverse it** by changing the grant to an allowance only with a deliberate
 decision about abuse: at $5 renewing monthly, the cost of a throwaway number is
 capped only by how many someone cares to acquire.
+
+### D-U · The paywall lives in WhatsApp, and the model can never invoice · 2026-07-27
+Operator decision: "paywall we need to build, whole point of app is being
+controlled via WhatsApp — that is okay, if they want to use they need to pay."
+This overrides the recommendation to collect via a link-out.
+
+The reasoning is sound and worth recording rather than merely accepting: a
+WhatsApp-native product that sends people to a browser to keep using it has
+broken its own premise for the users least able to follow the detour.
+
+**What this costs, stated plainly.** Saathi's promise has been that it never
+transacts, and the scam it exists to blunt is not a stolen transfer — it is a
+trusted voice asking an elder to pay. After this, Saathi can ask for money. That
+is a real reduction in the guarantee and it should not be described as anything
+else.
+
+**What is kept.** The reduction is bounded to a single deterministic path:
+
+- No payment tool exists. `send_invoice`, `request_payment`, `order_details`,
+  `charge` and `refund` are in `FORBIDDEN_TOOL_NAMES`, so the suite fails if one
+  is ever added to `TOOLS`. The model cannot invoice, cannot be argued into it,
+  and cannot be prompt-injected into it, because the capability is absent rather
+  than guarded — the same argument as the safety regex at priority 0.
+- One caller, one price. `capabilities._paywall_handle` is the only caller, and
+  the amount is `accounts.CONTINUE_PRICE_MINOR`. No amount is ever derived from
+  anything that read user text.
+- The paywall sits at priority 88 — above the agent, below everything
+  deterministic. An account out of allowance keeps safety, onboarding, data
+  erasure, reminder acknowledgement and every command including STOP. Those are
+  rights, not features to be sold back to someone.
+- **Reminders keep firing.** They run from the worker queue and never enter the
+  chain. An unpaid bill is not a reason to stop telling someone to take their
+  heart medication. Changing that must be a written decision, not a side effect
+  of where a capability sits.
+
+**Razorpay collects, we do not.** They will not take a payment without a phone
+number or email, so payer identity stays with them; we keep only the join
+(`accounts.psp_customer_id`) so a captured payment credits the right household.
+No card, no UPI handle, no contact detail we did not already hold.
+
+Off by default (`SAATHI_PAYMENTS_ENABLED=false`). An unconfigured install tells
+the user their trial ended and sends nothing — a half-working paywall either
+takes money without delivering or promises without charging.
+
+**Reverse it** by disabling the flag; the copy degrades to an explanation with
+no invoice, which is a safe resting state.

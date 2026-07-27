@@ -41,6 +41,10 @@ class Capabilities:
     max_text_len: int = 4096
     #: Native markup. WhatsApp uses *bold*; Telegram accepts real Markdown.
     markup: str = "plain"
+    #: Can this channel carry an in-thread invoice? WhatsApp Pay, India only.
+    #: False everywhere else, so a paywall on another channel refuses loudly
+    #: rather than silently failing to charge.
+    supports_payments: bool = False
 
 
 @runtime_checkable
@@ -59,6 +63,11 @@ class Transport(Protocol):
                             lang: str, variables: list[str]) -> str: ...
 
     async def fetch_media(self, media_id: str, max_bytes: int) -> bytes: ...
+
+    async def send_order_details(self, conn, user_id: int, handle: str,
+                                 payload: dict) -> str:
+        """Send an invoice. Only meaningful where `supports_payments` is True."""
+        raise NotImplementedError(f"{self.channel} cannot carry an invoice")
 
     def format_text(self, text: str) -> str:
         """Render model output in this channel's native markup."""

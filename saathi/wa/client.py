@@ -106,6 +106,21 @@ async def send_text(conn, user_id: int, wa_id: str, text: str) -> str:
                        Channel.FREEFORM)
 
 
+async def send_order_details(conn, user_id: int, wa_id: str, payload: dict) -> str:
+    """Send a pre-built `order_details` invoice.
+
+    Takes the payload rather than building it: the amount and reference are
+    decided in `saathi.payments`, which is the single place allowed to say what
+    someone owes. This function only puts it on the wire.
+
+    `Channel.FREEFORM` because an invoice is a normal in-window message. That is
+    fine for the paywall, which only ever fires in reply to something the user
+    just sent — so the 24-hour window is open by construction. An invoice sent
+    from the worker, unprompted, would need a template and does not exist.
+    """
+    return await _send(conn, user_id, wa_id, payload, Channel.FREEFORM)
+
+
 async def send_buttons(conn, user_id: int, wa_id: str, body: str,
                        buttons: list[tuple[str, str]]) -> str:
     """Up to 3 quick-reply buttons, 20 chars each (§11).

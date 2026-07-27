@@ -180,6 +180,12 @@ TOOL_CONFIG = {"tools": TOOLS}
 FORBIDDEN_TOOL_NAMES = frozenset({
     "pay", "make_payment", "transfer_money", "place_order", "checkout",
     "book_flight", "read_otp", "get_otp", "login", "open_account",
+    # Added 2026-07-27 with the paywall. Saathi *can* now send an invoice, but
+    # only `capabilities._paywall_handle` may, for one fixed price, in reply to
+    # a message from an account that is out of allowance. Keeping these names
+    # forbidden is what stops the next lane exposing it to the model, where a
+    # forwarded scam could talk it into billing someone.
+    "send_invoice", "request_payment", "order_details", "charge", "refund",
 })
 
 
