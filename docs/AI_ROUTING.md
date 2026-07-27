@@ -9,6 +9,7 @@ production yet.
 
 Owns: model routing, per-account key provisioning, spend caps, residency.
 Related: `DECISIONS.md` D-D (model choice), D-O (this routing change),
+D-S (paid-vendor usage ownership), `USAGE_LEDGER.md` (cross-vendor ledger),
 `vendor/` (captured OpenRouter API docs), `PROD_READINESS.md` PR-15 (rate limiting).
 
 ---

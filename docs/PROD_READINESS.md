@@ -139,7 +139,7 @@ now by D-S: Sarvam is STT-only, where per-turn cost is limited by
 **Fix:** price `llm_calls` rows per vendor and enforce a cap *before* the call.
 `llm_calls` already records per-user model, tokens and latency; it lacks price.
 That work would also answer the same question for Bedrock, which has the
-identical gap and no sub-keys either.
+identical gap and no sub-keys either. **Designed in `docs/USAGE_LEDGER.md` (D-V)** — build that rather than re-deriving it.
 
 ### PR-40 · There is no paywall, only a key that stops working
 D-T grants every user $5 once. Nothing handles the moment it runs out. The key
@@ -184,7 +184,9 @@ cap *before* the call. `llm_calls` already records per-user model, tokens and
 latency; it lacks price. The local route also covers Bedrock and Sarvam, which
 have the same gap and no sub-keys — see PR-39.
 **Fix:** a price table per model, a running per-account total, and the call to
-`mark_exhausted` when the grant is spent.
+`mark_exhausted` when the grant is spent. **`docs/USAGE_LEDGER.md` (D-V) is the design**: one Saathi row per paid vendor
+call with user attribution, units and cost, so the trigger covers Sarvam STT and
+paid templates rather than only model turns.
 
 ### PR-43 · The payment webhook is not handled
 `extract_messages` reads only `value["messages"]`, so a WhatsApp payment-status
@@ -725,6 +727,12 @@ correct answer does not belong there:
 
 Until it exists, the honest statement of PR-26's coverage is: memory, disk and
 event-loop starvation are bounded; **sustained CPU by one sender is not**.
+
+**Design recorded 2026-07-27:** `docs/USAGE_LEDGER.md` is the implementation
+shape for this widened cap. OpenRouter can hard-cap Bedrock/GLM-5, but Saathi
+must own the cross-vendor ledger for Sarvam STT/TTS/OCR, WhatsApp templates and
+future paid search. Langfuse may mirror it; LiteLLM is deferred unless we need a
+self-hosted LLM gateway.
 
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during
