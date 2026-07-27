@@ -108,7 +108,27 @@ async def test_button_ack_is_deterministic_not_model_routed(spy, monkeypatch):
         "id": "w3", "from": "91", "type": "interactive",
         "interactive": {"button_reply": {"id": "ack:42", "title": "Ho gaya"}}})
     assert out["handled"] == "ack"
-    assert any("reminder_fires" in s and "acked" in s for s in conn.sql)
+    # scheduled_turns, not reminder_fires: migration 006 moved dispatch, and the
+    # ack was still updating a table nothing fires from (PR-4b).
+    assert any("scheduled_turns" in s and "acked" in s for s in conn.sql)
+    assert not any("reminder_fires" in s for s in conn.sql)
+
+
+async def test_template_button_tap_reaches_the_ack_handler(spy, monkeypatch):
+    """The shape that actually arrives from a fired reminder.
+
+    Our own interactive messages carry the payload at
+    interactive.button_reply.id. A *template* quick-reply is a different message
+    type — "button", with button.payload — which nothing read, so every real
+    acknowledgement was dropped and routed to the model as plain text."""
+    async def boom(*a, **k):
+        raise AssertionError("a template ack was routed through the LLM")
+    monkeypatch.setattr(pipeline.loop, "run", boom)
+    conn = FakeConn()
+    out = await pipeline.handle_message(conn, {
+        "id": "w3b", "from": "91", "type": "button",
+        "button": {"payload": "ack:42", "text": "Ho gaya"}})
+    assert out["handled"] == "ack"
 
 
 async def test_empty_text_does_not_call_the_model(spy, monkeypatch):

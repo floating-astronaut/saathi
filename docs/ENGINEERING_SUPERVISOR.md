@@ -751,3 +751,68 @@ would invite a resend of something the user has read. Failures log at ERROR.
 - PR-18 still stands: `CONSENT_VERSION` hardcoded in two modules, with nothing
   forcing a re-consent when the text changes. Now that the text is recorded per
   message, a mismatch is at least detectable after the fact.
+
+---
+
+## 2026-07-28 — Lane PR-4b: the reminder loop closes
+
+### Four breaks, each silent
+
+1. **The template carried no per-message payload.** `reminder_fire_v2` is
+   approved *with* quick-replies ("Ho gaya", "15 min baad"), but a template
+   quick-reply returns only its **label** unless a `button` component supplies a
+   payload per message. Nothing tied a tap to the turn that produced it.
+2. **The arriving message type was never read.** Interactive messages we compose
+   carry the payload at `interactive.button_reply.id`. A template quick-reply is
+   a different type — `button`, with `button.payload` — and `MessageContext`
+   only knew the first shape.
+3. **The pipeline routed it as text.** `kind == "interactive"` gated both the
+   text resolution and the logging, so a `button` message fell through to the
+   model as plain text.
+4. **`handle_ack` updated `reminder_fires`** — the table migration 006 stopped
+   writing. And nothing anywhere enqueued a nudge, so the registered handler was
+   dead code.
+
+Consequence: §15's acknowledgement rate was **structurally zero**, not low, and
+a missed dose produced no follow-up.
+
+### Closed
+
+- `send_template(..., payloads=[...])` emits `button` components with
+  `sub_type: quick_reply` and a per-message payload, in template button order.
+  Templates without payloads grow no buttons — a check-in must not sprout
+  controls it was not approved with.
+- `MessageContext.button_id` reads both shapes.
+- The pipeline treats `button` like `interactive` for text resolution and
+  logging (`msg_kind` has no `button` member, so both record as interactive).
+- `handle_ack` updates `scheduled_turns`, cancels any pending nudge for that
+  turn, and **snooze re-enqueues** — marking a row snoozed is not a reminder,
+  and without the re-enqueue the user was told "later" by a system that then
+  forgot.
+- Firing a reminder books a nudge at +20 min, dedupe-keyed on the origin turn.
+- Ack and snooze replies are localised, now that language exists.
+
+### Evidence
+
+- 331 tests (326 before; 5 new in `tests/test_ack_loop.py`).
+- All three new statements run against **real Postgres** and rolled back —
+  including the `payload->>'origin_turn_id'` comparison. `scheduled_turns_user`
+  is `(user_id, kind)`, so the nudge-cancel lookup is already indexed; no
+  migration.
+- `tests/test_pipeline_order.py` had a test asserting the **old** behaviour
+  (`reminder_fires` + `acked`). It was pinning the bug in place. Updated, and it
+  now also asserts `reminder_fires` is never touched.
+
+### Worth noting
+
+A passing test asserted the broken behaviour. That is the fourth instance today
+of tests agreeing with a bug rather than catching it — after `sweep_stuck`'s
+invalid SQL, the reminder path writing to a dead table, and outbound messages
+never being recorded. The pattern is not bad luck; it is that these tests were
+written from the implementation rather than from the contract.
+
+### Remains
+
+- `worker/send_reminder.py` and `worker/reminder_scheduler.py` are still dead and
+  still contain writes to `reminder_fires`. Deleting them is a tidy-up lane.
+- Untested against a real handset: no reminder has fired on the live number yet.

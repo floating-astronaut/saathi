@@ -66,27 +66,56 @@ async def log_message(conn, user_id: int, direction: str, kind: str, *,
     return row[0] if row else 0
 
 
+ACK_REPLY = {"hi": "Shabaash! Ho gaya. 🌼", "en": "Lovely — marked as done. 🌼"}
+SNOOZE_REPLY = {"hi": "Theek hai, {mins} minute baad yaad dila dungi.",
+                "en": "Alright, I'll remind you again in {mins} minutes."}
+
+
 async def handle_ack(conn, user_id: int, button_id: str) -> str | None:
     """Quick-reply buttons on a fired reminder: acknowledge or snooze.
 
     Handled deterministically rather than through the model — an ack is an
     unambiguous button press, and routing it through an LLM would add latency,
     cost, and a chance of getting it wrong.
+
+    The id is a `scheduled_turns.id`. It used to be a `reminder_fires.id`, which
+    stopped being written when migration 006 moved dispatch to `scheduled_turns`
+    — so the ack updated a row that no longer existed while §15's
+    acknowledgement metric read a table nothing fired from (PR-4b).
     """
+    from .onboarding import _lang
+
     if button_id.startswith("ack:"):
+        turn_id = int(button_id.split(":", 1)[1])
         await conn.execute(
-            """update reminder_fires set state = 'acked', acked_at = now()
-                where id = %s and user_id = %s""",
-            (int(button_id.split(":", 1)[1]), user_id))
-        return "Shabaash! Ho gaya."
+            """update scheduled_turns set state = 'acked', acked_at = now()
+                where id = %s and user_id = %s""", (turn_id, user_id))
+        # A reminder that has been acknowledged must not be nudged about.
+        await conn.execute(
+            """update scheduled_turns set state = 'skipped'
+                where kind = 'nudge' and user_id = %s and state = 'pending'
+                  and payload->>'origin_turn_id' = %s""",
+            (user_id, str(turn_id)))
+        return ACK_REPLY.get(await _lang(conn, user_id), ACK_REPLY["hi"])
+
     if button_id.startswith("snooze:"):
-        _, fire_id, mins = button_id.split(":", 2)
-        await conn.execute(
-            """update reminder_fires
-                  set state = 'snoozed', snoozed_to = now() + (%s || ' minutes')::interval
-                where id = %s and user_id = %s""",
-            (mins, int(fire_id), user_id))
-        return f"Theek hai, {mins} minute baad yaad dila dungi."
+        _, turn_id, mins = button_id.split(":", 2)
+        turn_id, mins = int(turn_id), int(mins)
+        row = await (await conn.execute(
+            """update scheduled_turns
+                  set state = 'snoozed', snoozed_to = now() + make_interval(mins => %s)
+                where id = %s and user_id = %s
+            returning payload, snoozed_to""", (mins, turn_id, user_id))).fetchone()
+        # Marking it snoozed is not a reminder. Book the next one, or the user
+        # has simply been told "later" by a system that then forgets.
+        if row:
+            payload, when = row
+            from . import scheduling
+            await scheduling.enqueue(
+                conn, user_id, "reminder", when, payload=payload or {},
+                dedupe_key=f"snooze:{turn_id}:{mins}")
+        return SNOOZE_REPLY.get(await _lang(conn, user_id),
+                                SNOOZE_REPLY["hi"]).format(mins=mins)
     return None
 
 

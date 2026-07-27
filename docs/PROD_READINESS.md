@@ -55,7 +55,7 @@ for a medication product is a product decision, not a bug. `cloudwatch:
 DescribeAlarmHistory` is also still denied to the box, so alarm transitions can
 be observed live but not audited afterwards.
 
-### PR-4 · Reminders had no delivery guarantee — partly resolved 2026-07-27
+### PR-4 · Reminders had no delivery guarantee — resolved 2026-07-28
 The original row understated it. Reminders were not merely unguaranteed, they
 were **never dispatched**: `_create_reminder` wrote to `reminder_fires`, the
 worker read only `scheduled_turns`, and `worker/reminder_scheduler.py` — the
@@ -67,10 +67,14 @@ book their next occurrence; a deliberate no-send (paused user, no active handle)
 is marked `skipped`; and `scheduling.sweep_stuck` reclaims turns claimed but
 never sent. Proven end to end against the live database, not only against fakes.
 
-**Still open, and the reason this row stays P0:** nothing yet pages a human when
-dispatch stops. The sweep records the failure; no one is told. Depends on PR-3,
-which is itself blocked on `cloudwatch:PutMetricAlarm` and SNS (see PR-22).
-Acknowledgement is separately broken — lane PR-4b.
+**Alerting resolved** 2026-07-27 (PR-3) — a stopped worker now pages a human,
+proven by inducing the outage. **Acknowledgement resolved** 2026-07-28 (PR-4b) —
+a fired reminder now carries per-message payloads, the tap reaches the
+deterministic handler, and an unacknowledged reminder books a nudge.
+
+The loop is closed end to end: created → enqueued → dispatched → acknowledged or
+nudged → rescheduled, with a sweep for turns abandoned mid-flight. What remains
+is not a gap in the machinery but the absence of real users to run through it.
 
 ### PR-5 · Meta app and WhatsApp number are borrowed
 The app (`1571039744742551`) and the ayurpet system-user token are MeshPilot's;

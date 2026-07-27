@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import logging
 
+from datetime import timedelta
+
 from .. import scheduling
 from ..channels import registry
 from ..wa import client as wa
@@ -17,8 +19,13 @@ REMINDER_TEMPLATE = "reminder_fire_v2"
 NUDGE_TEMPLATE = "reminder_nudge_v2"
 CHECKIN_TEMPLATE = "daily_checkin"
 
+#: How long to wait before asking whether a reminder was acted on. Long enough
+#: not to nag, short enough that a missed morning dose is still actionable.
+NUDGE_AFTER_MINUTES = 20
 
-async def _handle(conn, user_id: int, template: str, variables: list[str]) -> str | None:
+
+async def _handle(conn, user_id: int, template: str, variables: list[str],
+                  payloads: list[str] | None = None) -> str | None:
     """Send a utility template to a user, unless they have paused us."""
     row = await (await conn.execute(
         """select c.channel_user_id, c.channel::text, u.paused
@@ -37,7 +44,8 @@ async def _handle(conn, user_id: int, template: str, variables: list[str]) -> st
     if not transport.capabilities.requires_templates:
         # A channel without a session window can just be messaged.
         return await transport.send_text(conn, user_id, handle, variables[0])
-    return await wa.send_template(conn, user_id, handle, template, "en", variables)
+    return await wa.send_template(conn, user_id, handle, template, "en", variables,
+                                  payloads=payloads or [])
 
 
 # --- reminder ----------------------------------------------------------------
@@ -54,7 +62,10 @@ async def reminder(conn, *, turn_id, user_id, payload, scheduled_for):
         return
     title, rrule, tz = row
 
-    mid = await _handle(conn, user_id, REMINDER_TEMPLATE, [title])
+    # Payloads in template button order: "Ho gaya" then "15 min baad". Without
+    # these the tap returns only the label and nothing ties it to this turn.
+    mid = await _handle(conn, user_id, REMINDER_TEMPLATE, [title],
+                        payloads=[f"ack:{turn_id}", f"snooze:{turn_id}:15"])
     if mid:
         await conn.execute(
             "update scheduled_turns set wa_message_id=%s where id=%s", (mid, turn_id))
@@ -66,6 +77,15 @@ async def reminder(conn, *, turn_id, user_id, payload, scheduled_for):
         # reclaimed and retried forever.
         await conn.execute(
             "update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+
+    # Follow up if it goes unacknowledged. Nothing enqueued a nudge before, so
+    # the handler below was registered and dead and a missed dose was silent.
+    if mid:
+        await scheduling.enqueue(
+            conn, user_id, "nudge",
+            scheduled_for + timedelta(minutes=NUDGE_AFTER_MINUTES),
+            payload={"origin_turn_id": turn_id, "title": title},
+            dedupe_key=f"nudge:{turn_id}")
 
     # A recurring reminder has to book its own next occurrence: nothing else
     # walks the rrule. Without this a daily reminder fires exactly once.
