@@ -14,6 +14,25 @@
 | Repo on box | `/home/ubuntu/saathi` |
 | Database | `saathi` on local Postgres 18.4, role `saathi` |
 | Secrets | Secrets Manager `saathi/dev/runtime` (ap-south-1) |
+| WhatsApp number | **+91 8071 581 944** — `phone_number_id 1266402176549539` |
+| WABA | `1687148075730227` — display name **"Indofolk AI"**, currency **INR** |
+| Business | `ayurpetofficial` (`935287898727459`) — legal entity **INDOFOLK WELLNESS PRIVATE LIMITED**, verified 19 Feb 2026, GSTIN `07AAHCI7432A1ZV` |
+| Retired number | +1 437-539-7958 — `phone_number_id 1127963600410973`, WABA `1023945910495878`. Kept, not deleted; its four templates remain approved there. |
+
+> **Re-verifying the Indian number.** It is a Vobiz DID and is **voice-only** —
+> every Indian DID in their inventory has `sms: false`, so an SMS code never
+> arrives. Use `code_method: VOICE`, and route the number somewhere audible
+> first: attach it to a Vobiz XML application whose answer URL returns
+> `<Response><Dial callerId="+918071581944"><Number>+91…</Number></Dial></Response>`.
+> `callerId` **must** be a Vobiz-owned number or the outbound leg is refused.
+> Detach the application afterwards — see `LANDMINES.md` on why deleting the
+> answer URL alone does not stop it.
+>
+>     POST /v21.0/{phone_number_id}/request_code  {"code_method":"VOICE","language":"en"}
+>     POST /v21.0/{phone_number_id}/verify_code   {"code":"NNNNNN"}
+>     POST /v21.0/{phone_number_id}/register      {"messaging_product":"whatsapp","pin":"…"}
+>
+> The two-step PIN is `WA_TWO_STEP_PIN_IN` in Secrets Manager.
 
 > **Two IP pins, both silent when they break.** The SSH rule is bound to the
 > operator's Mac at `207.219.25.137/32`, and the Cloudflare token

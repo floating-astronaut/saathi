@@ -14,6 +14,47 @@ Conventions:
 
 ---
 
+## 2026-07-27 (evening) — Saathi moves to an Indian number
+
+No Python changed. Configuration and Meta-side state only, but it changes what
+the product *is*: Saathi now answers on **+91 8071 581 944** as **"Indofolk AI"**,
+not on a +1 Canadian number as an unnamed sender.
+
+### Verified live
+
+A real WhatsApp message reached the product end to end: inbound "Hii" at
+04:41:50 → `POST /webhook/whatsapp` 200 → user row created → deterministic
+onboarding replied with the bilingual consent prompt and three quick-replies,
+rendered correctly on the handset. Worker heartbeat kept flowing across the
+switch.
+
+### Changed
+
+- `WA_PHONE_NUMBER_ID` → `1266402176549539`, `WA_BUSINESS_ACCOUNT_ID` →
+  `1687148075730227`, **in Secrets Manager** — editing `.env` alone would have
+  been silently reverted by the next `saathi-env-sync`. Old ids retained as
+  `*_OLD_CA` rather than dropped.
+- Four templates re-submitted on the new WABA under the **same names**, so no
+  code change: `turns.py` references them as string literals. All four came back
+  `UTILITY`, not MARKETING — the anchoring wording from the first fight held.
+
+### Found
+
+- **Onboarding never records outbound messages** (PR-31). The first exchange
+  every user has, including the consent text, is absent from `messages` — the
+  table the backups actually protect. 1 inbound, 0 outbound after a conversation
+  the user could see on screen.
+- **Template quick-replies return button *text*, not a payload.** `reminder_fire_v2`
+  carries `Ho gaya` / `15 min baad` as approved QUICK_REPLY buttons, so
+  `pipeline.handle_ack` — which parses `ack:{id}` — can never match. That refines
+  PR-4b: the fix is a `button` component with a dynamic payload, or matching on
+  the text.
+- Vobiz briefly held webhook access to every inbound message (PR-29), removed.
+
+Decision recorded as **D-M**.
+
+---
+
 ## 2026-07-27 (later still)
 
 **314 tests passing.**

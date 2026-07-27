@@ -119,6 +119,33 @@ Notes: **worse than SEC-2 reported.** STOP matches `\bunsubscribe\b` as a
   needed. Onboarding (10) left unguarded on purpose: gating it would drop an
   un-onboarded user to the agent and break "onboarding never calls the model".
 
+### WA-1 — Saathi is unreachable and unnamed on WhatsApp   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
+Reading: docs/LANDMINES.md, docs/DECISIONS.md (D-A, D-J), docs/PROD_READINESS.md (PR-5)
+Acceptance: an Indian number, an approved display name, inbound reaching
+  `/webhook/whatsapp`, and a real message answered end to end. — MET.
+Result: **+91 8071 581 944** "Indofolk AI", CONNECTED on CLOUD_API, WABA
+  `1687148075730227`, currency INR. Live message verified on the handset.
+  Vobiz supplies the number only — verification and registration were done on our
+  own Cloud API, so **D-A survives**. Decision D-M.
+Notes: the display name is "Indofolk AI", not "Saathi" — "Saathi" was declined
+  because the verified business's registered site (`indofolkwellness.com`) is a
+  B2B pet products company with zero mention of Saathi. Reversible once a Saathi
+  page exists there. See WA-2.
+
+### WA-2 — make "Saathi" an approvable display name   [OPEN]
+Owner: unassigned        Opened: 2026-07-27
+Reading: docs/DECISIONS.md (D-M), docs/PRD.md §2
+Acceptance: `indofolkwellness.com` presents Saathi as an Indofolk Wellness
+  product; "Saathi" re-submitted and APPROVED; a `wa.me` link published so the
+  number is reachable without saving a contact.
+Write-back: docs/DECISIONS.md, docs/PROD_READINESS.md
+Notes: the WIX_API_KEY is stored and its account covers the site (site id
+  `74ab9ac8-1a47-4476-9b59-a67c93636324`). **This is a live company website that
+  is not Saathi's** — nothing published without the operator reading it first.
+  The product cost of waiting is real: an elder currently receives medication
+  reminders from a company name, not from the companion they talk to.
+
 ### PR-4b — the reminder ack path is unreachable   [OPEN]
 Owner: unassigned        Opened: 2026-07-27
 Reading: docs/LANDMINES.md (Meta template rules), docs/PRD.md §C2, §15
@@ -128,9 +155,11 @@ Acceptance: a fired reminder carries quick-reply buttons whose payload identifie
   table that actually receives fires.
 Write-back: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md
 Notes: found while working PR-4. Three separate breaks, all silent:
-  (1) `wa.send_template` sends only body variables — **no button component**, so
-  the `ack:{id}` / `snooze:{id}` payloads `pipeline.handle_ack` parses are never
-  produced by anything;
+  (1) **refined 2026-07-27** — the templates *do* carry approved QUICK_REPLY
+  buttons (`Ho gaya`, `15 min baad`). Template-defined quick replies return the
+  button **text**, not a payload, so the `ack:{id}` form `handle_ack` parses can
+  never appear. Fix is a `button` component with a dynamic payload, or matching
+  on the text;
   (2) `handle_ack` updates `reminder_fires`, but reminders now fire from
   `scheduled_turns`, so the row that fired is never marked acked;
   (3) nothing anywhere calls `enqueue(..., "nudge", ...)` — the handler is
