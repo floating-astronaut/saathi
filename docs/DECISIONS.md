@@ -105,3 +105,28 @@ construction**, not by policy:
 The compounding property survives all of this: the correction pass produces
 gold-labelled pairs for free, labelled by the user's own read-back confirmation,
 so the corpus builds itself from ordinary use with no annotation.
+
+### D-L · The runtime box may author and push; signing is not a gate · 2026-07-27
+Operator decision, stated plainly: *"this is single person github account and I
+only work here, that rule is cosmetic."*
+
+The signing requirement was inherited from the MeshPilot habit set, where it
+distinguishes commits from several contributors. Saathi has one author and two
+private remotes on accounts he alone controls, so a signature proves something
+nobody needs proved, while the rule's real cost was concrete — it blocked work
+authored on the runtime box from ever landing, which is how the SSH change ended
+up live with three docs still claiming no inbound port was open.
+
+So: **the dev box signs because it has the key; the runtime box pushes unsigned.**
+Both are legitimate. `CONTRIBUTING.md` is amended to match.
+
+What does *not* change:
+- Every commit is still authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>`.
+- Every commit still goes to **both** remotes.
+- `ops/deploy.sh` still refuses a dirty tree or a non-`main` branch, and deploys
+  are still artifact-shipped rather than pulled on the box.
+- PR-22 still stands: the runtime box holding forge write credentials is a real
+  blast-radius question, and this decision widens it rather than resolving it.
+
+**Reverse this if a second contributor appears.** At that point signatures start
+carrying information again, and the runtime box should drop to read-only tokens.

@@ -108,6 +108,26 @@ no way to answer "what did we send this user last Tuesday" after a rebuild.
 **Fix:** ship logs off-box. The `messages` table is the product record, but
 operational logs are not backed up at all.
 
+### PR-22 · The runtime box can push to `main` on both remotes
+`gh` and `glab` were authenticated on `i-01b2c27883acb25ca` on 2026-07-27
+(operator instruction, lane OPS-1). GitHub scopes `gist, read:org, repo,
+workflow` give repo permissions `admin/maintain/push`; the GitLab OAuth grant
+carries `write_repository` + `api` at group access level 50 (Owner). Both are
+wired into git as credential helpers.
+
+So the **internet-facing** box now holds write access to the source of truth for
+a product it also runs. It has no signing key, so anything it pushed would break
+`CONTRIBUTING.md:44` (`%G?` must be `G`) — meaning the realistic failure is not
+an honest mistake but a compromise of the tunnel-exposed box turning into a
+push to `main`.
+
+Filed P1 rather than P0 because deploys are still manual from the dev box, so a
+pushed commit does not reach users on its own. Upgrade it if that stops being
+true.
+**Fix:** decide whether the runtime box keeps write access or is reduced to
+read-only (a token with `read_api` / `read_repository` and no `repo` scope).
+Tracked as `CRED-1` on `control-plane/ACTIVE_LANE_BOARD.md`.
+
 ---
 
 ## P2 — before scale

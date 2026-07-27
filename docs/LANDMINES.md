@@ -131,3 +131,52 @@ secret embedded in a command leaks into the audit trail permanently.
 
 **Fix:** Secrets Manager + the instance role. The box fetches its own secrets
 (`/usr/local/bin/saathi-env-sync`); nothing sensitive crosses SSM.
+
+---
+
+## Terminal: a CLI device-flow login hangs silently when driven through a pipe
+
+**Symptom:** `gh auth login --web` produces **no output at all** — a zero-byte
+log — and never returns. It looks like a network stall or a hung API call.
+
+**Cause:** `gh`'s prompt library sizes the terminal by emitting a cursor-position
+query (`ESC[999;999f ESC[6n`) and then *blocking until the terminal replies* with
+`ESC[row;colR`. A pipe never replies. `script(1)` does not help: it allocates a
+PTY for the child, but nothing on the master side answers the query either.
+
+**Why it is nasty:** nothing errors, nothing times out, and the log is empty
+rather than truncated — so the natural conclusion is "the network is slow" or
+"the flag is wrong", and neither is true. `script -f` (flush) fixes the
+buffering and still leaves you hanging at the same prompt.
+
+**Fix:** run it under `tmux`, which is a real terminal emulator and answers the
+query:
+
+    tmux new-session -d -s auth -x 200 -y 50 "gh auth login --web ..."
+    tmux send-keys -t auth "y" Enter
+    tmux capture-pane -p -t auth
+
+Applies to any interactive CLI login, not just `gh`.
+
+---
+
+## Git: `%G?` returns `N` on correctly signed commits when allowed-signers is unset
+
+**Symptom:** `git log --pretty='%G?'` shows `N` on every commit, which reads as
+"not signed" — and `CONTRIBUTING.md` requires `G`.
+
+**Cause:** the commits *are* SSH-signed (`git cat-file commit HEAD` shows the
+`gpgsig` block). SSH signature **verification** needs
+`gpg.ssh.allowedSignersFile` to be configured and to exist. Unset, git cannot
+verify, so it reports `N` — the same character it would use for genuinely
+unsigned work.
+
+**Why it is nasty:** it looks exactly like a discipline breach that has not
+happened, and invites someone to "fix" signing that was never broken.
+
+**Fix:** check for the signature itself before believing `%G?`:
+
+    git cat-file commit HEAD | grep -q '^gpgsig' && echo signed
+
+Configure `gpg.ssh.allowedSignersFile` on any box that needs to *verify* rather
+than merely produce signatures.
