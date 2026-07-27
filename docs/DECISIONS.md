@@ -195,3 +195,41 @@ product's value is a familiar companion; the name changed, the register did not.
 to the verified business, and the business's registered site is a pet-products
 company with no mention of Saathi. Reversible if that site ever presents Saathi
 as its product.
+
+### D-O · OpenRouter routes to our own Mumbai Bedrock; fallbacks are disabled · 2026-07-27
+Saathi will call `z-ai/glm-5` through OpenRouter instead of `boto3` → Bedrock
+directly. Design in `AI_ROUTING.md`. **Not built yet** — this records the choice
+and its conditions before the code exists.
+
+**Why at all.** Per-account API keys with hard USD caps, minted programmatically.
+That is `PROD_READINESS.md` PR-15's fix: today an onboarded user can send
+unlimited voice notes and nothing enforces §14's cap. Spend becomes attributable
+per paying household and a runaway loop burns one cap, not the balance.
+
+**What does not change, and this is the point.** The BYOK credential on the
+Indofolk AI workspace (`718e8438-…`) is `amazon-bedrock`, named "Indian Box",
+`sort_order: 0`, `is_fallback: false` — **the same Mumbai `ap-south-1` account
+Saathi already uses**. And `z-ai/glm-5` is the same model as `zai.glm-5`.
+
+So **D-D survives intact**: the model that scored 8/8 on Hindi fractional time
+words is the model still answering, and inference still happens in India.
+OpenRouter is a router and a meter, not a new inference location. If either the
+slug or the region ever changes, D-D's bakeoff must be re-run — it was measured
+on that model, and `paune gyarah → 22:45` being wrong means a missed dose.
+
+**The condition that makes it safe.** Every request sends
+`provider: {allow_fallbacks: false}`, as a constant in the client and not a
+setting. Without it, a Bedrock outage silently reroutes an elder's medication
+conversation to a US provider and nothing says so. With it the request fails and
+Saathi surfaces an error. Same reasoning as D-F: a deterministic guarantee must
+not depend on instruction-following or on someone remembering a flag.
+
+**What is honestly given up.** D-D's claim was "inference stays in India". That
+remains true. But the prompt now **transits OpenRouter's infrastructure** to
+reach Mumbai, so "the data never leaves India" is no longer accurate and the
+privacy policy must not imply it. That is a real change in processors under DPDP,
+accepted knowingly, and it is the reason this decision is written down rather
+than treated as a config change.
+
+**Reverse it** by pointing the client back at `boto3`. The model, region and
+account are unchanged, so reversal costs nothing but the metering.
