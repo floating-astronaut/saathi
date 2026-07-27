@@ -15,6 +15,15 @@ class Settings(BaseSettings):
     wa_business_account_id: str = ""
     wa_access_token: str = ""
     wa_webhook_verify_token: str = ""
+    #: The Meta app this number's WABA is subscribed to. Not a secret — it is
+    #: visible in every Graph URL — but kept beside the secret so the two cannot
+    #: drift apart, which is the failure that makes a signature mismatch look
+    #: like a code bug.
+    wa_app_id: str = ""
+    #: Signs every inbound webhook (`web/app.valid_signature`). **Rotating this
+    #: without also subscribing the new app to the WABA makes every inbound
+    #: message 403** — the user sees silence, and nothing in our logs says why,
+    #: because a rejected webhook never reaches the pipeline.
     wa_app_secret: str = ""
 
     # Bedrock — regional ap-south-1, inference stays in India (plan §5c)
