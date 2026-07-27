@@ -14,11 +14,17 @@
 | Codex | — | 2026-07-27 | SEC-2 | `SECURITY.md` (new, owns it outright) | **ended** — closed SEC-2 at scan `c4b34ba`, surfaces released |
 | Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-3 | `saathi/metrics.py`, `saathi/worker/__main__.py`, `ops/alerting/`, `tests/test_metrics.py` | **ended** — closed, surfaces released |
 
-**Base commit is `36768ba`** (Codex's SEC-2 close). `main` moved five times on
-2026-07-27 — `ffe9acc`, `64a520b`, `c4b34ba`, `7044985`, `36768ba`. Any session
-that started before the latest must rebase before committing. This worked in
-practice today: two sessions ran concurrently and rebased without a single
-conflict, because each declared its surfaces here first.
+**Base commit is `0f46069`** (2026-07-27, end of day). `main` moved **51 times**
+on 2026-07-27, so any figure written here goes stale within the hour — do not
+trust this line, run:
+
+    git ls-remote https://github.com/Nuraveda-Labs/saathi.git main
+
+Rebase before committing if your session started earlier. Concurrent sessions
+rebased without a conflict on 2026-07-27 because each declared its surfaces
+here first — but note that codex twice wrote directly into `/home/ubuntu/saathi`
+without a row here, and both times the work had to be rescued by hand
+(`2a11443`, `2d65854`). Declaring surfaces only helps if everyone does it.
 
 ## Rules
 
@@ -39,8 +45,19 @@ different things:
 
 | Box | Region | Can |
 |---|---|---|
-| Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` |
-| Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
+| Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` (remote transport) |
+| Runtime box `i-01b2c27883acb25ca` | ap-south-1 | author, push, `ops/deploy.sh --local`, run services, debug live, verify — **cannot sign** |
+
+**Updated 2026-07-27:** the runtime box is no longer verify-only. PR-28 gave it
+`--local`, and D-L settled that signing is not a gate ("single person github
+account… that rule is cosmetic"). All 51 commits and all four deploys that day
+were authored, pushed and deployed from the runtime box, unsigned by design.
+
+Do not use `%G?` to check any of this — SSH verification needs
+`gpg.ssh.allowedSignersFile`, which is unset, so a correctly signed commit also
+reports `N`. `CONTRIBUTING.md:64` gives the check that works. This has now
+misled twice, most recently on 2026-07-27 when a session reported 51 signing
+violations that were not violations.
 
 Edits made in the runtime box's checkout are committed nowhere and are
 overwritten by the next deploy. If you are working there, say so in your row —
