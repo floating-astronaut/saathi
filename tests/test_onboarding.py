@@ -49,7 +49,8 @@ async def test_first_message_asks_the_language_and_nothing_else():
     out = await onboarding.begin(conn, t, 1, "91")
     body, btns = t.buttons[0]
     assert out == {"onboarding": "new"}        # language is not consent
-    assert btns == ["हिंदी", "English"]
+    # Three scripts, which is also WhatsApp's hard limit of three buttons.
+    assert btns == ["हिंदी", "Hinglish", "English"]
     assert "consent" not in " ".join(conn.sql)
 
 
@@ -57,7 +58,9 @@ async def test_welcome_states_what_we_never_do():
     conn, t = Conn(), T()
     await onboarding.handle_button(conn, t, 1, "91", "ob:lang:hi", None)
     body, btns = t.buttons[0]
-    assert "OTP" in body and "paisa" in body
+    # The two promises that matter most, now in Devanagari. "OTP" stays Latin
+    # on purpose — it is what the scam callers themselves say.
+    assert "OTP" in body and "पैसे" in body
     assert len(btns) <= 3                      # WhatsApp quick-reply limit
     assert all(len(b) <= 20 for b in btns)     # label length limit
 
@@ -91,13 +94,19 @@ async def test_declining_leaves_the_door_open():
     assert out == {"onboarding": "declined"}
     # The restart phrase must actually restart. In Hindi it said "shuru karein",
     # which matched no command until 2026-07-27 — a dead end for exactly the
-    # users this product is for, hidden while the copy was bilingual.
+    # users this product is for, hidden while the copy was bilingual. It broke
+    # a second time on 2026-07-27 when the copy became Devanagari and the parser
+    # was still Latin-only, so this now reads the phrase out of whatever the
+    # copy actually says rather than hard-coding one script.
+    import re
+
     from saathi import commands
     said = t.texts[0]
-    phrase = "shuru karein" if "shuru" in said else "start"
-    assert phrase in said.lower()
-    assert commands.parse(phrase).command is not None, (
-        f"declined message tells the user to type {phrase!r}, which does nothing")
+    quoted = re.findall(r"['\"“”‘’]([^'\"“”‘’]{2,30})['\"“”‘’]", said)
+    assert quoted, f"the declined message quotes no phrase to type: {said!r}"
+    for phrase in quoted:
+        assert commands.parse(phrase).command is not None, (
+            f"declined message tells the user to type {phrase!r}, which does nothing")
     assert "onboarding = 'new'" in " ".join(conn.sql)   # can restart later
 
 
@@ -111,9 +120,9 @@ async def test_reminders_are_opt_in_not_default():
     body, btns = t.buttons[-1]
     # The contract is that declining is offered, not that the copy contains an
     # English word — the Hindi asks "kya main aapko cheezein yaad dilaaun".
-    assert "yaad" in body.lower() or "remind" in body.lower()
+    assert any(w in body.lower() for w in ("याद", "yaad", "remind"))
     assert len(btns) == 2, "opt-in needs a real choice, not one button"
-    assert any(x in " ".join(btns).lower() for x in ("nahi", "not now"))
+    assert any(x in " ".join(btns).lower() for x in ("नहीं", "nahi", "not now"))
 
 
 async def test_reminders_are_opt_in_in_english_too():
@@ -128,9 +137,9 @@ async def test_training_consent_is_asked_last_and_separately():
     conn, t = Conn(), T()
     await onboarding.handle_button(conn, t, 1, "91", "ob:rem:yes", "Kamala")
     body, _ = t.buttons[-1]
-    assert "seekh" in body or "learn" in body.lower()
+    assert "सीख" in body or "learn" in body.lower()
     # and it must promise not to keep names
-    assert "naam" in body
+    assert "नाम" in body
 
 
 async def test_typing_instead_of_tapping_reoffers_the_buttons():

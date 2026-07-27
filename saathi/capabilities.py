@@ -70,10 +70,10 @@ async def _erase_buttons(ctx: MessageContext) -> dict:
     if ctx.button_id == "del:yes":
         await memory.erase(ctx.conn, ctx.user_id, hard=True)
         await identity.revoke(ctx.conn, ctx.channel, ctx.handle, "user erasure")
-        await ctx.reply("Sab kuch hata diya gaya. Alvida, aur khayal rakhiyega. 🌼\n\n"
+        await ctx.reply("सब कुछ हटा दिया गया। अलविदा, और ख़याल रखिएगा। 🌼\n\n"
                         "Everything has been deleted. Take care.")
         return {"handled": "erased"}
-    await ctx.reply("Theek hai, kuch nahi hataaya. / Nothing was deleted.")
+    await ctx.reply("ठीक है, कुछ नहीं हटाया। / Nothing was deleted.")
     return {"handled": "erase_cancelled"}
 
 
@@ -157,10 +157,13 @@ register(simple("media", 30, lambda c: c.kind in ("image", "document"), _media))
 # where a capability happened to sit.
 
 PAYWALL_COPY = {
-    "hi": ("Aapka free trial poora ho gaya hai. 🙏 Aage bhi main aapke saath "
-           "rahoon — dawai ki yaad, baat-cheet, sab kuch — to yahin se jaari "
-           "rakh sakte hain.\n\n"
-           "Aapke pehle se lagaye hue reminder chalte rahenge, chinta na karein."),
+    "hi": ("आपका फ़्री ट्रायल पूरा हो गया है। 🙏 आगे भी मैं आपके साथ रहूँ — "
+           "दवा की याद, बात-चीत, सब कुछ — तो यहीं से जारी रख सकते हैं।\n\n"
+           "आपके पहले से लगाए हुए रिमाइंडर चलते रहेंगे, चिंता न करें।"),
+    "hi-en": ("Aapka free trial poora ho gaya hai. 🙏 Aage bhi main aapke saath "
+              "rahoon — dawai ki yaad, baat-cheet, sab kuch — to yahin se jaari "
+              "rakh sakte hain.\n\n"
+              "Aapke pehle se lagaye hue reminder chalte rahenge, chinta na karein."),
     "en": ("Your free trial is complete. 🙏 To keep me with you — the medicine "
            "reminders, the conversations, all of it — you can continue right "
            "here.\n\n"
@@ -211,7 +214,8 @@ async def _agent(ctx: MessageContext) -> dict:
     turn = await agent_loop.run(
         prov.fence(ctx.text, p), facts, Handlers(ctx.conn, ctx.user_id, ctx.tz).handle,
         history=prior, user_name=ctx.display_name,
-        allowed_tools=prov.allowed_tools(names, p), tz=ctx.tz)
+        allowed_tools=prov.allowed_tools(names, p), tz=ctx.tz,
+        lang=ctx.lang)
     if ctx.conversation_id:
         await conversation.touch(ctx.conn, ctx.conversation_id)
     await agent_loop.record(ctx.conn, turn, ctx.user_id, ctx.message_id,

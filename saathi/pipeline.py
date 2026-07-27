@@ -101,8 +101,10 @@ async def log_message(conn, user_id: int, direction: str, kind: str, *,
     return row[0] if row else 0
 
 
-ACK_REPLY = {"hi": "Shabaash! Ho gaya. 🌼", "en": "Lovely — marked as done. 🌼"}
-SNOOZE_REPLY = {"hi": "Theek hai, {mins} minute baad yaad dila dungi.",
+ACK_REPLY = {"hi": "शाबाश! हो गया। 🌼", "hi-en": "Shabaash! Ho gaya. 🌼",
+             "en": "Lovely — marked as done. 🌼"}
+SNOOZE_REPLY = {"hi": "ठीक है, {mins} मिनट बाद याद दिला दूँगी।",
+                "hi-en": "Theek hai, {mins} minute baad yaad dila dungi.",
                 "en": "Alright, I'll remind you again in {mins} minutes."}
 
 
@@ -430,6 +432,20 @@ HELP_TEXT = (
 # every time they said /stop. Same complaint, later in the journey.
 CMD_COPY = {
     "hi": {
+        "stopped": ("ठीक है, मैं अब संदेश नहीं भेजूँगी। "
+                    "'चालू करो' कहकर वापस शुरू कर सकते हैं।"),
+        "resumed": "वापस शुरू! अब मैं पहले जैसी याद दिलाऊँगी।",
+        "nothing_known": "अभी मेरे पास आपके बारे में कुछ भी नहीं है।",
+        "known_intro": "मेरे पास यह है:",
+        "known_outro": "कुछ हटाना हो तो बताइए।",
+        "cleared": ("चैट साफ़ कर दी ({n} संदेश)। आपके रिमाइंडर और "
+                    "यादें वैसी ही हैं।"),
+        "confirm_delete": ("क्या आप सच में सब कुछ हटाना चाहते हैं? "
+                           "यह वापस नहीं आएगा।"),
+        "del_yes": "हाँ, सब हटाओ", "del_no": "नहीं, रहने दो",
+        "ask_lang": "आप किस भाषा में बात करना चाहेंगे?",
+    },
+    "hi-en": {
         "stopped": ("Theek hai, main ab message nahi bhejungi. "
                     "'chalu karo' kehkar wapas shuru kar sakte hain."),
         "resumed": "Wapas shuru! Ab main pehle jaisi yaad dilaungi.",
@@ -468,7 +484,7 @@ def _c(lang: str, key: str, **fmt) -> str:
 async def _run_command(conn, transport, user_id: int, handle: str, cmd) -> dict | None:
     """Deterministic handling of unambiguous requests. No model, no cost."""
     from .agent.tools.handlers import Handlers
-    from .onboarding import _lang, ASK_LANG
+    from .onboarding import _lang, ASK_LANG, LANG_BUTTONS
     C = commands.Command
     lang = await _lang(conn, user_id)
 
@@ -477,7 +493,7 @@ async def _run_command(conn, transport, user_id: int, handle: str, cmd) -> dict 
         # once and could not be revisited (PR-32); the person most likely to
         # mistap it is the one this product is for.
         await transport.send_buttons(conn, user_id, handle, ASK_LANG,
-                                     [("ob:lang:hi", "हिंदी"), ("ob:lang:en", "English")])
+                                     list(LANG_BUTTONS))
         return {}
     if cmd is C.HELP:
         await transport.send_text(conn, user_id, handle, HELP_TEXT)
@@ -564,6 +580,7 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         user_id=who.user_id, display_name=who.display_name, tz=who.tz,
         voice_pref=who.voice_reply_pref,
         onboarding=await _onboarding_state(conn, who.user_id),
+        lang=await onboarding._lang(conn, who.user_id),
         account_status=await accounts.status_of(conn, who.user_id),
         wa_message_id=wa_mid, kind=kind, conversation_id=convo_id,
         provenance=provenance.detect(msg, kind).value,
