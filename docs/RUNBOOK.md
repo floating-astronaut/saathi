@@ -118,8 +118,20 @@ install → migrations → `saathi-env-sync` → `uv sync` → tests → restart
 Migrations are ledgered in `schema_migrations` and only applied once; anything
 that fails there prints `MIGRATION ABORT` and stops the deploy **before** the
 restart, so the services are never brought up against a schema they do not
-match. A failing test run, a failed `uv sync` and a failed `saathi-env-sync` now
-stop it in the same place, which they did not before 2026-07-27.
+match. A failing test run, a failed `uv sync`, a failed `saathi-env-sync` and a
+failed `chown` now stop it in the same place, which they did not before
+2026-07-27.
+
+**The verification at the end can fail, and a failure means something specific.**
+`ops/deploy_verify.sh` asserts rather than prints: every unit `active`, healthz
+reporting `"ok":true`, no `traceback`/`critical` in the last 90 seconds; and
+`deploy.sh` additionally asserts 200 through the tunnel and 403 on an unsigned
+webhook. Any of those failing exits **1** with `VERIFY FAILED`.
+
+That exit code **prevented nothing**. By the time verification runs, the deploy
+has already installed, migrated and restarted — there is nothing left to stop.
+Read it as "the box you just changed is not serving", not as "the deploy was
+blocked". The response is to put the previous tree back, below.
 
 ### Putting the previous tree back
 

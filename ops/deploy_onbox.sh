@@ -32,16 +32,22 @@ FROM=""
 REPO="$CANONICAL_REPO"
 RUN_TESTS=1
 
+die() { echo "$*" >&2; exit 1; }
+
+# `shift 2` on a flag that is the last argument shifts nothing, and this loop
+# has no `set -e` to stop it, so it would re-read the same argument for ever —
+# over SSM that is a 900-second TimedOut that reads like a sick box. Check the
+# value is there before consuming it.
+need_value() { [ "$1" -ge 2 ] || die "deploy_onbox: $2 needs a value"; }
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    --from)    FROM="${2:-}"; shift 2 ;;
-    --repo)    REPO="${2:-}"; shift 2 ;;
+    --from)    need_value $# --from; FROM="$2"; shift 2 ;;
+    --repo)    need_value $# --repo; REPO="$2"; shift 2 ;;
     --no-test) RUN_TESTS=0; shift ;;
     *) echo "deploy_onbox: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-
-die() { echo "$*" >&2; exit 1; }
 
 [ "$(id -u)" = "0" ] || die "deploy_onbox: must run as root (SSM does; local mode uses sudo)"
 [ -n "$FROM" ] || die "deploy_onbox: --from is required"
@@ -56,12 +62,24 @@ REPO=$(cd "$REPO" 2>/dev/null && pwd -P) || die "deploy_onbox: --repo does not e
 case "$REPO/" in "$FROM"/*) die "deploy_onbox: --repo ($REPO) is inside --from ($FROM)" ;; esac
 case "$FROM/" in "$REPO"/*) die "deploy_onbox: --from ($FROM) is inside --repo ($REPO)" ;; esac
 
-# The migration section below is PR-25's, moved out of the SSM heredoc without
-# a character changed, because it is the part that was verified against real
-# Postgres across seven scenarios. It interpolates $REPO and $m into `su -
-# ubuntu -c` strings unquoted. Rather than re-quote verified lines and lose that
-# equivalence, refuse the input that would break them. Neither path can contain
-# whitespace in practice; a rehearsal target under a temp directory could.
+# The containment checks above do not catch a --repo that is a system directory:
+# / is not "inside" anything, so `--target /` would pass every check, tar the
+# whole filesystem into /.prev and then copy the staged tree over /. Name them.
+case "$REPO" in
+  / | /home | /home/ubuntu | /root | /usr | /etc | /var | /tmp | /boot | /opt | /srv)
+    die "deploy_onbox: refusing --repo $REPO — that is a system directory, not a deploy target." ;;
+esac
+
+# The migration section below is PR-25's, moved out of the SSM heredoc without a
+# character changed, because it is the part that was verified against real
+# Postgres across seven scenarios. Two of its `su - ubuntu -c` strings
+# interpolate $REPO unquoted. Rather than re-quote verified lines and lose that
+# equivalence, refuse the input that would break them. This covers $REPO and
+# $FROM and nothing else — the loop's own $m and $b come from a glob under
+# $REPO/db/migrations, so they are reachable only by putting a file with a space
+# in its name into the repo, which is a different problem with a different fix.
+# Neither path can contain whitespace in practice; a rehearsal target under a
+# temp directory could.
 case "$REPO" in *[[:space:]\'\"\\]*) die "deploy_onbox: --repo path contains whitespace or a quote: $REPO" ;; esac
 case "$FROM" in *[[:space:]\'\"\\]*) die "deploy_onbox: --from path contains whitespace or a quote: $FROM" ;; esac
 
@@ -114,9 +132,17 @@ echo "  snapshot $SNAP"
 # not deleted here. That has always been true of this deploy (it is why an empty
 # evals/ still exists on the box) and changing it is not this script's job.
 if ! cp -r "$FROM/." "$REPO/"; then
-  die "deploy_onbox ABORT: install failed; $REPO may be half-written. Restore: tar xzf $SNAP -C $(dirname "$REPO")"
+  die "deploy_onbox ABORT: install failed; $REPO may be half-written. Restore: sudo tar xzf $SNAP -C $(dirname "$REPO")"
 fi
-chown -R ubuntu:ubuntu "$REPO"
+# Checked, because this is the command that decides whether the services can
+# read the code they are about to be restarted into. A partial chown leaves a
+# half-root-owned tree that imports fine as root and fails as ubuntu.
+if ! chown -R ubuntu:ubuntu "$REPO"; then
+  echo "ABORT: chown of $REPO failed, so part of the tree is not readable by the"
+  echo "user the services run as. Services not restarted. Restore the previous"
+  echo "tree with: sudo tar xzf $SNAP -C $(dirname "$REPO")"
+  exit 1
+fi
 
 # --- migrations ---------------------------------------------------------------
 DSN=$(grep -m1 '^SAATHI_DB_DSN=' "$REPO/.env" | cut -d= -f2-)
@@ -248,4 +274,4 @@ else
   sleep 9
 fi
 
-echo "  previous tree: tar xzf $SNAP -C $(dirname "$REPO")   (code only, not the database)"
+echo "  previous tree: sudo tar xzf $SNAP -C $(dirname "$REPO")   (code only, not the database)"
