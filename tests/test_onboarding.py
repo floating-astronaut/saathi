@@ -160,3 +160,20 @@ async def test_name_step_accepts_free_text():
 async def test_unrelated_button_is_not_claimed():
     conn, t = Conn(), T()
     assert await onboarding.handle_button(conn, t, 1, "91", "ack:42", None) is None
+
+
+async def test_finishing_onboarding_queues_the_versioned_free_key(monkeypatch):
+    calls = []
+
+    async def fake_account(conn, user_id):
+        return 6
+
+    async def fake_enqueue(conn, user_id, kind, when, payload=None, dedupe_key=None):
+        calls.append((user_id, kind, payload, dedupe_key))
+        return 42
+
+    monkeypatch.setattr("saathi.accounts.ensure_for_user", fake_account)
+    monkeypatch.setattr("saathi.scheduling.enqueue", fake_enqueue)
+    await onboarding._grant_free_allowance(Conn(), user_id=12)
+
+    assert calls == [(12, "provision_key", {"account_id": 6}, "provision:v2:6")]

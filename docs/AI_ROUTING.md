@@ -2,10 +2,12 @@
 
 How a Saathi turn reaches a model, who pays for it, and where the data goes.
 
-Status: **built 2026-07-27; mint and revoke proven against the live vendor.**
+Status: **closed 2026-07-27; mint, revoke, backfill, and spend-through proven live.**
 The document came before the code (`THE_METHOD.md` §1) and the code now follows
-it; §9 lists what has and has not been demonstrated. Nothing *routes* through
-OpenRouter in production yet — that is the remaining gap, not funding.
+it; §9 lists what has and has not been demonstrated. User turns now resolve the
+account key and call OpenRouter when one exists. Live verification on 2026-07-27
+resolved account 3's encrypted key and completed a real OpenRouter turn with
+token usage returned.
 
 Owns: model routing, per-account key provisioning, spend caps, residency.
 Related: `DECISIONS.md` D-D (model choice), D-O (this routing change),
@@ -16,10 +18,14 @@ D-S (paid-vendor usage ownership), `USAGE_LEDGER.md` (cross-vendor ledger),
 
 ## 1. Today
 
-Every model call is `boto3` → Bedrock `zai.glm-5` in **ap-south-1**, using the
-box's instance role. One credential, no attribution, no per-user cap. `PR-15`
-records the consequence: an onboarded user can send unlimited voice notes, each
-costing STT minutes and a model turn, and nothing enforces §14's free-tier cap.
+Before AI-1, every model call was `boto3` → Bedrock `zai.glm-5` in **ap-south-1**,
+using the box's instance role. One credential, no attribution, no per-user cap.
+
+As of 2026-07-27, ordinary chat turns resolve the user's account key and call
+OpenRouter Chat Completions when an active key exists. The Bedrock direct path
+remains only for code paths that still have no account key in hand, such as the
+first moments before the provisioning worker catches up and document text
+extraction that has not yet been account-plumbed.
 
 ## 2. What changes, and what deliberately does not
 
@@ -143,10 +149,12 @@ or revoked** — this fallback is not paranoia.
 
 ## 6. Naming, and the guard that matters
 
-    saathi:account:<account_id>:plan:<tier>:env:<env>
+    saathi:account:<account_id>:plan:<tier>:env:<env>[:ws:<workspace-prefix>]
 
 Self-describing, because that string is the only join back to a tenant when you
-are staring at the OpenRouter dashboard during an incident.
+are staring at the OpenRouter dashboard during an incident. The workspace suffix
+is included when configured, because revoked names remain unique in Saathi's DB
+and a workspace correction must be able to remint.
 
 **This org also holds MeshPilot's keys.** `DELETE /keys/{hash}` works on all of
 them. So every list, revoke and sync operation **asserts** the `saathi:` prefix
@@ -159,8 +167,8 @@ cannot live in the discipline of whoever runs it next.
 Minting happens on the `scheduled_turns` queue as kind `provision_key`. **Never
 inside an onboarding turn.** Onboarding is deterministic and makes no model call
 on purpose — that property is what makes an open door safe, and a blocking
-third-party HTTP call would regress it. The first turns run on the platform
-default; the account's own key takes over when it exists.
+third-party HTTP call would regress it. The first turns may still run on the platform
+default while the queue catches up; the account's own key takes over when it exists.
 
 ## 8. No silent fallback
 
@@ -197,9 +205,14 @@ A quiet downgrade to a shared key is how you find out at the end of the month.
 ### Built, 2026-07-27 — and what is still unproven
 
 Migration 008 adds `accounts`, `users.account_id`, `ai_keys` and
-`ai_key_events`. `saathi/openrouter.py` mints, revokes and resolves;
-`saathi/crypto.py` holds the Fernet wrapper; `provision_key` is a registered
-`scheduled_turns` kind; `saathi.admin.grant` is the operator command.
+`ai_key_events`. Migration 011 queues provisioning for already-onboarded accounts
+that predate the trigger. Migration 012 is a one-time operator backfill for every
+account already present in the live table, including users still mid-onboarding;
+live verification showed all 7 accounts with active key rows carrying both hash
+and ciphertext. `saathi/openrouter.py` mints, revokes, resolves and
+runs Chat Completions through the account key; `saathi/crypto.py` holds the
+Fernet wrapper; `provision_key` is a registered `scheduled_turns` kind;
+`saathi.admin.grant` is the operator command.
 
 Verified: the migration is idempotent under a second run on a scratch copy; the
 database itself enforces one active key per account (partial unique index), so
@@ -207,10 +220,11 @@ database itself enforces one active key per account (partial unique index), so
 `saathi:` prefix guard, refuse-if-unconfigured, and the lowest-cap fallback all
 go red when removed from the production path.
 
-**Not proven: a single real key has never been minted.** Every test stops at the
-HTTP boundary. With credits at 0 a real mint would create a live vendor object
-we cannot spend on and — if the response omitted the hash and the re-read missed
-it — could not revoke. That step waits for funding, deliberately.
+**Proven live:** real keys were minted for all 7 accounts, the mis-tiered beta key
+was revoked, the response carried hashes, and a real OpenRouter turn completed
+through account 3's resolved key with token usage returned. Unit coverage asserts
+the runtime request carries `allow_fallbacks: false`, `provider.zdr: true`, and
+the fixed `z-ai/glm-5` slug.
 
 ---
 
@@ -226,7 +240,7 @@ down so the feature list is not re-litigated from the marketing page.
 |---|---|
 | **ZDR** (`zdr` per-request) | The mitigation for §3's residual. Routes only to endpoints with zero-retention policies, and **blocks** rather than silently degrading when none exists. OpenRouter itself does not store prompts unless logging is opted into. Set alongside `allow_fallbacks: false` — together they mean *our Mumbai Bedrock or nothing, and never retained in transit*. |
 | **Zero-completion insurance** | Empty completions are not billed. Free. |
-| **App attribution** (`HTTP-Referer`, `X-Title`) | Trivial hygiene; identifies the caller in their dashboards. |
+| **App attribution** (`HTTP-Referer`, `X-OpenRouter-Title`) | Trivial hygiene; identifies the caller in their dashboards. |
 
 ### Considered, deferred
 
@@ -276,3 +290,11 @@ from their OpenAPI spec, so it is authoritative where the prose docs are wrong b
 omission — `workspace_id`, `limit_reset` and `expires_at` are all real parameters
 the docs page does not mention. Its dependencies are `httpx` and `pydantic`, both
 already present. Inference stays on plain `httpx`.
+
+
+OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.
+
+
+Future provisioning guard: `openrouter.mint()` now raises `ProvisioningDisabled` if `OPENROUTER_WORKSPACE_ID` is unset, so a config drift cannot silently mint into OpenRouter Default again.
+
+Future-signup guard: `openrouter.mint()` refuses to mint unless `OPENROUTER_WORKSPACE_ID` is set, and every create-key request includes that workspace id. Verified on-box after deploy.

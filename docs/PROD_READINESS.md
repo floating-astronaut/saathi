@@ -216,9 +216,9 @@ minted `saathi:account:6:plan:beta:env:dev` — real, present at OpenRouter, lim
 then exercised for real — `DELETE /keys/{hash}` returned `{"deleted": true}` and
 the key list is empty.
 
-So mint → store → revoke is proven end to end against the live vendor. What is
-**still** unproven is a turn actually *spending* through the key, because
-resolution is written and nothing routes through OpenRouter yet.
+So mint → store → revoke is proven end to end against the live vendor. Runtime
+routing is now wired and unit-tested: accounts with active keys call OpenRouter
+with `allow_fallbacks: false`, `provider.zdr: true`, and the fixed `z-ai/glm-5` slug. The remaining live proof has now been done: account 3's resolved key completed a real OpenRouter turn and returned token usage.
 
 ### PR-46 · Six accounts were backfilled with a renewing allowance
 Migration 008 backfilled every pre-existing account as `beta`. It was written
@@ -233,11 +233,11 @@ was caught — by reading the vendor, not the tests. Every test passed throughou
 because the tests assert `TIER_CAPS` and `TIER_RESET`, and both were correct. The
 *data* was wrong.
 
-**Fixed** by migration 010 — backfilled rows to `free`, the mis-tiered key marked
-revoked, and the upstream key deleted for real. 008 was deliberately **not**
-edited: it is recorded in `schema_migrations` with its checksum and editing it
-would abort the next deploy with `CHECKSUM MISMATCH`. That guard is PR-25 working
-as designed, on its author.
+**Fixed** by migration 010 and completed by migration 011 — backfilled rows to
+`free`, the mis-tiered key marked revoked, the upstream key deleted for real, and
+missing already-onboarded accounts queued for replacement key provisioning, then every remaining existing account queued by migration 012, with versioned dedupe keys. Live DB verification showed all 7 accounts with active key rows, hash present and ciphertext present. 008 was deliberately **not** edited: it is recorded in
+`schema_migrations` with its checksum and editing it would abort the next deploy
+with `CHECKSUM MISMATCH`. That guard is PR-25 working as designed, on its author.
 
 **What this row is really about:** a schema migration can encode a product
 decision, and then the decision can change without the migration following. There
@@ -1002,3 +1002,6 @@ and the privacy policy both cover. But there is no per-user opt-out short of
 declining the service, and no way to say "keep my transcripts, not my voice".
 **Fix:** a preference, once there is evidence anyone wants it. Recorded so the
 absence is deliberate rather than forgotten.
+
+
+OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.

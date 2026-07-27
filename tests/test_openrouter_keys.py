@@ -53,6 +53,8 @@ def configured(monkeypatch):
     monkeypatch.setattr(settings, "saathi_secrets_key",
                         Fernet.generate_key().decode(), raising=False)
     monkeypatch.setattr(settings, "saathi_env", "test", raising=False)
+    monkeypatch.setattr(settings, "openrouter_workspace_id",
+                        "718e8438-6c5a-48f9-85c9-f8909f2e4c47", raising=False)
 
 
 class _FakeResponse:
@@ -109,10 +111,18 @@ def test_our_own_key_name_passes_the_guard():
     assert name.startswith("saathi:")
 
 
-def test_the_key_name_identifies_the_tenant_from_a_dashboard():
+def test_the_key_name_identifies_the_tenant_from_a_dashboard(monkeypatch):
     # This string is the only join back to an account during an incident.
+    monkeypatch.setattr(settings, "openrouter_workspace_id", "", raising=False)
     name = openrouter.key_name(42, "beta", env="prod")
     assert name == "saathi:account:42:plan:beta:env:prod"
+
+
+def test_workspace_scoped_key_names_can_be_reminted_after_a_correction(monkeypatch):
+    monkeypatch.setattr(settings, "openrouter_workspace_id",
+                        "718e8438-6c5a-48f9-85c9-f8909f2e4c47", raising=False)
+    assert openrouter.key_name(42, "free", env="dev") == (
+        "saathi:account:42:plan:free:env:dev:ws:718e8438")
 
 
 async def test_revoking_refuses_a_foreign_key_before_calling_delete():
@@ -131,6 +141,15 @@ async def test_minting_refuses_when_there_is_no_master_key(monkeypatch):
         await openrouter.mint(conn, account_id=1)
 
 
+async def test_minting_refuses_when_workspace_id_is_missing(monkeypatch):
+    monkeypatch.setattr(settings, "openrouter_master_key", "sk-or-test", raising=False)
+    monkeypatch.setattr(settings, "openrouter_workspace_id", "", raising=False)
+    conn = Conn({"from ai_keys": []})
+    with pytest.raises(openrouter.ProvisioningDisabled):
+        await openrouter.mint(conn, account_id=1)
+    assert not conn.wrote("insert into ai_keys")
+
+
 async def test_minting_refuses_when_secrets_are_unavailable(monkeypatch):
     """The order matters: this must be caught *before* the upstream call.
 
@@ -138,6 +157,8 @@ async def test_minting_refuses_when_secrets_are_unavailable(monkeypatch):
     revokable only by a human with the dashboard.
     """
     monkeypatch.setattr(settings, "openrouter_master_key", "sk-or-test", raising=False)
+    monkeypatch.setattr(settings, "openrouter_workspace_id",
+                        "718e8438-6c5a-48f9-85c9-f8909f2e4c47", raising=False)
     monkeypatch.setattr(settings, "saathi_secrets_key", "", raising=False)
     conn = Conn({"from ai_keys": []})
     with pytest.raises(openrouter.ProvisioningDisabled):
@@ -192,6 +213,7 @@ async def test_the_free_key_is_minted_as_a_total_not_an_allowance(configured, mi
 
     assert out["minted"] is True
     assert mint_http.body["limit"] == 5.0
+    assert mint_http.body["workspace_id"] == "718e8438-6c5a-48f9-85c9-f8909f2e4c47"
     assert "limit_reset" not in mint_http.body, \
         "a free grant that resets monthly is not a free grant"
 
@@ -256,3 +278,37 @@ def test_both_documented_response_shapes_yield_a_key_and_hash():
 def test_a_missing_hash_is_reported_so_the_caller_can_re_read():
     """Without the hash the key can never be rotated or revoked."""
     assert openrouter._extract({"key": "sk-c"}) == ("sk-c", None)
+
+
+# --- inference routing --------------------------------------------------------
+
+class _FakeChatHttp(_FakeHttp):
+    async def post(self, url, headers=None, json=None):
+        _FakeChatHttp.url = url
+        _FakeChatHttp.headers = headers
+        _FakeChatHttp.body = json
+        return _FakeResponse({
+            "choices": [{"message": {"content": "Namaste"}}],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 3},
+        })
+
+
+async def test_runtime_request_disables_fallbacks_and_uses_zdr(monkeypatch):
+    monkeypatch.setattr(openrouter.httpx, "AsyncClient", _FakeChatHttp)
+    _FakeChatHttp.body = None
+
+    out = await openrouter.converse(
+        "sk-or-account", system="sys", messages=[{"role": "user", "content": [{"text": "hi"}]}],
+        tool_config=None, max_tokens=20, temperature=0.2)
+
+    assert _FakeChatHttp.url.endswith("/chat/completions")
+    assert _FakeChatHttp.headers["Authorization"] == "Bearer sk-or-account"
+    assert _FakeChatHttp.body["provider"] == {"allow_fallbacks": False, "zdr": True}
+    assert _FakeChatHttp.headers["X-OpenRouter-Title"] == "Indofolk AI"
+    assert _FakeChatHttp.body["model"] == "z-ai/glm-5"
+    assert out["usage"] == {"inputTokens": 11, "outputTokens": 3}
+    assert out["output"]["message"]["content"] == [{"text": "Namaste"}]
+
+
+def test_provisioning_dedupe_key_is_versioned_for_corrected_backfills():
+    assert openrouter.provision_dedupe_key(6) == "provision:v2:6"

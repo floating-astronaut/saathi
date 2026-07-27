@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import boto3
 
+from .. import openrouter
 from ..config import settings
 from .prompt import Prefix, build_prefix, estimate_tokens
 from .tools.specs import TOOL_CONFIG, TOOLS, assert_no_forbidden_tools
@@ -68,6 +69,7 @@ async def run(
     allowed_tools: set[str] | None = None,
     tz: str | None = None,
     lang: str | None = None,
+    ai_api_key: str | None = None,
 ) -> Turn:
     """Run one user turn to completion, executing tools as the model calls them.
 
@@ -108,13 +110,18 @@ async def run(
 
     for hop in range(MAX_HOPS):
         turn.hops = hop + 1
-        resp = client().converse(
-            modelId=settings.saathi_model_id,
-            system=[{"text": prefix.system}],
-            messages=messages,
-            toolConfig=tool_config,
-            inferenceConfig={"maxTokens": 700, "temperature": 0.2},
-        )
+        if ai_api_key:
+            resp = await openrouter.converse(
+                ai_api_key, system=prefix.system, messages=messages,
+                tool_config=tool_config, max_tokens=700, temperature=0.2)
+        else:
+            resp = client().converse(
+                modelId=settings.saathi_model_id,
+                system=[{"text": prefix.system}],
+                messages=messages,
+                toolConfig=tool_config,
+                inferenceConfig={"maxTokens": 700, "temperature": 0.2},
+            )
         usage = resp.get("usage", {})
         turn.input_tokens += usage.get("inputTokens", 0)
         turn.output_tokens += usage.get("outputTokens", 0)

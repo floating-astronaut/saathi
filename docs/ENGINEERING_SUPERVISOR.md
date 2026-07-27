@@ -1257,3 +1257,56 @@ the claim against the system rather than against another document.
 No real inbound message has round-tripped through the new app. Signatures,
 tokens, subscriptions and API reads are verified; a live message is not. Health
 checks stay green either way, which is precisely why that gap matters.
+
+## 2026-07-27 — AI-1 follow-up: runtime routing and existing-account provisioning
+
+**Read:** `AGENTS.md`, `docs/DOC_SYSTEM.md`, `docs/THE_METHOD.md`, `docs/AGENT_SYNC_PROTOCOL.md`, `docs/ROLES.md`, `control-plane/ACTIVE_LANE_BOARD.md`, `control-plane/SESSION_COORDINATION.md`, `docs/AI_ROUTING.md`, `docs/DECISIONS.md` D-O/D-T, `docs/PROD_READINESS.md` PR-38/PR-46, `docs/LANDMINES.md`, and official OpenRouter docs for Chat Completions/provider routing field names.
+
+**Changed:** `saathi/capabilities.py` now resolves the user's account and active OpenRouter key before the agent call; `saathi/agent/loop.py` accepts an account key and calls `saathi.openrouter.converse`; `saathi/openrouter.py` now adapts Bedrock-shaped messages/tools to OpenRouter Chat Completions with `provider.allow_fallbacks=false`, `provider.zdr=true`, `HTTP-Referer`, `X-OpenRouter-Title`, and fixed `z-ai/glm-5`; onboarding/admin provisioning dedupe uses `provision:v2:<account_id>`; migration 011 queues `provision_key` for already-onboarded accounts with no active key; focused tests were added for runtime request controls and versioned dedupe.
+
+**Verified:** `uv run pytest -q` — 509 passed. Focused suite before the full run: `tests/test_openrouter_keys.py tests/test_onboarding.py tests/test_capabilities.py tests/test_clock.py` — 57 passed. `git diff --check` on touched tracked paths was clean. Stale-claim search found no remaining "nothing routes" / old dedupe / platform-default-by-design wording in the touched AI routing surfaces.
+
+**Superseded later this session:** live spend-through was subsequently proven, migrations 011 and 012 were applied, the provisioning worker minted the remaining keys, and account 3 completed a real OpenRouter turn with token usage returned.
+
+## 2026-07-27 — AI-1 follow-up: all existing accounts backfill
+
+After migration 011, live DB inspection showed 7 accounts but only 3 completed-onboarding users; those 3 had active keys. Operator clarified by saying "do it" against the session goal that all current 6-7 users should have keys, so migration 012 was added to enqueue `provision_key` for every existing active account lacking one, including mid-onboarding users. No key material printed.
+
+## 2026-07-27 — AI-1 closed: all accounts keyed and spend-through proven
+
+**Applied:** staged on-box deploy from `/tmp/saathi-ai1-stage/saathi` through `ops/deploy_onbox.sh`, because `/home/ubuntu/saathi` is the deployed artifact with stub git. Migration 011 had already applied; migration 012 applied in this pass. Deploy ran `saathi-env-sync`, restarted services, and ran the full suite on-box: 509 passed. Standard verifier passed: `saathi-web`, `saathi-worker`, `cloudflared-saathi`, Postgres, healthz, worker kinds, and zero restart errors.
+
+**Provisioning evidence:** after the worker tick, `provision_key` rows were all `acked` (8 historical/active provisioning turns total). Live DB inspection without printing key material showed accounts 1..7 all `free/active` with active OpenRouter key rows; every row had a key name, hash present, and ciphertext present. Migration 012 is recorded in `schema_migrations`.
+
+**Spend-through evidence:** a value-blind probe selected a completed-onboarding user with an active key, resolved account 3's encrypted key via `openrouter.resolve()`, and ran `agent.loop.run(..., ai_api_key=key)` through OpenRouter. It returned text `route ok`, usage `input_tokens=821`, `output_tokens=40`, `hops=1`. No key material printed.
+
+**Remains:** the probe was synthetic rather than a WhatsApp handset message, but it exercised the runtime resolution and OpenRouter inference path that a chat turn uses.
+
+## 2026-07-27 — AI-1 correction: workspace-scoped remint needed
+
+Operator caught that the keys had been minted in OpenRouter's Default workspace. OpenRouter docs confirm `workspace_id` is optional on `POST /api/v1/keys` and defaults to Default when absent; live runtime config showed `OPENROUTER_WORKSPACE_ID` length 0. The target workspace `718e8438-6c5a-48f9-85c9-f8909f2e4c47` was reachable as Indofolk AI. Code was patched so configured-workspace key names carry `:ws:718e8438`, avoiding the local unique-name conflict when rotating the default-workspace rows.
+
+## 2026-07-27 — AI-1 correction closed: keys moved to Indofolk AI workspace
+
+**Operator correction:** the seven keys minted in the previous pass landed in OpenRouter's Default workspace. Desired workspace: `718e8438-6c5a-48f9-85c9-f8909f2e4c47` (Indofolk AI).
+
+**Docs checked:** OpenRouter `POST /api/v1/keys` documents `workspace_id` as optional and says it defaults to the default workspace if not provided; `GET /api/v1/keys` similarly defaults to Default unless `workspace_id` is passed; OpenRouter workspaces docs say API keys live inside a workspace. Source links used in final handoff.
+
+**Cause:** live runtime config had `OPENROUTER_WORKSPACE_ID` length 0. The target workspace was reachable by the management key as `Indofolk AI` / `indofolk-ai`.
+
+**Changed:** Secrets Manager `saathi/dev/runtime` now includes `OPENROUTER_WORKSPACE_ID` (36 chars, sha256 prefix `8ae3feeb...`), synced to `.env`. Key naming includes `:ws:718e8438` when a workspace is configured so revoked Default-workspace names do not block corrected remints under the DB's unique `ai_keys.name`. Deployed through `ops/deploy_onbox.sh`; on-box suite passed: 510 tests.
+
+**Rotation evidence:** accounts 1..7 had their old active keys revoked upstream and locally, then reminted as `saathi:account:<id>:plan:free:env:dev:ws:718e8438`, cap `$5.00`, no reset. OpenRouter list with `workspace_id=718e8438-6c5a-48f9-85c9-f8909f2e4c47` returned all seven keys with `disabled=false`, `limit=5`, `limit_reset=null`, and matching workspace id. OpenRouter list without `workspace_id` returned no Saathi keys in Default. No key material or hashes printed.
+
+**Spend-through evidence:** account 1's corrected key resolved through `openrouter.resolve()` and completed a real OpenRouter turn: `workspace route ok`, usage `input_tokens=822`, `output_tokens=39`, `hops=1`. Final service verifier passed: web, worker, cloudflared, Postgres, healthz, worker kinds, and zero restart errors.
+
+
+Future provisioning guard: `openrouter.mint()` now raises `ProvisioningDisabled` if `OPENROUTER_WORKSPACE_ID` is unset, so a config drift cannot silently mint into OpenRouter Default again.
+
+## 2026-07-27 — AI-1 future-signup guard
+
+**Goal:** ensure every future user who completes onboarding is minted into OpenRouter workspace `718e8438-6c5a-48f9-85c9-f8909f2e4c47`, not Default.
+
+**Changed:** `openrouter.mint()` now raises `ProvisioningDisabled` when `OPENROUTER_WORKSPACE_ID` is unset, before any upstream call. The create-key body always includes `workspace_id`, and configured-workspace key names include `:ws:718e8438`. Onboarding still queues `provision_key` on completion via `openrouter.provision_dedupe_key(account_id)`.
+
+**Verified:** focused tests `tests/test_openrouter_keys.py tests/test_onboarding.py` passed (39). Full suite passed locally (511) and during on-box deploy (511). Runtime value-blind config check: workspace id length 36, sha256 prefix `8ae3feeb`, target match true. Deployed source check confirmed the fail-closed guard and `body["workspace_id"]` assignment are present. Future key-name dry check produced `saathi:account:999:plan:free:env:dev:ws:718e8438`; no vendor key was minted by the dry check. Final service verifier passed.

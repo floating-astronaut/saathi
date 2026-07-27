@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
+from typing import Any
 
 import httpx
 
@@ -26,6 +27,7 @@ log = logging.getLogger("saathi.openrouter")
 #: Every key we mint carries this. Nothing without it may be listed, revoked or
 #: synced by this module.
 NAME_PREFIX = "saathi:"
+PROVISION_DEDUPE_VERSION = "v2"
 
 
 class ProvisioningDisabled(RuntimeError):
@@ -47,13 +49,37 @@ class NotOurKey(RuntimeError):
     """
 
 
+def provision_dedupe_key(account_id: int) -> str:
+    """Queue dedupe key for provisioning attempts.
+
+    Versioned because `scheduled_turns.kind, dedupe_key` is globally unique even
+    after a row is acked or failed. A permanent key like `provision:6` makes a
+    corrected re-provision impossible after a revoked or failed first attempt.
+    """
+    return f"provision:{PROVISION_DEDUPE_VERSION}:{account_id}"
+
+
+def _workspace_tag() -> str | None:
+    """Short stable tag for the OpenRouter workspace, if configured.
+
+    `ai_keys.name` is unique even for revoked rows, so a workspace correction must
+    mint a new vendor object with a new local name. The tag keeps the dashboard
+    join self-describing without printing the whole UUID in every key label.
+    """
+    return settings.openrouter_workspace_id.split("-", 1)[0] if settings.openrouter_workspace_id else None
+
+
 def key_name(account_id: int, tier: str, env: str | None = None) -> str:
-    """`saathi:account:<id>:plan:<tier>:env:<env>`
+    """`saathi:account:<id>:plan:<tier>:env:<env>[:ws:<workspace-prefix>]`
 
     Self-describing because this string is the only join back to a tenant when
-    you are staring at the OpenRouter dashboard during an incident.
+    you are staring at the OpenRouter dashboard during an incident. The workspace
+    suffix is present only when configured; it makes corrected remints possible
+    because revoked key names remain unique in the database.
     """
-    return f"{NAME_PREFIX}account:{account_id}:plan:{tier}:env:{env or settings.saathi_env}"
+    name = f"{NAME_PREFIX}account:{account_id}:plan:{tier}:env:{env or settings.saathi_env}"
+    tag = _workspace_tag()
+    return f"{name}:ws:{tag}" if tag else name
 
 
 def assert_ours(name: str | None) -> str:
@@ -124,7 +150,7 @@ async def mint(conn, account_id: int) -> dict:
        it holds even if two workers race — an application-level check alone
        would not be a guarantee, only a habit.
     2. **Refuse if unconfigured**, *before* any upstream call.
-    3. Mint with the tier cap and a monthly reset.
+    3. Mint with the tier cap and the tier reset policy.
     4. **On failure, audit then re-raise.** "Did this account ever get a key,
        and why not" must be answerable months later, when the exception text is
        long gone.
@@ -138,6 +164,8 @@ async def mint(conn, account_id: int) -> dict:
 
     if not settings.openrouter_master_key:
         raise ProvisioningDisabled("OPENROUTER_MASTER_KEY is not set")
+    if not settings.openrouter_workspace_id:
+        raise ProvisioningDisabled("OPENROUTER_WORKSPACE_ID is not set")
     if not crypto.available():
         # Checked before minting, not after: a key minted and then unstorable
         # is live, billable, and unrevokable by us.
@@ -146,9 +174,7 @@ async def mint(conn, account_id: int) -> dict:
     tier = await accounts.tier_of(conn, account_id)
     cap = accounts.tier_cap(tier)
     if cap is None:
-        # A free account runs on the platform default. Not an error: it is the
-        # answer to "should merely arriving cost us money".
-        log.info("account %s is tier %s — no key minted by design", account_id, tier)
+        log.info("account %s is tier %s with no AI cap; minting nothing", account_id, tier)
         return {"account_id": account_id, "minted": False, "name": None, "tier": tier}
 
     name = key_name(account_id, tier)
@@ -159,8 +185,7 @@ async def mint(conn, account_id: int) -> dict:
     reset = accounts.tier_reset(tier)
     if reset:
         body["limit_reset"] = reset
-    if settings.openrouter_workspace_id:
-        body["workspace_id"] = settings.openrouter_workspace_id
+    body["workspace_id"] = settings.openrouter_workspace_id
 
     try:
         async with httpx.AsyncClient(timeout=30) as http:
@@ -256,3 +281,133 @@ async def resolve(conn, account_id: int) -> str | None:
 
 def cap_of(row) -> Decimal | None:
     return row[4] if row else None
+
+
+# --- inference: OpenRouter Chat Completions back to Bedrock-shaped turns -------
+
+def _or_tools(tool_config: dict | None) -> list[dict] | None:
+    specs = (tool_config or {}).get("tools") or []
+    if not specs:
+        return None
+    out = []
+    for item in specs:
+        spec = item.get("toolSpec") or {}
+        out.append({
+            "type": "function",
+            "function": {
+                "name": spec.get("name"),
+                "description": spec.get("description", ""),
+                "parameters": spec.get("inputSchema", {}).get("json", {"type": "object"}),
+            },
+        })
+    return out
+
+
+def _stringify_tool_result(result: dict) -> str:
+    content = result.get("content") or []
+    if not content:
+        return "{}"
+    first = content[0]
+    if "json" in first:
+        import json
+        return json.dumps(first["json"], ensure_ascii=False)
+    return str(first.get("text", ""))
+
+
+def _or_messages(system: str, messages: list[dict]) -> list[dict]:
+    out: list[dict] = [{"role": "system", "content": system}]
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content") or []
+        if role == "user" and content and all("toolResult" in b for b in content):
+            for block in content:
+                result = block["toolResult"]
+                out.append({
+                    "role": "tool",
+                    "tool_call_id": result["toolUseId"],
+                    "content": _stringify_tool_result(result),
+                })
+            continue
+        if role == "assistant":
+            texts = [b["text"] for b in content if "text" in b]
+            calls = []
+            for block in content:
+                use = block.get("toolUse")
+                if not use:
+                    continue
+                import json
+                calls.append({
+                    "id": use["toolUseId"],
+                    "type": "function",
+                    "function": {
+                        "name": use["name"],
+                        "arguments": json.dumps(use.get("input") or {}, ensure_ascii=False),
+                    },
+                })
+            item: dict[str, Any] = {"role": "assistant", "content": "\n".join(texts) or None}
+            if calls:
+                item["tool_calls"] = calls
+            out.append(item)
+            continue
+        texts = [b["text"] for b in content if "text" in b]
+        out.append({"role": role or "user", "content": "\n".join(texts)})
+    return out
+
+
+def _bedrockish_response(payload: dict) -> dict:
+    choice = (payload.get("choices") or [{}])[0]
+    msg = choice.get("message") or {}
+    content = []
+    if msg.get("content"):
+        content.append({"text": msg["content"]})
+    import json
+    for call in msg.get("tool_calls") or []:
+        fn = call.get("function") or {}
+        raw = fn.get("arguments") or "{}"
+        try:
+            args = json.loads(raw) if isinstance(raw, str) else raw
+        except json.JSONDecodeError:
+            args = {"_raw": raw}
+        content.append({"toolUse": {
+            "toolUseId": call.get("id"),
+            "name": fn.get("name"),
+            "input": args or {},
+        }})
+    usage = payload.get("usage") or {}
+    return {
+        "usage": {
+            "inputTokens": usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0,
+            "outputTokens": usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0,
+        },
+        "output": {"message": {"role": "assistant", "content": content}},
+    }
+
+
+async def converse(api_key: str, *, system: str, messages: list[dict],
+                   tool_config: dict | None, max_tokens: int, temperature: float) -> dict:
+    """Run one chat completion through this account's capped key.
+
+    The residency/cost controls are constants here: no provider fallback, ZDR, and
+    only the GLM-5 slug chosen in D-D/D-O.
+    """
+    body: dict[str, Any] = {
+        "model": "z-ai/glm-5",
+        "messages": _or_messages(system, messages),
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "provider": {"allow_fallbacks": False, "zdr": True},
+    }
+    tools = _or_tools(tool_config)
+    if tools:
+        body["tools"] = tools
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://n8nworld.store",
+        "X-OpenRouter-Title": "Indofolk AI",
+    }
+    async with httpx.AsyncClient(timeout=60) as http:
+        resp = await http.post(f"{settings.openrouter_base_url}/chat/completions",
+                               headers=headers, json=body)
+        resp.raise_for_status()
+        return _bedrockish_response(resp.json())

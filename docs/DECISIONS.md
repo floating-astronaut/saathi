@@ -234,9 +234,10 @@ company with no mention of Saathi. Reversible if that site ever presents Saathi
 as its product.
 
 ### D-O · OpenRouter routes to our own Mumbai Bedrock; fallbacks are disabled · 2026-07-27
-Saathi will call `z-ai/glm-5` through OpenRouter instead of `boto3` → Bedrock
-directly. Design in `AI_ROUTING.md`. **Not built yet** — this records the choice
-and its conditions before the code exists.
+Saathi calls `z-ai/glm-5` through OpenRouter instead of `boto3` → Bedrock
+directly when an active account key exists. Design in `AI_ROUTING.md`. Runtime
+routing was wired on 2026-07-27; the remaining proof is a real spend-through turn
+with a minted key.
 
 **Why at all.** Per-account API keys with hard USD caps, minted programmatically.
 That is `PROD_READINESS.md` PR-15's fix: today an onboarded user can send
@@ -272,7 +273,7 @@ for it. Recorded here so a future reader does not re-litigate a settled point, o
 assume the policy overclaims when it does not.
 
 **ZDR narrows the residual.** Amended 2026-07-27: every request also sends the
-`zdr` parameter. OpenRouter routes only to endpoints with zero-retention
+`provider.zdr` parameter. OpenRouter routes only to endpoints with zero-retention
 policies, and **blocks** rather than silently choosing a retaining one. Combined
 with `allow_fallbacks: false` the guarantee becomes: *our Mumbai Bedrock or the
 request fails, and the prompt is never retained in transit.* That does not undo

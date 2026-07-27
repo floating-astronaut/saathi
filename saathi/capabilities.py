@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 
 from . import (accounts, commands, conversation, documents, identity, memory,
-               onboarding, payments, provenance as prov, vision)
+               onboarding, openrouter, payments, provenance as prov, vision)
 from .agent import loop as agent_loop
 from .agent.tools.handlers import Handlers
 from .core.context import MessageContext
@@ -211,11 +211,13 @@ async def _agent(ctx: MessageContext) -> dict:
     p = prov.Provenance(ctx.provenance)
     names = {t["toolSpec"]["name"] for t in __import__(
         "saathi.agent.tools.specs", fromlist=["TOOLS"]).TOOLS}
+    account_id = await accounts.ensure_for_user(ctx.conn, ctx.user_id)
+    ai_api_key = await openrouter.resolve(ctx.conn, account_id)
     turn = await agent_loop.run(
         prov.fence(ctx.text, p), facts, Handlers(ctx.conn, ctx.user_id, ctx.tz).handle,
         history=prior, user_name=ctx.display_name,
         allowed_tools=prov.allowed_tools(names, p), tz=ctx.tz,
-        lang=ctx.lang)
+        lang=ctx.lang, ai_api_key=ai_api_key)
     if ctx.conversation_id:
         await conversation.touch(ctx.conn, ctx.conversation_id)
     await agent_loop.record(ctx.conn, turn, ctx.user_id, ctx.message_id,

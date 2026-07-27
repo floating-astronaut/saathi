@@ -50,7 +50,7 @@ async def _show(conn, wa_id: str) -> int:
               f"\n  cap   ${key[4]}/month")
     else:
         cap = accounts.tier_cap(tier)
-        print(f"  no key — {'platform default by design' if cap is None else 'not yet minted'}")
+        print(f"  no key — {'no cap for this tier' if cap is None else 'not yet minted'}")
     events = await (await conn.execute(
         """select action, outcome, detail, created_at from ai_key_events
             where account_id = %s order by created_at desc limit 5""",
@@ -79,7 +79,7 @@ async def _grant(conn, wa_id: str, tier: str) -> int:
         payload={"account_id": account_id},
         # One outstanding mint per account. The database enforces one *active
         # key*; this stops a second turn being queued while the first is due.
-        dedupe_key=f"provision:{account_id}")
+        dedupe_key=openrouter.provision_dedupe_key(account_id))
     print(f"account {account_id}: {current} -> {tier} (cap ${accounts.tier_cap(tier)}/month)")
     print("queued provisioning" if turn else "provisioning already queued")
     print("the worker mints on its next tick; check with --show")
