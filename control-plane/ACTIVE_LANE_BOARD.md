@@ -146,8 +146,8 @@ Notes: the WIX_API_KEY is stored and its account covers the site (site id
   The product cost of waiting is real: an elder currently receives medication
   reminders from a company name, not from the companion they talk to.
 
-### WA-3 — surface commands and ice breakers   [OPEN]
-Owner: unassigned        Opened: 2026-07-27
+### WA-3 — surface commands and ice breakers   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
 Reading: docs/vendor/meta/conversational-components.md, saathi/commands.py, docs/PRD.md §2
 Acceptance: `GET /{phone_number_id}?fields=conversational_automation` returns our
   commands and prompts; a fresh thread shows tappable ice breakers; tapping one
@@ -169,12 +169,22 @@ Notes: **the handlers already exist.** `commands.py` parses eight slash commands
   pre-filled text dismisses the ice breaker UI. Ours (`wa.me/918071581944`) has no
   `?text=`, so it is safe — do not add one.
 
-  One design question to settle first: an un-onboarded user tapping an ice breaker
-  hits the onboarding capability at priority 10, which matches on
-  `not is_onboarded` and will swallow the text. That is correct — onboarding must
-  come first — but it means the tap's *intent* is lost. Either carry it through
-  onboarding, or accept it and word the ice breakers as openings rather than
-  instructions.
+Result: MET. 8 commands + 4 ice breakers configured on `1266402176549539`,
+  verified by read-back. All four ice breakers were run through `commands.parse`
+  and the safety classifier first — none trips a command or a trigger by accident.
+
+  **Settled the design question by testing, not by choosing.** The un-onboarded
+  tap is still swallowed by onboarding (correct — onboarding must come first), so
+  the ice breakers are worded as *openings*. But the menu itself is the payload:
+  four tappable lines showing remind / read / remember / just talk is a capability
+  demo shown before the user types anything, which is PRD §2's "articulating the
+  request" answered by the platform.
+
+  One phrasing changed because of a test: "Mere baare mein aapko kya yaad hai"
+  fell through to the **model**, while "Mere baare mein kya jaante hain" matches
+  the deterministic WHAT_YOU_KNOW handler. "What do you know about me" is a
+  transparency feature and must return an exact list, not a generated answer — so
+  the ice breaker is worded to hit the deterministic path.
 
 ### PR-4b — the reminder ack path is unreachable   [OPEN]
 Owner: unassigned        Opened: 2026-07-27
