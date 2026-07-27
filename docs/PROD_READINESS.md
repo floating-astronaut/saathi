@@ -249,22 +249,81 @@ the alternative was leaving a live forwarded-command vulnerability in place.
 when it is already on the target, or make deploying a dev-box-only action and
 say so in `CONTRIBUTING.md` instead of implying any session can run it.
 
-### PR-25 · Deploy restarts services even when a migration fails
+### PR-25 · Deploy restarts services even when a migration fails — RESOLVED 2026-07-27
 Confirmed in detail 2026-07-27 while reading the script. `remote.sh` runs with
-`set -uo pipefail` — **no `-e`** — and the migration loop is:
+`set -uo pipefail` — **no `-e`** — and the migration loop was:
 
     su - ubuntu -c "psql ... -f $m" >/dev/null 2>&1 \
       && echo "  migration ok" || echo "  migration FAILED"
 
-Three separate problems: the failure does not stop the run, **stderr is
-discarded** so the reason is never seen, and `systemctl restart` executes
+Three separate problems: the failure did not stop the run, **stderr was
+discarded** so the reason was never seen, and `systemctl restart` executed
 regardless. Services then run against a schema they do not match.
 
-There is also no `schema_migrations` table — all migrations re-run on every
-deploy and rely on being idempotent, so a non-idempotent migration would fail
-on the second deploy and be swallowed by the same loop.
-**Fix:** `ON_ERROR_STOP=1`, surface stderr, abort before the restart, and record
-applied versions.
+**The row's second paragraph was too kind, and that turned out to be the worse
+half.** It said the migrations "rely on being idempotent". Two of them are not,
+and re-running them is not a no-op — it is a silent state change on live rows:
+
+- `003_admission_control.sql` ends with
+  `update user_channels set status = 'active' where status = 'pending';`
+- `005_onboarding.sql` ends with
+  `update users set onboarding = 'done' where onboarding = 'new' and created_at < now();`
+
+Both were correct *once*, as backfills for rows that predated the feature. Run
+again they admit every pending unknown sender and mark every half-onboarded
+user as consented. The old loop ran them on **every deploy**. Measured, not
+inferred: a schema-only copy of the live database plus one pending channel and
+one `onboarding='new'` user, run through the old loop, came out `done / active`
+— all six migrations reporting "ok".
+
+**Fixed.** `ops/deploy.sh`:
+
+- `ON_ERROR_STOP=1` was already passed; psql's stderr is no longer thrown away,
+  so the actual error text appears in the deploy log next to the failure.
+- Any failure — bad DSN, ledger unavailable, migration error, ledger write
+  error, checksum mismatch — prints `MIGRATION ABORT` and `exit 1` **before**
+  `systemctl restart`. Nothing restarts against a schema it does not match.
+- A `schema_migrations` ledger (`db/schema_migrations.sql`) records
+  `version, checksum, applied_at, origin, note`. Version is the filename;
+  checksum is the sha256 of the file as applied. An already-recorded migration
+  is skipped, and a recorded migration whose file has since changed aborts the
+  deploy rather than being silently skipped.
+- The six migrations already on the box are **baselined, not asserted**: each
+  is claimed only if a sentinel object that exists if and only if that file
+  committed is visible right now (`user_channels`, `user_channels.status`,
+  `training_samples`, `users.onboarding`, `scheduled_turns`, and
+  `safety_events_trigger_check` admitting `hypoglycemia`). Each migration file
+  is a single `begin/commit`, so a visible sentinel means the whole file
+  committed. Baselined rows carry `origin='baselined'` and a **NULL checksum**,
+  because nobody watched them run and we will not pretend to know the bytes.
+
+Verified against scratch databases on the box (dropped afterwards; the live
+database was only ever read, via `pg_dump --schema-only`): fresh bootstrap
+applies all six and records them; a second run applies none; a pre-ledger fully
+migrated database baselines all six and leaves the canary rows above at
+`new / pending`; a *partially* migrated pre-ledger database baselines only
+002–004 and applies 005–007; an edited migration aborts with the two checksums
+printed; an injected failing migration prints the psql error, aborts, records
+nothing, and never reaches the restart.
+
+**Residuals, deliberately left open:**
+
+- **The ledger write is not in the migration's transaction.** Each migration
+  file ends with its own `commit;`, so recording it is a second statement. A
+  crash in that window leaves a migration applied but unrecorded, and the next
+  deploy will try it again. No worse than today's behaviour, and now loud for
+  the non-idempotent ones — but it is a window.
+- **Baselined rows cannot be checksum-checked**, by construction. An edit to
+  002–007 will therefore never be caught on the ap-south-1 box, only on a
+  database that saw them applied. This decays on its own as new migrations
+  arrive.
+- **A deploy still restarts when the on-box test run fails.** Same missing `-e`,
+  same shape, different line — `uv run pytest -q | tail -2` cannot fail the
+  script. Out of scope for this change and left as-is rather than fixed
+  silently.
+- The ledger is deploy bookkeeping, so `db/schema_migrations.sql` is not itself
+  a migration; a database bootstrapped by hand from `README.md` gets its ledger
+  on the first deploy, via the baseline.
 
 ### PR-29 · Vobiz briefly received every inbound WhatsApp message
 Completing Vobiz's embedded-signup flow subscribed their app

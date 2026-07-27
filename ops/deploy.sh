@@ -92,9 +92,86 @@ curl -fsSL -o /tmp/s/s.tgz "$URL" || { echo "FETCH FAILED"; exit 1; }
 tar xzf /tmp/s/s.tgz -C /tmp/s && cp -r /tmp/s/saathi/. \$REPO/
 chown -R ubuntu:ubuntu \$REPO
 DSN=\$(grep -m1 '^SAATHI_DB_DSN=' \$REPO/.env | cut -d= -f2-)
+if [ -z "\$DSN" ]; then
+  echo "MIGRATION ABORT: no SAATHI_DB_DSN in \$REPO/.env — refusing to guess a database"
+  exit 1
+fi
+
+# -X on every psql below is load-bearing, not tidiness. su - ubuntu is a login
+# shell, so psql would read ~ubuntu/.psqlrc, and the ledger read below is parsed
+# on its field separator. A single pset of fieldsep or format in that file makes
+# every version look unrecorded, so all six migrations re-apply and 003/005
+# re-run their backfills — the exact corruption this loop exists to prevent.
+# No such file exists on the box today; -X is what keeps that from mattering.
+# (No backticks in this heredoc, either: it is unquoted, so they would run.)
+
+# The ledger, plus the one-time baseline of everything applied before it
+# existed. Idempotent; see db/schema_migrations.sql for why it is not itself a
+# migration.
+if ! su - ubuntu -c "psql -X '\$DSN' -q -v ON_ERROR_STOP=1 -f \$REPO/db/schema_migrations.sql" 2>&1; then
+  echo "MIGRATION ABORT: could not establish the schema_migrations ledger"
+  exit 1
+fi
+
+# One read of the ledger: "version|checksum" per line, checksum empty when the
+# row was baselined. Both fields are whitespace-free (a filename we control and
+# a hex digest), which is what lets the word-split loop below work.
+if ! APPLIED=\$(su - ubuntu -c "psql -X '\$DSN' -qtA -v ON_ERROR_STOP=1 -c 'select version, checksum from schema_migrations'"); then
+  echo "MIGRATION ABORT: could not read schema_migrations"
+  exit 1
+fi
+
 for m in \$REPO/db/migrations/*.sql; do
-  su - ubuntu -c "psql '\$DSN' -q -v ON_ERROR_STOP=1 -f \$m" >/dev/null 2>&1 \
-    && echo "  migration \$(basename \$m) ok" || echo "  migration \$(basename \$m) FAILED"
+  # An empty or missing db/migrations leaves the glob unexpanded. It already
+  # fails safe — psql cannot open a file called '*.sql' — but says so as a
+  # migration error, which sends the reader looking for the wrong thing.
+  if [ ! -e "\$m" ]; then
+    echo "MIGRATION ABORT: no migration files at \$REPO/db/migrations/*.sql —"
+    echo "the artifact is incomplete, not the database. Services not restarted."
+    exit 1
+  fi
+  b=\$(basename "\$m")
+  sum=\$(sha256sum "\$m" | cut -d' ' -f1)
+  if [ -z "\$sum" ]; then
+    echo "  migration \$b: could not checksum the file"
+    echo "MIGRATION ABORT: an empty checksum would be recorded as a string, not a"
+    echo "NULL, and would read back for ever as an unverifiable baselined row."
+    exit 1
+  fi
+  known=0; have=""
+  for line in \$APPLIED; do
+    case "\$line" in "\$b|"*) known=1; have=\${line#*|} ;; esac
+  done
+  if [ "\$known" = "1" ]; then
+    if [ -z "\$have" ]; then
+      echo "  migration \$b already applied (baselined, checksum unknown)"
+    elif [ "\$have" = "\$sum" ]; then
+      echo "  migration \$b already applied"
+    else
+      echo "  migration \$b CHECKSUM MISMATCH"
+      echo "    recorded \$have"
+      echo "    on disk  \$sum"
+      echo "  The file changed after it was applied, so the database is not what"
+      echo "  db/migrations says it is. Write a new migration instead; if the edit"
+      echo "  really was a no-op, update the recorded checksum by hand and say so."
+      echo "MIGRATION ABORT: services not restarted"
+      exit 1
+    fi
+    continue
+  fi
+  echo "  migration \$b applying"
+  if ! su - ubuntu -c "psql -X '\$DSN' -q -v ON_ERROR_STOP=1 -f \$m" 2>&1; then
+    echo "  migration \$b FAILED — psql error above"
+    echo "MIGRATION ABORT: services not restarted; they would run against a schema"
+    echo "they do not match. Fix the migration and redeploy."
+    exit 1
+  fi
+  if ! su - ubuntu -c "psql -X '\$DSN' -q -v ON_ERROR_STOP=1 -v ver=\$b -v sum=\$sum -f \$REPO/db/record_migration.sql" 2>&1; then
+    echo "  migration \$b applied but NOT RECORDED — it will be attempted again"
+    echo "MIGRATION ABORT: services not restarted"
+    exit 1
+  fi
+  echo "  migration \$b ok"
 done
 saathi-env-sync
 su - ubuntu -c "cd \$REPO && ~/.local/bin/uv sync --quiet --extra dev"

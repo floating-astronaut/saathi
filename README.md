@@ -161,11 +161,17 @@ uv sync --extra dev
 createdb saathi
 psql -d saathi -f db/extensions.sql            # superuser — pg_trgm is untrusted
 psql -d saathi -f db/schema.sql                # run as the app role, so it owns its tables
-for m in db/migrations/*.sql; do psql -d saathi -f "$m"; done
+for m in db/migrations/*.sql; do psql -d saathi -v ON_ERROR_STOP=1 -f "$m"; done
 cp .env.example .env && chmod 600 .env         # never commit this
 uv run pytest -q
 uv run uvicorn saathi.web.app:app --port 3130
 ```
+
+Migrations are **not** all safe to re-run — 003 and 005 end in backfill
+`update`s that are wrong the second time. On the box `ops/deploy.sh` keeps a
+`schema_migrations` ledger and skips what it has already applied; a database you
+migrate by hand like this gets its ledger on the first deploy, by baselining
+what it finds. Locally, run the loop once.
 
 On the box, secrets are fetched rather than typed: `saathi-env-sync`.
 **Never put a secret in an SSM command** — command text is retained and visible
