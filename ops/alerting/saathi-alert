@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Publish a Saathi alert to SNS. Invoked by systemd OnFailure=.
+#
+# It deliberately sends NO log content. journalctl output is the obvious thing
+# to attach and the wrong thing to email: the Python entrypoints redact secrets
+# at the root logger (net_policy.RedactingFilter), but the backup script and
+# anything else running under systemd do not, and a Graph response carrying a
+# live page token has already been printed whole once in this project's history.
+# An alert is a summons, not a report. The operator runs journalctl themselves.
+set -euo pipefail
+
+UNIT="${1:?unit name required}"
+REGION="ap-south-1"
+TOPIC="arn:aws:sns:${REGION}:559896294326:saathi-alerts"
+
+STATE=$(systemctl is-active "$UNIT" 2>/dev/null || true)
+SINCE=$(systemctl show "$UNIT" -p ActiveEnterTimestamp --value 2>/dev/null || true)
+
+aws sns publish --region "$REGION" --topic-arn "$TOPIC" \
+  --subject "Saathi ALERT: ${UNIT} on $(hostname -s)" \
+  --message "$(cat <<MSG
+${UNIT} entered a failed state.
+
+  host    : $(hostname -s) (i-01b2c27883acb25ca, ap-south-1)
+  unit    : ${UNIT}
+  state   : ${STATE:-unknown}
+  since   : ${SINCE:-unknown}
+  at      : $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+No logs are included on purpose — they are not redacted outside the Python
+entrypoints. To see what happened:
+
+  journalctl -u ${UNIT} -n 100 --no-pager
+
+Runbook: docs/RUNBOOK.md
+MSG
+)" >/dev/null

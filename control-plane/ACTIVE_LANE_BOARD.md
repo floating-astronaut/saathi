@@ -150,13 +150,29 @@ Notes: P0, and **worse than the PROD_READINESS row says**. Measured 2026-07-27:
   reschedule, plus a stuck-turn sweep and a dispatch heartbeat. Ack/nudge
   wiring is cut out as PR-4b because it needs Meta-side template buttons.
 
-### PR-3 — no alerting on anything   [OPEN]
-Owner: unassigned        Opened: 2026-07-26 (from PROD_READINESS)
+### PR-3 — no alerting on anything   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-26 · Closed: 2026-07-27
 Reading: docs/PROD_READINESS.md (PR-3), docs/RUNBOOK.md
 Acceptance: backup failure and `saathi-worker` inactive both reach a human;
   demonstrated by inducing each condition, not by inspecting config.
-Write-back: docs/RUNBOOK.md, docs/PROD_READINESS.md
-Notes: P0. The backup timer logs to `journalctl` and nobody reads `journalctl`.
+Write-back: docs/RUNBOOK.md, docs/PROD_READINESS.md, CHANGELOG.md
+Result: MET. Worker stopped 01:44:05Z → ALARM 02:04:59Z → SNS delivered 8→9,
+  failed 0, to confirmed subscriber. `saathi-backup-stale` separately observed
+  ALARM→OK. Measured detection latency **~21 min**, not the 10 the config
+  implies — recorded in `RUNBOOK.md` rather than quietly rounded.
+Notes (history): detection was built and induced:
+  heartbeat published after each successful tick, two alarms treating missing
+  data as breaching, OnFailure drop-ins on all four units, and `saathi-alert`
+  verified publishing to SNS. What is *not* met is the words "reach a human" —
+  the SNS email subscription is `PendingConfirmation`, and SNS delivers nothing
+  until the recipient clicks the link. Closing on the strength of the alarms
+  existing would be the `ffmpeg -version` mistake exactly.
+  **To close:** operator runs
+  `aws sns subscribe --region ap-south-1 --topic-arn arn:aws:sns:ap-south-1:559896294326:saathi-alerts --protocol email --notification-endpoint support@glitchexecutor.com`
+  and clicks confirm; then re-induce and check the mail actually lands.
+  Learned on the way: `saathi-worker` is `Restart=always`, so it re-enters
+  `active` rather than `failed` and `OnFailure` barely applies to it — a
+  crash-looping worker looks alive, and only the heartbeat alarm catches it.
 
 ### PR-8 — no TTS; a voice-first product that only writes back   [OPEN]
 Owner: unassigned        Opened: 2026-07-26 (from PROD_READINESS)

@@ -14,6 +14,46 @@ Conventions:
 
 ---
 
+## 2026-07-27 (later)
+
+Alerting built (PR-3). **305 tests passing.**
+
+### Added
+
+- `saathi/metrics.py` — CloudWatch publisher that never raises. A metrics outage
+  must not stop a reminder going out, so `emit` swallows everything and returns
+  a bool. It logs at ERROR rather than WARNING, because the heartbeat alarm
+  treats missing data as breaching: when this module fails, the alarm starts
+  lying, and whoever gets paged needs that line.
+- `saathi/worker/__main__.py` — publishes `WorkerHeartbeat` and `TurnsDispatched`
+  *after* a successful tick, so the signal means "the worker did its job", not
+  "the process exists". Runs in a thread because boto3 is synchronous and
+  blocking the loop delays every reminder in the batch.
+- `ops/alerting/` — `saathi-alert` (OnFailure publisher), `saathi-metric` (one
+  datapoint, for units that are not Python), the systemd template, and an
+  idempotent `install.sh`.
+
+### Learned
+
+- **`OnFailure=` barely applies to `saathi-worker`.** It is `Restart=always`
+  with `StartLimitBurst=5`, so a crashing worker re-enters `active`, not
+  `failed`, and a crash-loop looks alive. The heartbeat alarm is what actually
+  catches it. Discovered by reading the unit rather than assuming.
+- **`%n` already includes `.service`.** `OnFailure=saathi-alert@%n.service`
+  instantiates `saathi-alert@saathi-worker.service.service`. It resolves, but
+  `%N` is the suffix-less form and is what you want.
+- **A topic with no confirmed subscriber accepts publishes happily.**
+  `NumberOfMessagesPublished` goes up, every call returns a MessageId, and
+  nobody is told anything. Check `list-subscriptions-by-topic` for
+  `PendingConfirmation` before believing alerting works.
+
+### Tests
+
+`tests/test_metrics.py` (4) — pins both directions of the failure mode: a
+metrics outage never raises, and it is always logged at ERROR.
+
+---
+
 ## 2026-07-27
 
 Control plane adopted; the reminder delivery path fixed. **301 tests passing.**

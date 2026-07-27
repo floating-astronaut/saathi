@@ -12,10 +12,13 @@
 |-------|-----|---------|------|----------------------|--------|
 | Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-4 | `saathi/scheduling.py`, `saathi/worker/turns.py`, `saathi/agent/tools/handlers.py`, `tests/test_reminder_delivery.py`, `tests/test_scheduling.py` | **ended** — closed at `64a520b`, surfaces released |
 | Codex | — | 2026-07-27 | SEC-2 | `SECURITY.md` (new, owns it outright) | **ended** — closed SEC-2 at scan `c4b34ba`, surfaces released |
+| Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-3 | `saathi/metrics.py`, `saathi/worker/__main__.py`, `ops/alerting/`, `tests/test_metrics.py` | **ended** — closed, surfaces released |
 
-**Base commit is `64a520b`.** `main` moved twice on 2026-07-27 (`ffe9acc`,
-`64a520b`). Any session that started before those must rebase before committing,
-or it will clobber the control plane and the reminder-delivery fix.
+**Base commit is `36768ba`** (Codex's SEC-2 close). `main` moved five times on
+2026-07-27 — `ffe9acc`, `64a520b`, `c4b34ba`, `7044985`, `36768ba`. Any session
+that started before the latest must rebase before committing. This worked in
+practice today: two sessions ran concurrently and rebased without a single
+conflict, because each declared its surfaces here first.
 
 ## Rules
 

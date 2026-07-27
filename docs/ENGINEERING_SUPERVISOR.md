@@ -451,3 +451,68 @@ Closure evidence:
 - `SEC2-REM-003` was suppressed as duplicate of PR-4b; SEC-1, CRED-1/PR-22 and
   DOC-1 were excluded as already-tracked lanes.
 - No source-code fixes were made in SEC-2.
+
+---
+
+## 2026-07-27 — Lane PR-3: something finally tells a human
+
+### Read
+
+`docs/PROD_READINESS.md` (PR-3), `docs/RUNBOOK.md`, the live systemd units, and
+`docs/LANDMINES.md` before touching anything that emails out.
+
+### Closed
+
+- `saathi/metrics.py` — CloudWatch publisher that never raises.
+- Worker publishes `WorkerHeartbeat` and `TurnsDispatched` **after** a
+  successful tick, so the signal means "did its job", not "process exists".
+- `ops/alerting/` — `OnFailure` publisher, a non-Python metric shim, the systemd
+  template, and an idempotent installer.
+- Two alarms → SNS `saathi-alerts`, both treating missing data as **breaching**.
+
+### Evidence — induced, not inspected
+
+- Worker stopped **01:44:05Z** → alarm ALARM **02:04:59Z**, reason *"no
+  datapoints were received for 2 periods and 2 missing datapoints were treated
+  as [Breaching]"* → SNS `NumberOfNotificationsDelivered` **8→9**,
+  `NumberOfNotificationsFailed` **0**, to the confirmed subscriber. Worker
+  restored 02:06:02Z.
+- `saathi-backup-stale` separately observed ALARM→OK as `BackupSuccess` arrived
+  — both directions of the missing-data path exercised.
+- Real backup run: dump → verify-by-restore → dropdb, exit 0, `ExecStartPost`
+  fired 01:47:19→01:47:20 and published `BackupSuccess`.
+- 305 tests passing.
+
+### Measured facts that contradicted the design
+
+- **Detection takes ~21 minutes, not 10.** `Period × EvaluationPeriods` is
+  arithmetic, not latency: CloudWatch will not call a period definitively empty
+  until its ingestion window settles, costing roughly an extra cycle. I
+  predicted ~10 min and said so out loud; the number is 21. `RUNBOOK.md` now
+  carries the measured figure and a warning to re-measure after any tuning.
+- **`OnFailure=` barely applies to `saathi-worker`.** It is `Restart=always`
+  with `StartLimitBurst=5`, so a crashing worker re-enters `active`, not
+  `failed`. A crash-loop looks alive; only the heartbeat catches it.
+- **`%n` already contains `.service`**, so `saathi-alert@%n.service` instantiates
+  `saathi-alert@saathi-worker.service.service`. `%N` is the form you want.
+- **A topic with no confirmed subscriber accepts publishes happily** — the
+  counter rises, every call returns a MessageId, nobody is told anything. Only
+  `NumberOfNotificationsDelivered` distinguishes the two.
+
+### Deliberate choices
+
+- Alerts carry **no log content**. `journalctl` is redacted only inside the
+  Python entrypoints; the backup script is not. An alert is a summons, and this
+  project has printed a live token once already.
+- Missing data is **breaching**, so a metrics outage pages someone about a
+  healthy service. That false alarm is the price of never mistaking broken
+  monitoring for silence.
+
+### Remains
+
+- Latency of ~21 min is a product decision, not a bug. Tune `Period` and
+  re-measure if it is too slow for a medication reminder.
+- `cloudwatch:DescribeAlarmHistory` is denied to the box, so transitions can be
+  watched live but not audited afterwards. Small read-only IAM ask.
+- I left `/saathi/authz-probe` behind earlier in the day when `DeleteLogGroup`
+  was denied; the grant has since landed and the group is gone.

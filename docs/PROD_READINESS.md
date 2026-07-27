@@ -36,13 +36,24 @@ Recovery today means repeating that from `docs/RUNBOOK.md` by hand.
 MeshPilot lane already learned this — see `ops/v2-infra` there, and law L3 in
 its supervisor log.
 
-### PR-3 · No alerting on anything
-A failed backup, a dead worker, a Postgres that stopped, a webhook returning 500
-— all silent until someone looks. The backup timer logs to `journalctl` and
-nobody reads `journalctl`.
-**Fix:** at minimum, backup failure and `saathi-worker` inactive → an alert that
-reaches a human. CloudWatch alarms on the instance plus a heartbeat from the
-worker would cover the realistic failures.
+### PR-3 · No alerting — RESOLVED 2026-07-27
+Detection is built and proven: `saathi-alert@.service` drop-ins on all four
+units, a `WorkerHeartbeat` published after every successful worker tick, and two
+CloudWatch alarms (`saathi-worker-heartbeat-missing`, `saathi-backup-stale`)
+wired to SNS topic `saathi-alerts`. Both treat missing data as breaching. See
+`RUNBOOK.md`.
+
+**Proven by inducing the outage, not by inspecting config.** `saathi-worker`
+stopped 01:44:05Z → alarm ALARM 02:04:59Z → SNS `NumberOfNotificationsDelivered`
+8→9 with `NumberOfNotificationsFailed` 0, to the confirmed subscriber
+`support@glitchexecutor.com`. `saathi-backup-stale` was separately observed
+transitioning ALARM→OK as `BackupSuccess` data arrived, so both directions work.
+
+**Residual, deliberately left open:** detection latency is **~21 minutes**, not
+the 10 the alarm config implies (see `RUNBOOK.md`). Whether that is acceptable
+for a medication product is a product decision, not a bug. `cloudwatch:
+DescribeAlarmHistory` is also still denied to the box, so alarm transitions can
+be observed live but not audited afterwards.
 
 ### PR-4 · Reminders had no delivery guarantee — partly resolved 2026-07-27
 The original row understated it. Reminders were not merely unguaranteed, they
