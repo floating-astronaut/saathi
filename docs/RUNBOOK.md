@@ -97,6 +97,18 @@ saathi-env-sync    # on the box; pulls saathi/dev/runtime into .env (0600)
 The instance role `saathi-dev-box` has `GetSecretValue` on that ARN only, plus
 `AmazonSSMManagedInstanceCore` and an inline `bedrock-invoke`.
 
+**Do not add `EnvironmentFile=` to the unit files.** `config.py` loads `.env`
+with `SettingsConfigDict(env_file=".env")`, reading it from disk into process
+memory, so no secret ever enters `os.environ`. Measured 2026-07-27: the running
+`saathi-web` process has 11 environment variables, all systemd boilerplate.
+
+That matters because we spawn two subprocesses — `ffmpeg` (`speech/audio.py`)
+and `pdftoppm` (`documents.py`) — which inherit the parent environment. Today
+they inherit nothing worth having. Moving `.env` into the unit "so the service
+reads config the normal way" would hand the Meta token and the database URL to
+every transcode. If it ever does move, the subprocess calls need an explicit
+scrubbed `env=` in the same change. See `PATTERNS_TO_BORROW.md`, hermes-agent.
+
 ## Verify (do all of these — "active" is not "working")
 
 ```bash

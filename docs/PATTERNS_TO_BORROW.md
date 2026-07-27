@@ -300,3 +300,102 @@ are wrong by omission, it runs off the hot path on `scheduled_turns`, and it
 touches no safety boundary. Dependencies it adds — `httpx`, `pydantic` — were
 already present. That is the shape of an SDK worth taking: authoritative, off the
 critical path, and nowhere near the tool list.
+
+---
+
+# `NousResearch/hermes-agent` — surveyed 2026-07-27
+
+The framework itself falls under the standing rule above and needs no further
+argument: it is a self-improving personal agent with a `terminal()` tool, a
+code-execution tool, MCP subprocesses, a plugin loader and skills that execute
+arbitrary Python at import time. It owns the loop by design. 221k stars, MIT,
+Nous Research, and the rebrand trail in its topics (`openclaw`, `clawdbot`,
+`moltbot`) plus `hermes claw migrate` say it absorbed an earlier project.
+
+**Read `SECURITY.md` anyway.** It is the best security document any of these
+surveys turned up, and it is valuable to us for a reason that has nothing to do
+with adopting the code.
+
+## The claim they make, and why they are right to make it
+
+Their §2.2 names exactly one boundary: "The only security boundary against an
+adversarial LLM is the operating system." (Hermes Agent `SECURITY.md` §2.2.)
+Everything inside the process is then explicitly demoted to heuristic — the
+approval gate, output redaction, the skills scanner, **and the tool allowlist**.
+Their reasoning is that any in-process component screening model output is a
+function of an attacker-influenced string, and shell is Turing-complete, so a
+denylist over shell strings is structurally incomplete.
+
+That conclusion is correct *for their shape*. Once a design includes arbitrary
+shell and in-process plugin loading, there is genuinely nothing left inside the
+process to stand on, and saying so out loud is more honest than most projects
+manage.
+
+## The inversion, which is the actually useful part
+
+Saathi's boundary is the one Hermes says cannot exist: it is in-process, it is
+the tool list, and it holds **only because the capability surface it would have
+to survive is absent**. There is no shell tool, no code-execution tool, no
+plugin loader, no MCP client, no skill import. `assert_no_forbidden_tools()` is
+a boundary rather than a heuristic for the same reason a locked door is a
+boundary in a room with no windows.
+
+So this is the strongest available citation for the standing rule, from the
+largest agent framework on GitHub: **adopting a framework of that shape would
+move Saathi from "boundary by construction" to "the boundary is the OS" — and
+Saathi has no OS boundary to fall back on.** `saathi-web` is a uvicorn process
+running unsandboxed as `ubuntu`, with the database URL and the Meta token in
+process memory and an AWS instance role attached to the box. Hermes can tell an
+operator to choose a sandbox posture. We ship the posture.
+
+Their own contributing guide supplies the illustration, warning that a venv
+placed inside the directory the agent works in can be destroyed by a
+relative-path command the agent runs against its own checkout — killing the
+runtime mid-session. That is the failure mode of a loop that can run anything.
+
+## Worth proposing to the SEC lane (not edited here — `SECURITY.md` is Codex's)
+
+Our `SECURITY.md` lists twelve invariants as a flat set under "Security
+Boundaries". Hermes's structure is better, and three parts are worth lifting:
+
+1. **Separate boundaries from defence in depth, in the document.** Some of our
+   twelve are load-bearing (HMAC verification before side effects; provenance
+   withholding mutating tools; the absent-by-construction tool set; the window
+   guard being unreachable-around). Others are mitigations that a determined
+   attacker inside the process would defeat (secret redaction from logs and
+   error fields). Calling both "boundaries" makes the strong ones sound like
+   the weak ones.
+2. **State that a finding needs a chained outcome.** Hermes's §3.2 rules that
+   prompt injection *per se* — getting the model to emit something odd — is not
+   a vulnerability without a concrete consequence behind it. For Saathi the
+   chained outcome is specific and worth naming: injected text that reaches a
+   mutating tool, crosses a user boundary, or sends a message. This is
+   immediately relevant to the running SEC lane, since it is the line between a
+   report and a finding.
+3. **Say that out of scope does not mean unwelcome.** Their §3.2 redirects such
+   reports to normal issues rather than closing them. Cheap, and it keeps
+   people reporting.
+
+## One thing we measured because of their §2.3
+
+Hermes strips credentials from the environment handed to subprocesses, and is
+careful to say this reduces casual exfiltration without being containment. We
+have two subprocesses — `ffmpeg` (`speech/audio.py`) and `pdftoppm`
+(`documents.py`) — so it was worth checking what they inherit.
+
+Measured on the box, 2026-07-27: the running `saathi-web` process has **11
+environment variables, all systemd and shell boilerplate** (`HOME`, `PATH`,
+`LANG`, `INVOCATION_ID`, …). No secret is among them. The unit file has no
+`EnvironmentFile=`, and `config.py` loads `.env` through
+`SettingsConfigDict(env_file=".env")`, which reads the file from disk into
+process memory. Secrets therefore never enter `os.environ`, and a child process
+inherits nothing worth having. Both subprocesses are also spawned with
+`create_subprocess_exec` and fixed argument lists — no shell, and no argument
+derived from model output.
+
+This is a real property and it is **accidental**. It would be undone by one
+plausible tidy-up: moving `.env` into the systemd unit as `EnvironmentFile=` so
+the service "reads config the normal way". That change would put the Meta token
+and the database URL into the environment of every `ffmpeg` invocation. Do not
+make it — and if `.env` ever does move into the unit, the subprocess calls need
+an explicit scrubbed `env=` at the same time.
