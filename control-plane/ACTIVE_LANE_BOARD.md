@@ -74,6 +74,28 @@ Notes: operator decision — not taken unilaterally, since the subscription was 
   classifier (R7). **Appeared in two separate supervisor `Queued` blocks and was
   never closed — this board exists because of failures like this one.**
 
+### SEC-2 — security review   [CLAIMED]
+Owner: Codex        Opened: 2026-07-27
+Reading: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, docs/LANDMINES.md, docs/DECISIONS.md
+Acceptance: `SECURITY.md` exists at the repo root, registered in
+  `docs/DOC_SYSTEM.md`; every finding is either fixed or carries a
+  `PROD_READINESS.md` row with a severity.
+Write-back: SECURITY.md, docs/DOC_SYSTEM.md, docs/PROD_READINESS.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: **Codex owns `SECURITY.md` outright — no other session writes it.**
+  Shared surfaces, and how to avoid a collision:
+  - `docs/PROD_READINESS.md` — **append new PR-* rows only**; do not renumber or
+    reflow existing ones. Next free id is **PR-23** (PR-22 is taken).
+  - `docs/ENGINEERING_SUPERVISOR.md` — append-only, newest at the **bottom**.
+  - `control-plane/ACTIVE_LANE_BOARD.md` — edit only this lane's block.
+  - `docs/DOC_SYSTEM.md` — add one row to the doc map; leave the precedence
+    ladder alone (it changed today).
+  Do **not** touch `saathi/scheduling.py`, `saathi/worker/turns.py` or
+  `saathi/agent/tools/handlers.py` without re-reading them at `64a520b` — all
+  three changed today. Findings against them are welcome; blind edits are not.
+  Base on `64a520b` or later. Already-known security items are lanes, not new
+  findings: SEC-1 (Business Agent on our WABA), CRED-1/PR-22 (forge write
+  credentials on the runtime box), DOC-1 (SSH ingress undocumented).
+
 ### PR-4b — the reminder ack path is unreachable   [OPEN]
 Owner: unassigned        Opened: 2026-07-27
 Reading: docs/LANDMINES.md (Meta template rules), docs/PRD.md §C2, §15
