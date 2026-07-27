@@ -186,6 +186,26 @@ Result: MET. 8 commands + 4 ice breakers configured on `1266402176549539`,
   transparency feature and must return an exact list, not a generated answer — so
   the ice breaker is worded to hit the deterministic path.
 
+### AI-1 — per-account OpenRouter keys   [OPEN]
+Owner: unassigned        Opened: 2026-07-27
+Reading: docs/AI_ROUTING.md, docs/DECISIONS.md (D-D, D-O), docs/vendor/, PR-15
+Acceptance: a paying account gets a capped key minted from `scheduled_turns`;
+  calling twice mints once; an unconfigured install refuses rather than storing a
+  plaintext; every request carries `allow_fallbacks: false`; no list/revoke/sync
+  can touch a key without the `saathi:` prefix; audit rows on both outcomes.
+Write-back: docs/AI_ROUTING.md, docs/PROD_READINESS.md, CHANGELOG.md
+Notes: design doc written first (THE_METHOD §1) — the code follows it, not the
+  other way round. Model and region are unchanged (D-O), so D-D's bakeoff stands.
+
+  **Blocked on credits.** The OpenRouter account has 0. Keys will mint cleanly
+  and fail on first use — provisioning succeeds, spending does not. Build and
+  test the machinery, but do not put a real user on it until funded.
+
+  Confirmed live: workspace `718e8438-…` (Indofolk AI), BYOK `amazon-bedrock`
+  "Indian Box" at sort_order 0, `z-ai/glm-5` available, provisioning key valid.
+  The SDK's `create()` takes `workspace_id`, `limit_reset` and `expires_at` — the
+  prose docs omit all three, so trust `vendor/` and the generated client.
+
 ### PR-4b — the reminder ack path is unreachable   [OPEN]
 Owner: unassigned        Opened: 2026-07-27
 Reading: docs/LANDMINES.md (Meta template rules), docs/PRD.md §C2, §15

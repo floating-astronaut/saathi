@@ -75,6 +75,7 @@ a measurement disagree, the measurement wins and `DECISIONS.md` records it.
 | `../SECURITY.md` | Security reporting policy, security invariants, severity guide, and public-testing boundaries. |
 | `ENGINEERING_SUPERVISOR.md` | Append-only lane log. Evidence, not intentions. |
 | `PROD_READINESS.md` | Dev shortcuts that must be fixed before production, with severity. **Add a row when you take one.** |
+| `AI_ROUTING.md` | How a turn reaches a model, who pays, and where the data goes. Model routing, per-account keys, spend caps, residency. |
 | `vendor/` | **Captured** third-party API docs — Meta, Wix, Vobiz. Transcripts, never edited to match what we believe. See `vendor/README.md`. |
 | `../CHANGELOG.md` | What changed in the Python, and what broke finding out. |
 | [`foundations/README.md`](foundations/README.md) | Product/domain research underneath the PRD — user research, accessibility, clinical/safety grounding, competitive landscape, DPDP/WhatsApp regulatory detail, glossary. Checks the PRD's *research* claims against primary sources the way §0 checks its technical ones. |
