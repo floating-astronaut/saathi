@@ -10,7 +10,9 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Awaitable, Callable
+from zoneinfo import ZoneInfo
 
 import boto3
 
@@ -21,6 +23,11 @@ from .tools.specs import TOOL_CONFIG, TOOLS, assert_no_forbidden_tools
 log = logging.getLogger("saathi.agent")
 
 MAX_HOPS = 5  # tool round-trips per user turn; elders' tasks are shallow
+
+#: Tools the model cannot use correctly without knowing today's date. Withheld
+#: when the prefix carries no clock. `snooze_reminder` is absent from this set
+#: on purpose: it takes a relative offset only, so it never needs a date.
+CLOCK_DEPENDENT_TOOLS = frozenset({"create_reminder"})
 
 _client = None
 
@@ -59,23 +66,39 @@ async def run(
     history: list[dict] | None = None,
     user_name: str | None = None,
     allowed_tools: set[str] | None = None,
+    tz: str | None = None,
 ) -> Turn:
     """Run one user turn to completion, executing tools as the model calls them.
 
     `handle_tool(name, args) -> dict` performs the side effect and returns a
     JSON-serialisable result. It is the only thing that can change state, which
     keeps the injection surface (PRD §12) to the tool list itself.
+
+    `tz` is the user's IANA timezone and is what gives the model a clock. It is
+    optional only because one caller — `pipeline._read_pdf_text` — genuinely
+    has no user in hand. There is no default: a *wrong* clock would be worse
+    than none, so a missing `tz` costs the turn its `create_reminder` tool
+    rather than letting the model guess a date onto a medication reminder.
     """
     assert_no_forbidden_tools()
 
+    now_local = datetime.now(ZoneInfo(tz)) if tz else None
     prefix: Prefix = build_prefix(facts, tool_tokens(),
-                                  settings.saathi_prefix_token_budget, user_name)
+                                  settings.saathi_prefix_token_budget, user_name,
+                                  now_local=now_local)
     # Withholding beats filtering: a filter must recognise every phrasing of an
     # attack, while an absent tool does not care what the text says.
-    tool_config = TOOL_CONFIG
-    if allowed_tools is not None:
-        tool_config = {"tools": [t for t in TOOLS
-                                 if t["toolSpec"]["name"] in allowed_tools]}
+    names = allowed_tools if allowed_tools is not None else {
+        t["toolSpec"]["name"] for t in TOOLS}
+    if not prefix.has_clock:
+        # No clock in the prefix means the model cannot know today's date, and
+        # a one-off reminder requires one. Withhold rather than trust it to
+        # notice: a guessed date fires on the wrong day, silently.
+        names = names - CLOCK_DEPENDENT_TOOLS
+        log.warning("no timezone for this turn — withholding %s",
+                    sorted(CLOCK_DEPENDENT_TOOLS))
+    tool_config = ({"tools": [t for t in TOOLS if t["toolSpec"]["name"] in names]}
+                   if names != {t["toolSpec"]["name"] for t in TOOLS} else TOOL_CONFIG)
     messages: list[dict] = list(history or [])
     messages.append({"role": "user", "content": [{"text": user_text}]})
 
@@ -158,6 +181,7 @@ async def run_for_user(conn, user_id: int, user_text: str,
         "select tz from users where id = %s", (user_id,))).fetchone()
     tz = row[0] if row else "Asia/Kolkata"
     facts = await memory.load_facts(conn, user_id)
-    turn = await run(user_text, facts, Handlers(conn, user_id, tz).handle, history)
+    turn = await run(user_text, facts, Handlers(conn, user_id, tz).handle, history,
+                     tz=tz)
     await record(conn, turn, user_id, None)
     return turn

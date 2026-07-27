@@ -14,6 +14,71 @@ Conventions:
 
 ---
 
+## 2026-07-27 — the agent had no idea what day it was
+
+**376 tests passing** (366 → 376). `tests/test_clock.py`.
+
+### Broke
+
+- **"5 minute baad sone ki yaad dila dena" produced no reminder.** Reported from
+  the live number with a screenshot: a voice note asked for a reminder in five
+  minutes, and the agent asked for a wall-clock time — twice — then the
+  conversation ended with nothing scheduled.
+
+  The symptom looks like bad instruction-following. It is not. **The prefix
+  contained no date, no time and no timezone**, and nothing else in the loop
+  supplied one: `grep -n "datetime\|now(\|ZoneInfo" saathi/agent/prompt.py`
+  returned nothing at all. "Five minutes from now" is not a phrasing problem
+  when the model has no *now* — it is not a computable request, and asking for
+  an absolute time was the only correct move left to it.
+
+  The quieter half of the same defect: `create_reminder` takes
+  `recurrence: once` plus a `date`, and a model with no clock can only **guess**
+  that date. A guess lands on the wrong day and nothing looks broken — no error,
+  no log line, a reminder cheerfully scheduled for the wrong Tuesday.
+
+### Fixed
+
+- **One line of clock in the prefix**, in the user's own zone:
+  `Now, where the user is: Mon 27 Jul 2026, 14:05 (Asia/Kolkata).` Sixteen
+  tokens; a realistic prefix goes 1,639 → 1,655 of the 3,000 budget. It is one
+  line and not a block on purpose — there is no prompt caching on `zai.glm-5`,
+  so this is paid on every turn, roughly 300 times per user per month. IANA zone
+  names rather than "IST": the model reasons better about `Asia/Kolkata` than
+  about three overloaded letters, and it is the same string the user would have
+  to say back to correct it.
+
+- **No clock means no `create_reminder`.** `Prefix.has_clock` is false when the
+  caller has no user timezone (the document-reading path genuinely has no user),
+  and `loop.run` then withholds the tool rather than trusting the model to
+  notice it is guessing. Capability by absence, same argument as PRD §12: an
+  absent tool cannot be talked into firing on the wrong day. `snooze_reminder`
+  is deliberately *not* withheld — it takes a relative offset and never needs a
+  date, which is exactly the shape `create_reminder` should grow next (PR-37).
+
+- The prompt now also says to mention a remembered fact only when it is relevant.
+  The same transcript had the agent padding a reminder request with
+  "Aapne mujhe banaya hai".
+
+### Not fixed — see PR-37
+
+`create_reminder` still has no relative-offset parameter, so the arithmetic is
+the model's to do. And `users.tz` is still trusted absolutely: user 15 is stored
+as `Asia/Kolkata` while the handset showed UTC−4, so a 10pm request would have
+been delivered at half past noon. **No reminder has yet been proven to arrive
+end-to-end from a voice note** — these tests prove the tool is offered, not that
+the message lands.
+
+### How the tests were checked
+
+Both guards were deleted from the *production path* — `if not prefix.has_clock`
+replaced with `if False`, and `clock_line(now_local)` dropped from the assembled
+text — and the suite required to go red: 2 failures and 1 failure respectively.
+Five separate bugs have now shipped here with tests that agreed with the bug, so
+a green test that has never been seen red is not evidence.
+
+---
+
 ## 2026-07-27 (deploy) — the box could not deploy itself, and a red suite shipped anyway
 
 **366 tests passing** (unchanged; no application code was touched). PR-28.
