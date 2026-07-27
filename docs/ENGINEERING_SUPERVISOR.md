@@ -403,3 +403,51 @@ log would destroy the only record of when the change actually happened.
 `PROD_READINESS.md` gains PR-24 and skips PR-23, which is held for lane SEC-2
 (Codex, running concurrently). A gap in a journal is cheaper than two sessions
 claiming one id.
+
+---
+
+## 2026-07-27 — Lane SEC-2: security policy and scan
+
+### Read
+
+`docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`control-plane/ACTIVE_LANE_BOARD.md`, `control-plane/SESSION_COORDINATION.md`,
+`docs/ARCHITECTURE.md`, `docs/PROD_READINESS.md`, `docs/LANDMINES.md`,
+`docs/DECISIONS.md`, the tail of this log, and the changed security-sensitive
+files called out by the board: `saathi/scheduling.py`,
+`saathi/worker/turns.py`, and `saathi/agent/tools/handlers.py`.
+
+### Changed
+
+- Added root `SECURITY.md`, owned by Codex under SEC-2.
+- Registered `SECURITY.md` in `docs/DOC_SYSTEM.md` doc map only.
+- Added `PROD_READINESS.md` rows **PR-23**, **PR-25** and **PR-26** for
+  unresolved reportable findings.
+
+### Evidence
+
+- Scan checkout `/home/ubuntu/saathi-scan` was clean at `c4b34ba`, after both
+  remotes reported `main = c4b34ba`; this is after the required base `64a520b`.
+- `SESSION_COORDINATION.md` shows Codex active only on SEC-2 and owning
+  `SECURITY.md`.
+- `saathi/capabilities.py` routes deterministic commands at priority 22 before
+  the agent at priority 90.
+- `saathi/provenance.py` withholds mutating tools from relayed content only when
+  building the agent allowed tool set.
+- `saathi/commands.py` matches natural-language and slash commands without
+  provenance input.
+
+### Closure
+
+Final scan report written to
+`/tmp/codex-security-scans/saathi-scan/c4b34bab020707c3e4b47103820c43d4225e023a_20260727T012351Z/report.md`.
+
+Closure evidence:
+
+- `SECURITY.md` exists at the repo root and is registered in `DOC_SYSTEM.md`.
+- Generated repository worklist contained 67 source-like rows; `work_ledger.jsonl`
+  has 67 completion receipts.
+- Reportable findings are tracked in `PROD_READINESS.md`: PR-23, PR-25, PR-26.
+- `SEC2-REM-003` was suppressed as duplicate of PR-4b; SEC-1, CRED-1/PR-22 and
+  DOC-1 were excluded as already-tracked lanes.
+- No source-code fixes were made in SEC-2.

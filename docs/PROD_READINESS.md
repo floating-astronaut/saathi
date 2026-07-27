@@ -138,13 +138,59 @@ true.
 read-only (a token with `read_api` / `read_repository` and no `repo` scope).
 Tracked as `CRED-1` on `control-plane/ACTIVE_LANE_BOARD.md`.
 
+### PR-23 · Forwarded text can still trigger deterministic state changes
+`provenance.py` correctly treats forwarded, quoted, image, and document text as
+relayed content: it fences the text for the agent and withholds mutating tools.
+But deterministic commands run before the agent capability and do not check
+provenance. A forwarded message whose body is exactly `stop`, `clear chat`, or a
+matching Hinglish command can still pause the user or clear their conversation
+without the user authoring that instruction.
+
+This is narrower than the already-resolved forwarded-tool-call risk, because it
+does not reach the LLM tool loop. It is still a security boundary failure: the
+product rule is that relayed content may be read, explained, or warned about,
+but must not be obeyed.
+
+**Fix:** make the deterministic command capability provenance-aware. Relayed
+content should be summarized or warned about, not routed to state-changing
+commands; interactive button payloads can remain trusted because the user
+pressed a first-party control.
+
+### PR-25 · Deploy restarts services even when a migration fails
+`ops/deploy.sh` runs every migration with `psql -v ON_ERROR_STOP=1`, but the
+loop masks a nonzero exit with `|| echo ... FAILED`. The script then continues
+to install the artifact and restart `saathi-web` and `saathi-worker`.
+
+That is fail-open at the deployment boundary: code can be rolled forward against
+an incomplete schema. For this product, the realistic impact is silent breakage
+of reminder delivery, safety-event writes, onboarding/consent state, or erasure
+paths rather than a clean failed deploy.
+
+**Fix:** make any failed migration abort the deploy before service restart. Keep
+the migration output visible, but do not consume the nonzero exit status.
+
+### PR-26 · Inbound PDFs have no size or concurrency limit before parsing
+A valid WhatsApp sender can send a document, and the webhook detaches processing
+with `asyncio.create_task`. The PDF branch downloads the media blob, runs
+`pypdf` over the in-memory bytes, and may write/rasterise the full PDF with
+`pdftoppm`. The 5 MiB guard in the vision path is too late to protect this
+branch.
+
+With default open onboarding, repeated large or expensive PDFs can burn memory,
+CPU, disk, and worker/event-loop capacity, degrading normal message handling and
+safety-sensitive reminder work.
+
+**Fix:** add explicit media byte limits, PDF parser/rasterisation resource
+limits, and an application-level concurrency/backpressure guard before parsing
+or spawning document work.
+
 ---
 
 ## P2 — before scale
 
-### PR-23 · reserved for lane SEC-2 (Codex security review)
-Held so two concurrent sessions cannot claim the same id. If SEC-2 closes without
-needing it, leave the gap — renumbering a journal is worse than a hole in it.
+### SEC-2 reservation note
+PR-23 was held for lane SEC-2 during concurrent DOC-1 work. SEC-2 consumed it
+above for the forwarded-text deterministic-command finding.
 
 ### PR-24 · SSH is open to the operator's Mac
 `sg-0f805961424175e66` permits TCP 22 from `207.219.25.137/32` — a single
