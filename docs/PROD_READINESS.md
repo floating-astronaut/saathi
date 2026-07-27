@@ -262,6 +262,59 @@ on the second deploy and be swallowed by the same loop.
 **Fix:** `ON_ERROR_STOP=1`, surface stderr, abort before the restart, and record
 applied versions.
 
+### PR-29 · Vobiz briefly received every inbound WhatsApp message
+Completing Vobiz's embedded-signup flow subscribed their app
+(`1247920013487973`) to WABA `1687148075730227`'s webhooks, alongside ours. For
+the window it was in place, every inbound message on the Saathi number — voice
+notes, prescription photos, medicine names — was delivered to a third party.
+
+Nobody decided this; it is what `featureType: only_waba_sharing` does. It sits
+badly against the rest of the privacy design, which goes to real lengths:
+inference kept inside India on regional endpoints, narrow pre-storage redaction,
+7-day voice retention enforced by S3 lifecycle rather than our code, a
+k-anonymised opt-in corpus. A silent third-party copy of raw message content is
+a larger exposure than anything those controls address, and under DPDP it is a
+processor relationship requiring a basis and a contract.
+
+**Removed 2026-07-27** — `subscribed_apps` on that WABA now lists our app only.
+No real users existed during the window, so no user data was actually disclosed.
+
+**Standing risk:** re-running any Vobiz connect flow re-subscribes them.
+`DELETE /{waba}/subscribed_apps` removes the app tied to the *access token*, so
+our token can only unsubscribe **us** — removal must be done in WhatsApp Manager.
+**Fix:** check `subscribed_apps` after any change on the Vobiz side, the same way
+`LANDMINES.md` says to check it after any Business Manager change.
+
+### PR-30 · Templates on the new WABA are unreviewed, and the app is already on it
+`.env` now points at the Indian number, but the four templates were re-submitted
+on the new WABA on 2026-07-27 and are `PENDING`. Until they are APPROVED,
+**every reminder, nudge and check-in will fail** — the send path needs a template
+outside the 24-hour window.
+
+Acceptable only because no real reminders exist. Both `scheduled_turns` and
+`reminder_fires` are empty.
+**Fix:** confirm all four are APPROVED before a single real user is onboarded.
+Templates do not migrate between WABAs; the old WABA's four remain approved and
+unused.
+
+### PR-31 · Onboarding messages are never recorded — including the consent text
+`pipeline.py` and `worker/send_reminder.py` both insert outbound sends into
+`messages`. **`onboarding.py` does not.** Proven on the first real conversation
+(2026-07-27): the user's "Hii" was recorded, the onboarding reply the user
+visibly received was not — `messages` held 1 inbound, 0 outbound.
+
+`messages` is described elsewhere as *the product record*, and it is the thing
+the 6-hourly backup actually protects. So the entire onboarding exchange — the
+first thing every user ever sees — is outside it.
+
+The sharp edge is **consent**. Consent is captured during onboarding. The `users`
+row keeps `consent_at` and `consent_version`, but not the text that was shown. If
+a user or a regulator asks *what exactly were they told and when*, the answer is
+reconstructed from a hardcoded string in a source file at some past commit, not
+from a record. `CONSENT_VERSION` is also hardcoded in two modules (PR-18), so the
+drift risk compounds.
+**Fix:** record outbound in the onboarding path as the other two paths do.
+
 ### PR-13 · Cloudflare token is IP-locked to the EIP
 `saathi-box-canonical` is locked to `15.252.75.191/32`. Correct, and it means
 **changing the EIP silently breaks the box's Cloudflare access**.

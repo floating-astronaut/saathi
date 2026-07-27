@@ -629,3 +629,78 @@ verification block `deploy.sh` itself runs. No migrations changed in this deploy
   `reminders.status = 'active'` at dispatch, so a cancelled reminder is skipped
   correctly — but it is residue of the same split-brain that caused PR-4 and
   should be cleaned up with PR-4b.
+
+---
+
+## 2026-07-27 — Lane WA-1: an Indian number, and a name
+
+### The problem, restated after measuring it
+
+The operator reported the number showing as "Invite to WhatsApp". The number was
+fine — `CONNECTED`, `VERIFIED`, quality GREEN. Three other things were not:
+
+- **no click-to-chat link anywhere.** The `site` branch has no `wa.me` and does
+  not even print the number; `data-deletion` says "Send Saathi a message on
+  WhatsApp" without saying how. The only route in was saving a **+1 Canadian**
+  number by hand — which, typed into an Indian phone without the country code,
+  resolves to nothing. That is the reported symptom.
+- **`name_status: DECLINED`** — the thread showed a raw foreign number.
+- profile empty, `vertical: ENTERTAIN`.
+
+### What the display-name rejection actually was
+
+Not the word, and not a generic-Hindi-term rule. `ayurpetofficial` is only a
+portfolio label; its verified legal entity is **INDOFOLK WELLNESS PRIVATE
+LIMITED** — the same company our privacy pages name, same GSTIN. But its
+**registered website** is `indofolkwellness.com`, *"Premium B2B Pet Products"*,
+with `saathi` appearing **zero** times. Review asks whether the name relates to
+the verified business; nothing on record connected "Saathi" to a pet exporter.
+
+**"Indofolk AI" was approved first time**, because it matches the legal name.
+
+### Closed
+
+- Indian DID bought from Vobiz — **+91 8071 581 944**, ₹100 + ₹500/mo.
+- Verified by **voice OTP**, because every Indian DID in their inventory is
+  `sms: false`. Routed through a temporary Cloudflare Worker returning Dial XML
+  to the operator's mobile, then torn down.
+- Registered on **our own** Cloud API (`request_code` → `verify_code` →
+  `register`), two-step PIN generated on-box and stored value-blind.
+- WABA `1687148075730227`, **currency INR** — §14's cost model finally applies.
+- Vobiz unsubscribed from the WABA's webhooks; our app subscribed.
+- Four templates re-submitted on the new WABA, same names, all `UTILITY`.
+- `.env` switched **via Secrets Manager**, services restarted.
+
+### Evidence
+
+- Live inbound at 04:41:50 → `POST /webhook/whatsapp` **200** → user row created,
+  `onboarding = consent` → bilingual onboarding rendered on the handset with all
+  three quick-replies, header reading **"Indofolk AI"**.
+- Send permission proven without sending: a deliberately nonexistent template
+  returned **132001 "Template name does not exist"** — past auth, past
+  permission. No new token needed.
+- 0 tracebacks since restart; worker heartbeat uninterrupted across the switch.
+
+### Mistakes and traps
+
+- **Deleting the Cloudflare Worker did not stop the forward.** The edge kept
+  serving the cached XML, so the business number kept ringing a personal mobile
+  after the script was gone. Detaching the number at Vobiz is what stopped it.
+  `LANDMINES.md`.
+- **Vobiz's "Test URL" failure was CORS**, not the XML. Their message says
+  "unreachable or returned invalid XML" and it was neither — the payload was
+  correct throughout, verified independently with `curl` before touching it.
+- **I twice mis-parsed their API** (`items` key), reporting 0 owned numbers when
+  there was 1, and 19 secret keys when there were 18.
+- **I asserted `ayurpetofficial` was a different, borrowed company** and repeated
+  it across several turns. It is the same legal entity. The docs' "borrowed"
+  framing is true of the *app and token*, not the business.
+
+### Remains
+
+- **PR-30** — templates are `PENDING`. Until approved, every reminder, nudge and
+  check-in fails. Acceptable only because no reminders exist.
+- **PR-31** — onboarding records no outbound message, so the consent text is
+  outside the product record.
+- **WA-2** — a Saathi page on `indofolkwellness.com`, then re-submit "Saathi",
+  plus the `wa.me` link that was the original complaint.

@@ -249,3 +249,53 @@ hands over the stale token without refreshing first.
 A PAT would not expire this way. The OAuth grant was chosen because glab 1.53
 has no device flow and a browser-based login kept the token out of the operator's
 hands — a deliberate trade, recorded so the two-hour expiry is not a surprise.
+
+---
+
+## Cloudflare: deleting a Worker does not stop it serving
+
+**Symptom:** you delete a Worker script, confirm `success: true`, and the URL
+still returns 200 with the old body.
+
+**Cause:** the edge keeps serving the cached response after the script is gone.
+`DELETE /workers/scripts/{name}` removes the deployment, not what edge nodes are
+already holding.
+
+**Why it is nasty:** on 2026-07-27 that Worker was the answer URL forwarding the
+Saathi business number to the operator's **personal mobile**. Deleting it looked
+like teardown; the forward kept working. Anyone calling the business number would
+still have rung a personal phone, and the console would have shown no application
+attached to explain why.
+
+**Fix:** remove the *consumer*, not just the producer. Detaching the number from
+the Vobiz application is what actually stopped it. Verify by the effect, not the
+delete call:
+
+    curl -s -X POST https://<worker>.workers.dev/     # must stop returning the payload
+
+General form: deleting a thing that is cached, proxied or attached elsewhere does
+not revoke it. Break the link that uses it.
+
+---
+
+## Vobiz: "Answer URL is unreachable or returned invalid XML" usually means CORS
+
+**Symptom:** the console's *Test URL* button rejects an answer URL that is
+demonstrably fine — `curl` from anywhere returns 200 with valid XML.
+
+**Cause:** the test runs as a **browser-side `fetch()`** from `console.vobiz.ai`.
+Without `Access-Control-Allow-Origin` the browser blocks it, and the console
+reports it as unreachable *or* invalid XML — two very different faults behind one
+message, neither of them the real one.
+
+**Fix:** serve CORS headers from the answer URL:
+
+    access-control-allow-origin: *
+    access-control-allow-methods: GET, POST, OPTIONS
+
+and answer `OPTIONS` with 204. The actual call flow does not need CORS at all —
+only their test button does.
+
+**Rule to keep:** before rewriting a payload the vendor calls invalid, verify it
+yourself from outside. The payload was correct the whole time; only the browser
+could not fetch it.

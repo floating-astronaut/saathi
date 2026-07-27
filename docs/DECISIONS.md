@@ -130,3 +130,46 @@ What does *not* change:
 
 **Reverse this if a second contributor appears.** At that point signatures start
 carrying information again, and the runtime box should drop to read-only tokens.
+
+### D-M · Saathi moves to an Indian number on a second WABA · 2026-07-27
+The product now runs on **+91 8071 581 944** (`phone_number_id 1266402176549539`)
+under WABA `1687148075730227`, display name **"Indofolk AI"**, currency **INR**.
+
+The old number was **+1 437-539-7958** — Canadian. PR-5 recorded that as blocking
+*pricing*, because India messaging rates and template pacing key off the sender's
+country, so §14's cost model never held. It also blocked *trust*: this product's
+own priority-0 classifier teaches elders to distrust unknown foreign numbers, and
+we were asking them to accept exactly that.
+
+**The two WABAs sit under the same verified business.** `ayurpetofficial`
+(`935287898727459`) is only the portfolio's display label; its legal entity is
+**INDOFOLK WELLNESS PRIVATE LIMITED**, verified 19 Feb 2026, GSTIN
+`07AAHCI7432A1ZV` — the same entity our privacy and terms pages already name. So
+this is a second WABA, not a second company, and business verification carried
+over without re-submission.
+
+**Why the display name is "Indofolk AI" and not "Saathi".** "Saathi" was declined.
+The reason is structural, not linguistic: Meta checks whether the name relates to
+the verified business, and the business's *registered website* is
+`indofolkwellness.com` — a B2B pet products company, with zero mentions of Saathi
+or of elders. Nothing on record connected the word to the business. "Indofolk AI"
+matches the legal name and passed first time.
+
+This is a knowing trade. An elder receives medication reminders from a company
+name rather than the companion they talk to, which costs exactly the familiarity
+the PRD argues for. **Reversible:** put a Saathi page on `indofolkwellness.com`,
+then re-submit "Saathi" — an approved display name can be changed, subject to a
+further review.
+
+**Vobiz is the telco, not the BSP — D-A survives.** The Indian DID came from Vobiz
+(`Ilailimitado Private Limited`), ₹100 setup + ₹500/month, voice-only. Their
+WhatsApp product is a Tech Provider arrangement: their docs promise "instant
+setup, no verification needed", which works because *they* onboard the number
+onto your WABA through their Meta app, and messages then bill per conversation on
+their balance. That is precisely what **D-A** rejected. So the number was verified
+onto **our own** WABA by voice OTP and registered on Cloud API ourselves. Vobiz
+supplies a number; nothing else.
+
+Their embedded-signup flow did briefly subscribe Vobiz's app to the WABA's
+webhooks, giving them a copy of every inbound message. Removed the same day — see
+`PROD_READINESS.md` PR-29.
