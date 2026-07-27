@@ -349,7 +349,7 @@ free-tier STT minutes; nothing enforces it.
 By design (k-anonymity), but it means the learning loop is unmeasurable during
 internal testing and will look broken to anyone who does not know why.
 
-### PR-32 · Language is asked once and never revisited
+### PR-32 · Language is asked once and never revisited — RESOLVED 2026-07-28
 Onboarding asks Hindi or English, stores it in `users.lang_pref`, and there is no
 way to change it afterwards — no `/language` command, and nothing in the copy
 says it is changeable. A user who taps the wrong button on first contact is stuck
@@ -360,8 +360,24 @@ Also: `lang_pref` is free text with an old default of `'hi-en'`. Users created
 before 2026-07-28 carry that value; `_lang()` maps anything unrecognised to Hindi,
 so they get Hindi rather than an error. Fine, but it means the column now holds
 two vocabularies.
-**Fix:** a `/language` command reusing the same buttons, and a decision on
-whether `hi-en` is retired or kept as a third option.
+**Resolved.** `/language` (also `bhasha`, "change language", "switch to
+english", "english mein baat karo") re-offers the same two buttons, and is
+registered with WhatsApp so it appears in the `/` menu.
+
+Two things found while fixing it:
+
+- **Changing language would have un-onboarded the user.** `ob:lang:*` routed
+  straight into `_welcome`, which sets `onboarding = 'consent'` — so an elder who
+  only wanted English would have been sent back through the consent flow. Guarded
+  on `onboarding = 'done'`.
+- **Every command reply was still bilingual.** Onboarding stopped saying things
+  twice; `/stop`, `/resume`, `/clear` and the rest did not, so a user who chose
+  English still got a Hindi paragraph. Same complaint, later in the journey. Now
+  localised via `CMD_COPY`.
+
+`lang_pref` still holds the legacy `'hi-en'` for users created before
+2026-07-28; `_lang()` maps anything unrecognised to Hindi. Whether `hi-en` is
+retired or kept as a third option is still undecided.
 
 ### PR-18 · Onboarding consent version is hardcoded
 `CONSENT_VERSION = "2026-07-26.v1"` in two modules. When the policy text

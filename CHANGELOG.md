@@ -14,6 +14,40 @@ Conventions:
 
 ---
 
+## 2026-07-28 (later still) — the language can be changed
+
+**337 tests passing.**
+
+### Broke
+
+- **The language was asked once and could not be changed.** No command, nothing
+  in the copy saying it was changeable. An elder who mistapped the first button
+  was stuck in the wrong language — and mistapping is exactly what this user
+  does.
+- **Changing it would have un-onboarded them.** `ob:lang:*` routed into
+  `_welcome`, which sets `onboarding = 'consent'`. Someone who wanted English
+  would have been sent back through the consent flow.
+- **Command replies were still bilingual.** Onboarding stopped repeating itself
+  on 2026-07-28; `/stop`, `/resume`, `/clear`, `/whatyouknow` and the delete
+  confirmation did not.
+
+### Fixed
+
+`/language` — plus `bhasha`, `bhasha badlo`, "change language", "switch to
+english", "english mein baat karo" — re-offers the same two buttons, and is
+registered with WhatsApp so it shows in the `/` menu. The done-state guard stops
+it restarting onboarding. Command replies localised through `CMD_COPY`.
+
+### The pattern held again
+
+The obvious phrasing `\b(english|hindi) mein baat kar` would also match "mera
+beta english mein baat karta hai" — a fact about someone's son, which would have
+silently switched the language. Tightened to imperative and desire forms only,
+and there are tests for the three statement forms. PR-23 was the same mistake in
+STOP, and it cost a user's reminders.
+
+---
+
 ## 2026-07-28 (later) — a fired reminder can come back
 
 **331 tests passing.**

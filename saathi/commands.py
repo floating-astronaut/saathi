@@ -31,6 +31,7 @@ class Command(str, Enum):
     DELETE_ALL = "delete_all"
     WHAT_YOU_KNOW = "what_you_know"
     CLEAR_CHAT = "clear_chat"
+    LANGUAGE = "language"
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,19 @@ _PATTERNS: list[tuple[Command, list[str]]] = [
     (Command.CLEAR_CHAT, [
         r"\bclear (this )?chat\b", r"\bdelete (this )?(chat|conversation)\b",
         r"chat (saaf|clear) kar", r"baat.chit mita",
+    ]),
+    # Asked once at onboarding and previously unchangeable (PR-32). The
+    # person most likely to mistap the first button is the one this product
+    # is for, and there was no way back.
+    (Command.LANGUAGE, [
+        r"^\s*(language|bhasha|bhaasha)\s*[!.]?\s*$",
+        r"\bchange (the )?language\b",
+        r"\bbhaa?sha badl",
+        # Imperative or desire only. A bare "kar" substring would also match
+        # "mera beta english mein baat karta hai" — a fact about someone
+        # else, which must not silently switch the language (PR-23).
+        r"\b(english|hindi) mein baat kar(o|iye|en|ein|ni hai|na hai)\b",
+        r"\bswitch to (english|hindi)\b",
     ]),
     (Command.WHAT_YOU_KNOW, [
         r"what do you know about me", r"\bwhat have you (stored|remembered)\b",
@@ -80,6 +94,7 @@ _SLASH = {
     "/resume": Command.RESUME, "/delete": Command.DELETE_ALL,
     "/forget": Command.DELETE_ALL, "/whatyouknow": Command.WHAT_YOU_KNOW,
     "/clear": Command.CLEAR_CHAT,
+    "/language": Command.LANGUAGE, "/bhasha": Command.LANGUAGE,
 }
 
 

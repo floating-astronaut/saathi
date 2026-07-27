@@ -816,3 +816,52 @@ written from the implementation rather than from the contract.
 - `worker/send_reminder.py` and `worker/reminder_scheduler.py` are still dead and
   still contain writes to `reminder_fires`. Deleting them is a tidy-up lane.
 - Untested against a real handset: no reminder has fired on the live number yet.
+
+---
+
+## 2026-07-28 — PR-32: the language can be changed
+
+### Closed
+
+`/language` re-offers the two buttons onboarding used, matched from `/language`,
+`/bhasha`, a bare "language" or "bhasha", "change language", "bhasha badlo",
+"switch to english|hindi", and "(english|hindi) mein baat karo". Registered with
+WhatsApp, so it appears in the `/` menu alongside the other eight.
+
+### Two things found while fixing it
+
+**Changing language would have un-onboarded the user.** `ob:lang:*` fell straight
+through to `_welcome`, which sets `onboarding = 'consent'`. An elder who tapped
+the wrong button at the start and later asked for English would have been sent
+back through the consent flow — and their `consent_at` rewritten. Guarded on
+`onboarding = 'done'`, with a test asserting a new user still goes through
+consent so the guard cannot swing the other way.
+
+**Every command reply was still bilingual.** Onboarding stopped saying everything
+twice that morning; `_run_command` did not. A user who chose English still got a
+Hindi paragraph from `/stop`. Same complaint the operator raised, one step later
+in the journey. Localised via `CMD_COPY`.
+
+### The substring lesson, third time
+
+The natural pattern `\b(english|hindi) mein baat kar` also matches "mera beta
+english mein baat karta hai" — a fact about someone's son. Telling Saathi about
+your family would have switched its language. Tightened to imperative and desire
+forms (`karo|kariye|karen|karein|karni hai|karna hai`), with tests for three
+third-person statements that must not match.
+
+This is the same mistake as PR-23, where STOP matched `\bunsubscribe\b` as a
+substring and a forwarded advert paused a user's reminders. Third time a loose
+regex nearly reached state-changing behaviour. **Anchor or qualify by default;
+substring-match only with a reason.**
+
+### Evidence
+
+337 tests (331 before, 6 new). Deployed, 0 errors, `/language` confirmed present
+in `conversational_automation` on the live number.
+
+### Remains
+
+`lang_pref` still holds legacy `'hi-en'` for users created before today, mapped
+to Hindi by `_lang()`. Whether to retire it or keep it as a third option is
+undecided.

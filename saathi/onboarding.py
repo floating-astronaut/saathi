@@ -86,6 +86,7 @@ COPY: dict[str, dict[str, str]] = {
             "• \"Yeh message samajh nahi aaya, samjhao\"\n\n"
             "Bolkar bhi bhej sakte hain — voice note."
         ),
+        "lang_changed": "Theek hai, ab main Hindi mein baat karungi. 🌼",
         "declined": (
             "Koi baat nahi. Jab bhi mann kare, 'shuru karein' likh dijiyega."
         ),
@@ -126,6 +127,7 @@ COPY: dict[str, dict[str, str]] = {
             "• \"I don't understand this message, explain it\"\n\n"
             "You can send a voice note too."
         ),
+        "lang_changed": "Done — I will speak English from now on. 🌼",
         "declined": (
             "No problem at all. Just say \"start\" whenever you'd like to begin."
         ),
@@ -204,6 +206,14 @@ async def handle_button(conn, transport, user_id: int, handle: str,
         await conn.execute(
             "update users set lang_pref = %s where id = %s", (lang, user_id))
         log.info("user %s chose language %s", user_id, lang)
+        # An onboarded user changing language must NOT be sent back through
+        # consent. `_welcome` sets onboarding='consent', so calling it here
+        # would silently un-onboard someone who only wanted English.
+        row = await (await conn.execute(
+            "select onboarding::text from users where id = %s", (user_id,))).fetchone()
+        if row and row[0] == "done":
+            await transport.send_text(conn, user_id, handle, t(lang, "lang_changed"))
+            return {"onboarding": "done", "language": lang}
         return await _welcome(conn, transport, user_id, handle, lang)
 
     lang = await _lang(conn, user_id)
