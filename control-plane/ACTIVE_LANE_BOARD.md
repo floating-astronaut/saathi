@@ -77,17 +77,19 @@ Notes: operator decision — not taken unilaterally, since the subscription was 
   classifier (R7). **Appeared in two separate supervisor `Queued` blocks and was
   never closed — this board exists because of failures like this one.**
 
-### SEC-2 — security review   [CLAIMED]
-Owner: Codex        Opened: 2026-07-27
+### SEC-2 — security review   [CLOSED]
+Owner: Codex        Opened: 2026-07-27 · Closed: 2026-07-27
 Reading: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, docs/LANDMINES.md, docs/DECISIONS.md
 Acceptance: `SECURITY.md` exists at the repo root, registered in
   `docs/DOC_SYSTEM.md`; every finding is either fixed or carries a
-  `PROD_READINESS.md` row with a severity.
+  `PROD_READINESS.md` row with a severity. — MET.
+  Result: root `SECURITY.md`; doc-map registration; scan report at
+  `/tmp/codex-security-scans/saathi-scan/c4b34bab020707c3e4b47103820c43d4225e023a_20260727T012351Z/report.md`; new rows PR-23, PR-25, PR-26.
 Write-back: SECURITY.md, docs/DOC_SYSTEM.md, docs/PROD_READINESS.md, docs/ENGINEERING_SUPERVISOR.md
 Notes: **Codex owns `SECURITY.md` outright — no other session writes it.**
   Shared surfaces, and how to avoid a collision:
   - `docs/PROD_READINESS.md` — **append new PR-* rows only**; do not renumber or
-    reflow existing ones. Next free id is **PR-23** (PR-22 is taken).
+    reflow existing ones. Next free id is **PR-27** after DOC-1 consumed PR-24 and SEC-2 consumed PR-23, PR-25 and PR-26.
   - `docs/ENGINEERING_SUPERVISOR.md` — append-only, newest at the **bottom**.
   - `control-plane/ACTIVE_LANE_BOARD.md` — edit only this lane's block.
   - `docs/DOC_SYSTEM.md` — add one row to the doc map; leave the precedence
@@ -95,7 +97,7 @@ Notes: **Codex owns `SECURITY.md` outright — no other session writes it.**
   Do **not** touch `saathi/scheduling.py`, `saathi/worker/turns.py` or
   `saathi/agent/tools/handlers.py` without re-reading them at `64a520b` — all
   three changed today. Findings against them are welcome; blind edits are not.
-  **PR-23 is reserved for you** — DOC-1 took PR-24 rather than collide with it.
+  PR-23 was reserved for SEC-2; DOC-1 took PR-24 rather than collide with it.
   Base on `64a520b` or later. Already-known security items are lanes, not new
   findings: SEC-1 (Business Agent on our WABA), CRED-1/PR-22 (forge write
   credentials on the runtime box), and **PR-24 — SSH open to `207.219.25.137/32`**,

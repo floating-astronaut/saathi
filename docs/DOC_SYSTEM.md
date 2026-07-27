@@ -72,6 +72,7 @@ a measurement disagree, the measurement wins and `DECISIONS.md` records it.
 | `BUILD_PLAN.md` | The plan, the measurements, the running log of what shipped. |
 | `RUNBOOK.md` | How to deploy, verify, and recover. Infrastructure IDs live here. |
 | `LANDMINES.md` | Traps already paid for. Read before Meta / Cloudflare / audio work. |
+| `../SECURITY.md` | Security reporting policy, security invariants, severity guide, and public-testing boundaries. |
 | `ENGINEERING_SUPERVISOR.md` | Append-only lane log. Evidence, not intentions. |
 | `PROD_READINESS.md` | Dev shortcuts that must be fixed before production, with severity. **Add a row when you take one.** |
 | `../CHANGELOG.md` | What changed in the Python, and what broke finding out. |
