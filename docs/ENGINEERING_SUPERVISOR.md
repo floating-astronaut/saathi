@@ -930,3 +930,56 @@ premium. PR-33.
   a contract need a `DECISIONS.md` entry.
 - The ordering that actually matters is unchanged and is in
   `PATTERNS_TO_BORROW.md`: PR-27, PR-22, PR-1, PR-7 come before any of it.
+
+---
+
+## 2026-07-27 · `bbb061b` deployed — the first deploy the box ran on itself
+
+Four lanes closed and shipped: the dead `reminder_fires` worker path (`1430905`),
+PR-25 (`758c008`), PR-26 (`e78e6ec`, `bd29978`), PR-28 (`f049793`, `bbb061b`).
+337 → 366 tests.
+
+**Evidence.** `sudo ops/deploy.sh --local`, exit 0. Six migrations
+`already applied (baselined, checksum unknown)`, **zero applied** — which is the
+whole point of PR-25, because applying them would have re-run 003's and 005's
+backfills. 366 passed on the box. All four units active, `healthz` ok, tunnel
+200, unsigned webhook 403, zero errors since restart. Live tree then compared
+against `git archive bbb061b`: identical but for the two files PR-36 predicted
+would survive.
+
+**Three things were true that nobody had written down.**
+
+1. *Every deploy silently re-ran two destructive backfills.* 003 admits every
+   pending channel, 005 marks every `new` user `done`. Correct once, as
+   backfills; ruinous on repeat, because they undo the admission gate and the
+   consent step. Reproduced twice on a schema-only copy of live.
+2. *Inbound documents failed silently in production.* `messages.kind` was written
+   with WhatsApp's wire type and `document` is not in the `msg_kind` enum, so the
+   insert aborted the transaction before the media capability ran. A user sending
+   a prescription PDF got nothing back.
+3. *A red test suite deployed.* `uv run pytest -q | tail -2` under a login shell
+   with no `pipefail` — the pipeline's status was `tail`'s. Same for `uv sync`
+   and `saathi-env-sync`.
+
+Each of the three had passing tests, a healthy `/healthz`, and a deploy that
+printed success. **That is now five separate occasions where green agreed with
+the bug**, and the common cause has not changed: the assertion was written from
+the implementation instead of from the contract. The counter-measure that
+actually worked today was mechanical — delete the *call* from the production
+path, not the function body, and require the test to go red. Eleven of those on
+PR-26; two of them only failed after being rewritten, because the first version
+hung instead of failing and the second errored on a syntax fault, which proves
+nothing.
+
+**The canary check is weaker than it looks.** After the deploy, `user_channels`
+is `active|4, consent|2` and `users` is `done|2`. Nothing flipped — but there
+were no `pending` channels and no `new` users to corrupt, so today's run proves
+the ledger was *consulted*, not that it *saved* anything. The save is prospective.
+
+**Still not proven, and it is the oldest open item:** no reminder has ever fired
+on the live number. The worker registers four kinds and reports them at every
+deploy; that is registration, not delivery. `ffmpeg -version` also passed.
+
+**Cost of not fixing PR-36 now:** `worker/send_reminder.py` and
+`worker/reminder_scheduler.py` were deleted from the box by hand after this
+deploy. Every future deploy that drops a file needs the same manual step.
