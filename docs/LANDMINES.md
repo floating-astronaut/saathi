@@ -208,3 +208,44 @@ new statement against the real database once:
     SQL
 
 Fakes prove shape. Only Postgres proves validity.
+
+---
+
+## glab: the git credential helper does not refresh an expired OAuth token
+
+**Symptom:** `git push gitlab` fails with
+
+    remote: HTTP Basic: Access denied...
+    glab auth git-credential: "erase" is an invalid operation.
+    fatal: Authentication failed for 'https://gitlab.com/...'
+
+while `glab auth status` cheerfully reports *"✓ Logged in as ..."*.
+
+**Cause:** `glab auth login --web` stores an **OAuth grant**, not a PAT. The
+access token expires every **two hours**; only the refresh token is persisted
+(`oauth2_refresh_token`, with `oauth2_expiry_date`). glab's *own* commands
+refresh transparently on use — but `glab auth git-credential`, which git calls,
+hands over the stale token without refreshing first.
+
+**Why it is nasty:** two ways.
+
+1. `glab auth status` is not a health check. It reports the grant, not whether
+   the access token is currently valid.
+2. `git push origin && git push gitlab` pushes GitHub **first**. GitHub succeeds,
+   GitLab fails, and you are left with the remotes **diverged** — the one state
+   `CONTRIBUTING.md` forbids. The failure is loud, but only if you look: the
+   GitHub push line scrolls past looking like success.
+
+**Fix:** force a refresh before pushing, then push:
+
+    glab api user >/dev/null      # any glab command refreshes the token
+    git push origin main && git push gitlab main
+
+**Always verify both remotes afterwards** rather than trusting the exit code:
+
+    git ls-remote origin main | cut -c1-7
+    git ls-remote gitlab main | cut -c1-7
+
+A PAT would not expire this way. The OAuth grant was chosen because glab 1.53
+has no device flow and a browser-based login kept the token out of the operator's
+hands — a deliberate trade, recorded so the two-hour expiry is not a surprise.
