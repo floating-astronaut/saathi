@@ -707,6 +707,17 @@ exists in no commit" trap that cost a session an afternoon on 2026-07-27, and it
 will be sitting in the directory the next reader opens. Delete them on the box
 after that deploy, or fix this row properly.
 
+**Demonstrated, exactly as predicted, on the `bbb061b` deploy of 2026-07-27.**
+Both files survived the install; the tree otherwise matched `bbb061b` byte for
+byte. They were removed by hand afterwards (with their `.pyc`), after checking
+their SHA-256 against `1430905^` and confirming nothing on the box imports them
+— the two remaining mentions are a comment in `agent/tools/handlers.py` and a
+docstring in `tests/test_reminder_delivery.py`. The tree then matched `bbb061b`
+exactly. **Deleting by hand is not the fix**; it is the cost of not having one,
+paid once, and it has to be paid again for every file `main` ever drops. The
+next deploy that deletes a file will need the same manual step until this row is
+closed with `rsync --delete` or an unpack-and-swap.
+
 **Fix:** install with `rsync --delete`, or unpack into `<repo>.new` and swap the
 symlink. Both change what a deploy *is* and neither belongs in a lane about
 transport. Until then: after deleting anything from `db/migrations`, check the
