@@ -183,7 +183,7 @@ Regression cover in `tests/test_relayed_commands.py`, verified to fail without
 the guard.
 
 
-### PR-26 · Inbound PDFs have no size or concurrency limit before parsing
+### PR-26 · Inbound PDFs have no size or concurrency limit before parsing — RESOLVED 2026-07-28
 A valid WhatsApp sender can send a document, and the webhook detaches processing
 with `asyncio.create_task`. The PDF branch downloads the media blob, runs
 `pypdf` over the in-memory bytes, and may write/rasterise the full PDF with
@@ -194,9 +194,61 @@ With default open onboarding, repeated large or expensive PDFs can burn memory,
 CPU, disk, and worker/event-loop capacity, degrading normal message handling and
 safety-sensitive reminder work.
 
-**Fix:** add explicit media byte limits, PDF parser/rasterisation resource
-limits, and an application-level concurrency/backpressure guard before parsing
-or spawning document work.
+**Found while fixing it: the branch was unreachable.** `handle_message` logs
+before it dispatches and logged WhatsApp's wire type, so every inbound document
+raised `invalid input value for enum msg_kind: "document"` and unwound the turn
+before the media capability ran. The threat was real but latent; the user-visible
+symptom was silence. Confirmed against the real database, not the fake
+connection, which is the same trap `LANDMINES.md` already records. Fixed at the
+single write path (`pipeline._msg_kind`), with `MSG_KINDS` asserted against
+`db/schema.sql` so the two cannot drift.
+
+**Resolved.** Every number is in `config.py` next to its neighbours, with the
+reasoning for the value:
+
+| Guard | Where it sits | Default |
+|---|---|---|
+| Byte cap, checked at Meta's `file_size`, at `Content-Length`, and during the stream | `wa/client.py::fetch_media`, which now takes `max_bytes` with **no default** | 8 MiB PDF, 5 MiB image, 16 MiB audio |
+| Measured re-check of what actually arrived | `pipeline._handle_media`, so a transport that ignores the limit cannot fail open | — |
+| Media messages in flight, process-wide | `pipeline._MEDIA_GATE`, around the download | 4 |
+| Documents parsed or rasterised at once | `pipeline._DOC_GATE`, around parse and render | **1** — 2 vCPU, and the loop also runs the safety classifier |
+| Declared page count, refused before the page tree is walked | `documents._extract_blocking` | 200 |
+| Extracted characters, per page and total | `documents._extract_blocking` | 20k / 60k |
+| `pypdf` off the event loop, in a pool sized to the document gate, with a wall clock | `documents.extract_text` | 8s |
+| `pdftoppm` wall clock, **and a kill** | `documents.render_first_page` | 15s |
+| `pdftoppm` RLIMIT_CPU / RLIMIT_AS / RLIMIT_FSIZE | `documents._render_limits`, via `preexec_fn` | 15s / 512 MiB / 32 MiB |
+| Raster bounded by output pixels rather than DPI | `-scale-to`, since the page's declared size is the sender's choice | 1700 px |
+
+The (N+1)th document is **refused, not queued**, with a bilingual message that
+says what would work instead. A queue in front of CPU-bound work is the same
+unbounded growth wearing a hat: it accepts everything, holds every blob while it
+waits, and answers minutes after the person gave up.
+
+Verified by running it — real `pypdf`, the real `pdftoppm` (happy path, the
+timeout kill, and an `RLIMIT_FSIZE` kill via SIGXFSZ), the real `httpx` stack,
+and a signed document webhook through the real FastAPI app. Each guard was then
+deleted from the production path and its test confirmed to go red, nine for
+nine. `tests/test_media_limits.py`.
+
+**What is still not bounded, and is deliberately elsewhere:**
+
+- **Per-user rate limiting** — the gates bound concurrency, not frequency. One
+  sender can still occupy the single document slot continuously. Widened onto
+  **PR-15**, where it belongs: it must cover audio and text too, and it needs
+  state that survives a restart.
+- **A timed-out `pypdf` thread cannot be cancelled.** Python will not interrupt
+  a thread inside C code, so a runaway extraction keeps its pool slot until it
+  finishes. The event loop is returned immediately, and the pool is sized to the
+  document gate so runaways cannot accumulate — but for the duration, one core
+  is gone. Killing it properly means a subprocess, which is a larger change than
+  this lane.
+- **The gates are per-process and in-memory.** They bound what `saathi-web` does
+  to itself. They are not shared with `saathi-worker`, and a second web worker
+  would double every ceiling. `saathi-web` runs one uvicorn worker today; if
+  that changes, these numbers change with it.
+- **`-scale-to` upscales a small page** to 1700 px where `-r 150` would have
+  rendered it small. Bounded and harmless, but it is more image tokens for a
+  receipt-sized page than before.
 
 ---
 
@@ -432,6 +484,28 @@ rotates, and the WhatsApp token never expires by design.
 Admission control stops unknown handles cheaply, but an *onboarded* user can
 send unlimited voice notes, each costing STT minutes and a model turn. §14 caps
 free-tier STT minutes; nothing enforces it.
+
+**Widened 2026-07-28 by PR-26.** The media gates bound how much runs *at once*;
+they do nothing about how *often* one sender may ask. With `saathi_dm_policy =
+open`, one number can send documents back to back forever: each is refused
+quickly once the gate is full, but the box still spends a download and a reply
+on every one, and one document at a time is still one core, continuously.
+
+Deliberately left here rather than solved inside the media path, because a
+correct answer does not belong there:
+
+- it must cover **audio and text too** — a voice-note flood costs Sarvam minutes
+  and a model turn, which is more expensive than CPU;
+- it must **survive a restart and be shared between processes**, so it wants
+  Postgres (`messages` already has the timestamps) rather than a counter in
+  `saathi-web`'s memory;
+- and it must decide what an over-limit user *hears*, which is a product
+  question with the same shape as `saathi_admission_max_replies`: every refusal
+  we send is a message we pay for, so a flood must eventually go quiet rather
+  than argue back.
+
+Until it exists, the honest statement of PR-26's coverage is: memory, disk and
+event-loop starvation are bounded; **sustained CPU by one sender is not**.
 
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during

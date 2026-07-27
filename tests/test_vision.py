@@ -59,6 +59,10 @@ def test_text_layer_detection_threshold():
     assert documents.has_text_layer("x" * documents.TEXT_LAYER_MIN)
 
 
-def test_malformed_pdf_returns_empty_not_an_exception():
-    """A corrupt forward must not 500 the reply."""
-    assert documents.extract_text(b"this is not a pdf") == ""
+async def test_malformed_pdf_returns_empty_not_an_exception():
+    """A corrupt forward must not 500 the reply.
+
+    Async since PR-26: the pypdf pass runs in a bounded thread pool with a wall
+    clock rather than on the event loop.
+    """
+    assert await documents.extract_text(b"this is not a pdf") == ""

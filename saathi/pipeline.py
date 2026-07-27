@@ -26,10 +26,12 @@ from . import (commands, conversation, documents, identity, memory,
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
+from .core import backpressure
 from .safety.classifier import classify
 from .speech import stt as stt_mod
 from .speech.audio import ogg_to_wav16k
 from .channels import registry
+from .channels.base import MediaTooLarge
 from .wa import window
 
 log = logging.getLogger("saathi.pipeline")
@@ -42,6 +44,29 @@ async def already_seen(conn, wa_message_id: str | None) -> bool:
     row = await (await conn.execute(
         "select 1 from messages where wa_message_id = %s", (wa_message_id,))).fetchone()
     return row is not None
+
+
+#: The `msg_kind` enum in `db/schema.sql`. WhatsApp's wire types are a longer
+#: list than this — `document`, `video`, `sticker`, `location`, `contacts` — and
+#: passing one of those straight through is not a bad row, it is an aborted
+#: transaction: Postgres answers `invalid input value for enum msg_kind` and the
+#: whole turn unwinds.
+#:
+#: That is what was happening to **every inbound document**. `handle_message`
+#: logs before it dispatches, so a forwarded PDF raised here and never reached
+#: the media capability at all — which is also why no test caught it: the
+#: suite's fake connection records the SQL string and never parses it
+#: (`LANDMINES.md`, "a fake connection will certify SQL that Postgres rejects").
+MSG_KINDS = frozenset({"text", "audio", "image", "interactive", "template", "system"})
+
+
+def _msg_kind(kind: str) -> str:
+    """Coerce a wire type to the enum, loudly. `text` is the honest fallback:
+    the row exists for dedupe and for the transcript, and both survive it."""
+    if kind in MSG_KINDS:
+        return kind
+    log.warning("message kind %r is not in msg_kind; recording it as text", kind)
+    return "text"
 
 
 async def log_message(conn, user_id: int, direction: str, kind: str, *,
@@ -60,7 +85,7 @@ async def log_message(conn, user_id: int, direction: str, kind: str, *,
            values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
            on conflict (wa_message_id) do nothing
            returning id""",
-        (user_id, direction, kind, wa_message_id, body, transcript,
+        (user_id, direction, _msg_kind(kind), wa_message_id, body, transcript,
          transcript_raw, stt_ms, template),
     )).fetchone()
     return row[0] if row else 0
@@ -127,7 +152,7 @@ async def transcribe_voice(conn, user_id: int, media_id: str,
     Media URLs expire in minutes (§9), so the fetch happens immediately and is
     not deferred behind anything slower.
     """
-    ogg = await registry.get(channel).fetch_media(media_id)
+    ogg = await registry.get(channel).fetch_media(media_id, settings.saathi_max_audio_bytes)
     # Keep the original OGG, not the transcode — debugging a mis-hearing needs
     # what the user actually sent.
     await media_store.put_voice(conn, user_id, ogg, wa_message_id=wa_message_id)
@@ -158,6 +183,59 @@ async def _contribute_corrections(conn, user_id: int, transcript) -> None:
             log.exception("training contribution failed")
 
 
+# Backpressure for the media capability (PR-26). Two gates, because the two
+# costs are different: holding a multi-MiB blob in memory is cheap and parallel,
+# parsing a PDF is neither.
+#
+# Module-level and process-wide on purpose. The webhook detaches every message
+# with `asyncio.create_task`, so "how many of these are running" is otherwise
+# the sender's decision, not ours.
+_MEDIA_GATE = backpressure.Gate("media", settings.saathi_media_concurrency)
+_DOC_GATE = backpressure.Gate("document", settings.saathi_doc_concurrency)
+
+
+# Refusals an elder can act on. Bilingual and specific, in the register the rest
+# of the media path uses: say what happened, then say what would work. The
+# person on the other end may have photographed their prescription by accident,
+# and "error" is not a word they should ever see.
+MEDIA_TOO_LARGE = (
+    "Yeh file bahut badi hai, main ise khol nahi paungi. Jo page zaroori hai, "
+    "uska photo bhej dijiye — main padh dungi. 🙏\n\n"
+    "That file is too big for me to open. Send me a photo of just the page that "
+    "matters and I'll read it for you."
+)
+
+MEDIA_BUSY = (
+    "Main abhi ek doosri file padh rahi hoon. Ise thodi der baad dobara bhej "
+    "dijiye, main zaroor padhungi. 🙏\n\n"
+    "I'm reading something else just now. Please send this again in a minute and "
+    "I'll read it."
+)
+
+DOC_TOO_LONG = (
+    "Yeh document bahut lamba hai — main itne saare page nahi padh sakti. Jis "
+    "page ki baat hai, uska photo bhej dijiye.\n\n"
+    "This document is very long — I can't read that many pages. Please send a "
+    "photo of the page you're asking about."
+)
+
+DOC_UNREADABLE = (
+    "Maaf kijiye, is file ko main padh nahi payi. Agar aap iska photo kheench "
+    "kar bhej dein, to main zaroor koshish karungi. 🙏\n\n"
+    "Sorry, I couldn't read that file. If you take a photo of it and send that, "
+    "I'll try again."
+)
+
+MEDIA_ERROR = (
+    "Maaf kijiye, yeh file main khol nahi payi. Dobara bhej sakte hain?\n\n"
+    "Sorry, I couldn't open that. Could you send it again?"
+)
+
+#: Which refusal each `documents.DocumentRejected` reason earns. Unknown reasons
+#: fall back to "I couldn't read it", which is true of all of them.
+_DOC_REFUSALS = {"too_many_pages": DOC_TOO_LONG}
+
+
 async def _handle_media(conn, transport, user_id: int, handle: str,
                         msg: dict, kind: str, wa_mid: str | None) -> dict | None:
     """Read an image or document and reply with what it says.
@@ -165,46 +243,110 @@ async def _handle_media(conn, transport, user_id: int, handle: str,
     Deliberately does not go through the agent loop: the vision model *is* the
     answer, and routing its output back through a text model would add latency,
     cost, and a chance of the disclaimer being paraphrased away.
+
+    Every exit from here either sends a reading or sends a refusal. There is no
+    path that drops the message silently — an elder who sent a photo and heard
+    nothing back has no way to tell that from the product being broken.
     """
     node = msg.get(kind) or {}
     media_id = node.get("id")
     caption = (node.get("caption") or "").strip() or None
-    mime = node.get("mime_type")
+    mime = (node.get("mime_type") or "").lower()
     if not media_id:
         return None
+
+    is_pdf = kind == "document" and "pdf" in mime
+    # The limit is chosen from what the file *is*, not from which WhatsApp
+    # bucket it arrived in — a photo sent "as a file" is still a photo, and must
+    # be held to the limit the vision model will apply to it later.
+    max_bytes = (settings.saathi_max_document_bytes if is_pdf
+                 else settings.saathi_max_image_bytes)
+
+    async def refuse(text: str, reason: str) -> dict:
+        body = transport.format_text(text)
+        await log_message(conn, user_id, "in", "image" if kind == "image" else "text",
+                          wa_message_id=wa_mid, body=caption or f"[{kind}]")
+        await transport.send_text(conn, user_id, handle, body)
+        await log_message(conn, user_id, "out", "text", body=body)
+        log.warning("media refused for user %s: %s", user_id, reason)
+        return {"handled": "media_refused", "reason": reason}
+
     try:
-        blob = await transport.fetch_media(media_id)
-    except Exception:  # noqa: BLE001
-        log.exception("media fetch failed")
-        await transport.send_text(conn, user_id, handle,
-            "Maaf kijiye, yeh file main khol nahi payi. Dobara bhej sakte hain?\n\n"
-            "Sorry, I couldn't open that. Could you send it again?")
-        return {"handled": "media_error"}
+        with _MEDIA_GATE.hold():
+            try:
+                blob = await transport.fetch_media(media_id, max_bytes)
+            except MediaTooLarge:
+                return await refuse(MEDIA_TOO_LARGE, "too_large")
+            except Exception:  # noqa: BLE001
+                log.exception("media fetch failed")
+                await transport.send_text(conn, user_id, handle,
+                                          transport.format_text(MEDIA_ERROR))
+                return {"handled": "media_error"}
 
-    reading = None
-    if kind == "document" and "pdf" in (mime or "").lower():
-        text = documents.extract_text(blob)
-        if documents.has_text_layer(text):
-            reading = await _read_pdf_text(text, caption)
-        else:
-            page = await documents.render_first_page(blob)
-            if page:
-                reading = await vision.read_document(page, "image/png", caption)
-    if reading is None:
-        intent = vision.classify_intent(caption)
-        if intent == "medicine":
-            reading = await vision.describe_medicine(blob, mime)
-        elif intent == "document":
-            reading = await vision.read_document(blob, mime, caption)
-        else:
-            reading = await vision.describe_image(blob, mime, caption)
+            # A transport that did not honour the limit must not be able to fail
+            # open. This is the one check that measures what actually arrived.
+            if len(blob) > max_bytes:
+                log.error("transport %s returned %s bytes against a %s-byte limit",
+                          getattr(transport, "channel", "?"), len(blob), max_bytes)
+                return await refuse(MEDIA_TOO_LARGE, "too_large")
 
-    body = transport.format_text(reading.rendered())
-    await log_message(conn, user_id, "in", "image" if kind == "image" else "text",
-                      wa_message_id=wa_mid, body=caption or f"[{kind}]")
-    await transport.send_text(conn, user_id, handle, body)
-    await log_message(conn, user_id, "out", "text", body=body)
-    return {"handled": "media", "kind": reading.kind, "had_disclaimer": bool(reading.disclaimer)}
+            try:
+                if is_pdf:
+                    with _DOC_GATE.hold():
+                        reading = await _read_pdf(blob, caption)
+                elif kind == "image" or mime.startswith("image/"):
+                    reading = await _look(blob, mime, caption)
+                else:
+                    # A .docx, a .zip, an audio file sent as a document. This
+                    # used to be handed to the vision model as if it were a
+                    # picture, which spent a model call to produce nothing.
+                    return await refuse(DOC_UNREADABLE, "unsupported_type")
+            except backpressure.Busy:
+                return await refuse(MEDIA_BUSY, "busy")
+            except documents.DocumentRejected as exc:
+                return await refuse(_DOC_REFUSALS.get(exc.reason, DOC_UNREADABLE),
+                                    exc.reason)
+            except Exception:  # noqa: BLE001
+                # A Bedrock throttle, a malformed response, the agent loop
+                # giving up. `dispatch` would swallow this and the turn would
+                # end in silence, which she cannot tell from a broken product.
+                log.exception("reading media failed")
+                return await refuse(MEDIA_ERROR, "read_failed")
+            if reading is None:
+                return await refuse(DOC_UNREADABLE, "unreadable")
+
+            body = transport.format_text(reading.rendered())
+            await log_message(conn, user_id, "in", "image" if kind == "image" else "text",
+                              wa_message_id=wa_mid, body=caption or f"[{kind}]")
+            await transport.send_text(conn, user_id, handle, body)
+            await log_message(conn, user_id, "out", "text", body=body)
+            return {"handled": "media", "kind": reading.kind,
+                    "had_disclaimer": bool(reading.disclaimer)}
+    except backpressure.Busy:
+        # Nothing was downloaded and nothing was parsed. Say so, rather than
+        # queueing a blob behind work that is already saturating the box.
+        return await refuse(MEDIA_BUSY, "busy")
+
+
+async def _look(blob: bytes, mime: str | None, caption: str | None) -> "vision.Reading":
+    """A photograph, whichever bucket it arrived in. The caption picks the mode."""
+    intent = vision.classify_intent(caption)
+    if intent == "medicine":
+        return await vision.describe_medicine(blob, mime)
+    if intent == "document":
+        return await vision.read_document(blob, mime, caption)
+    return await vision.describe_image(blob, mime, caption)
+
+
+async def _read_pdf(blob: bytes, caption: str | None) -> "vision.Reading | None":
+    """Text layer first, rasterise page one second. None if neither worked."""
+    text = await documents.extract_text(blob)
+    if documents.has_text_layer(text):
+        return await _read_pdf_text(text, caption)
+    page = await documents.render_first_page(blob)
+    if page is None:
+        return None
+    return await vision.read_document(page, "image/png", caption)
 
 
 async def _read_pdf_text(text: str, question: str | None) -> "vision.Reading":

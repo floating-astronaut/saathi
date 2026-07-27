@@ -24,6 +24,44 @@ the file plays locally. **Every inbound voice note fails in production.**
 
 ---
 
+## asyncio: `wait_for` around a subprocess cancels your wait, not the process
+
+**Symptom:** none. That is the problem. A timeout fires, the code logs
+`pdftoppm unavailable or slow`, the user gets a polite refusal, and everything
+looks handled — while the renderer is still running, unattended, on a two-core
+box.
+
+**Cause:** `await asyncio.wait_for(proc.communicate(), 30)` cancels the
+`communicate()` coroutine. The child is a separate process; nothing in that
+expression touches it. It keeps its CPU, keeps writing its output file, and
+nobody is left holding a reference to kill it.
+
+**Why it is nasty:** the exception you catch is `TimeoutError` either way, so a
+kill and a shrug are indistinguishable from inside the handler. The only
+evidence that separates them is the **child's exit status**: `-9` means you
+killed it, `0` means it finished on its own after you stopped caring.
+
+**Fix:** kill and reap, and assert on the exit status rather than on your own
+exception (`documents.render_first_page`,
+`tests/test_media_limits.py::test_a_slow_renderer_is_killed_and_leaves_nothing_behind`).
+
+    try:
+        await asyncio.wait_for(proc.communicate(), timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+
+Belt and braces: give the child `RLIMIT_CPU` via `preexec_fn` too, so the kernel
+ends it even if your own timeout never runs. `preexec_fn` executes between fork
+and exec in a process that has threads, so it must contain **syscalls only** —
+no imports, no logging, nothing that takes a lock.
+
+The same shape applies to a thread: `wait_for` around `run_in_executor` returns
+the event loop to you and leaves the thread running, and Python cannot interrupt
+a thread inside C code at all. There the only defence is to bound the pool.
+
+---
+
 ## Speech: `codemix` returns Devanagari, which silently disables entity correction
 
 **Symptom:** the correction pass repairs nothing, ever. No error.

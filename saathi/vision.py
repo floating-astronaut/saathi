@@ -30,7 +30,9 @@ log = logging.getLogger("saathi.vision")
 #: Regional ap-south-1 vision model — images stay in India.
 VISION_MODEL = "qwen.qwen3-vl-235b-a22b"
 
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
+#: The model's own ceiling, and the same number the download is capped at, so a
+#: photo cannot be fetched under one limit and then refused by another (PR-26).
+MAX_IMAGE_BYTES = settings.saathi_max_image_bytes
 
 _client = None
 
