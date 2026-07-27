@@ -463,3 +463,41 @@ causality.
 This is the concrete implementation path for PR-15's widened requirement: rate
 limits must cover audio, text, templates and future paid search, not just model
 turns.
+
+### D-W · Three scripts: हिंदी, Hinglish, English · 2026-07-27
+Operator: "people who chose hindi should get text back in devanagari", then
+"keep hinglish (romanized hindi), english and hindi until we not add new lang".
+
+**The bug being fixed.** The onboarding button has always read **"हिंदी"**, in
+Devanagari, and every message after it arrived romanised. The prompt rule said
+"reply in the user's language and script", which made the model mirror whatever
+it was sent — and since the deterministic copy was romanised, and an elder with
+an English keyboard types "dawai" rather than "दवाई", it mirrored Latin forever.
+
+**Reading and typing are different skills**, and for this audience they diverge
+sharply. Someone who reads Devanagari comfortably may only have a Latin
+keyboard. So script is a **stored choice**, stated to the model on every turn
+(`prompt.script_line`), never inferred from the last message.
+
+`hi-en` stops being a legacy value and becomes a first-class option, because it
+would otherwise have fallen through `COPY` to `hi` and switched existing
+Hinglish users to Devanagari without asking. Three choices is also WhatsApp's
+hard limit of three quick replies, so a fourth language cannot be added to that
+step without redesigning it.
+
+**What it costs.** Devanagari tokenises at roughly **1.77x** Latin for the same
+sentence — measured, not estimated: the welcome message is 77 tokens romanised
+and 136 in Devanagari. There is no prompt caching, and replies re-enter the
+prompt as history, so this compounds. It is a real cost increase on the $5 free
+grant (D-T) and worth revisiting if the grant proves tight.
+
+**Numerals stay international** (112, 108, 1930, "15 मिनट"), not Devanagari
+numerals. Helpline numbers are dialled: १०८ on an emergency line is a hazard,
+not a nicety.
+
+**Not converted: the Meta-approved templates.** `reminder_fire_v2`,
+`reminder_nudge_v2` and `daily_checkin` carry romanised Hindi in body text Meta
+has approved, and a template cannot be edited — it needs a new name, and Meta
+holds a deleted name for four weeks (`LANDMINES.md`). **So reminders and nudges
+still arrive romanised for everyone.** That is the largest remaining gap and it
+is the core of the product. See PR-44.

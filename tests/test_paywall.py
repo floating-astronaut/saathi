@@ -160,9 +160,14 @@ async def test_the_user_is_told_in_their_own_language():
 
 
 async def test_the_reply_promises_that_reminders_continue():
-    """Because they do, and it is the thing a person would most fear losing."""
-    for copy in capabilities.PAYWALL_COPY.values():
-        assert "reminder" in copy.lower()
+    """Because they do, and it is the thing a person would most fear losing.
+
+    Checked in each script rather than by searching for the English word —
+    the Hindi copy says "रिमाइंडर", which contains no Latin at all.
+    """
+    assert "रिमाइंडर" in capabilities.PAYWALL_COPY["hi"]
+    assert "reminder" in capabilities.PAYWALL_COPY["hi-en"].lower()
+    assert "reminder" in capabilities.PAYWALL_COPY["en"].lower()
 
 
 async def test_an_unconfigured_install_says_so_but_sends_no_invoice():

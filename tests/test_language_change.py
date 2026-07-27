@@ -59,7 +59,7 @@ async def test_the_command_re_offers_both_languages():
     out = await pipeline._run_command(conn, t, 1, "91", commands.Command.LANGUAGE)
     assert out == {}
     body, btns = t.buttons[0]
-    assert btns == ["हिंदी", "English"]
+    assert btns == ["हिंदी", "Hinglish", "English"]
 
 
 # --- and changing it does not un-onboard you ---------------------------------

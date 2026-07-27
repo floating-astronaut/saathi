@@ -80,9 +80,10 @@ def test_hypoglycemia_advice_leads_with_sugar_not_an_ambulance():
     than saying nothing. Escalation comes second, not first."""
     r = classify("sugar low ho gaya").reply
     first_line = r.split("\n")[0].lower()
-    assert "meetha" in first_line or "sugar" in first_line
+    assert "मीठा" in first_line or "sugar" in first_line
     assert "112" in r                       # escalation still present
-    assert r.index("meetha") < r.index("112")
+    # Order is the contract, not the wording: eat sugar first, escalate second.
+    assert r.index("मीठा") < r.index("112")
 
 
 def test_sugar_gir_gaya_is_not_read_as_a_fall():

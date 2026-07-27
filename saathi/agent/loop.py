@@ -67,6 +67,7 @@ async def run(
     user_name: str | None = None,
     allowed_tools: set[str] | None = None,
     tz: str | None = None,
+    lang: str | None = None,
 ) -> Turn:
     """Run one user turn to completion, executing tools as the model calls them.
 
@@ -85,7 +86,7 @@ async def run(
     now_local = datetime.now(ZoneInfo(tz)) if tz else None
     prefix: Prefix = build_prefix(facts, tool_tokens(),
                                   settings.saathi_prefix_token_budget, user_name,
-                                  now_local=now_local)
+                                  now_local=now_local, lang=lang)
     # Withholding beats filtering: a filter must recognise every phrasing of an
     # attack, while an absent tool does not care what the text says.
     names = allowed_tools if allowed_tools is not None else {

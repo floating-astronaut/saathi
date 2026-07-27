@@ -14,6 +14,84 @@ Conventions:
 
 ---
 
+## 2026-07-27 (night) — the button said हिंदी and the answer came back in Latin
+
+**506 tests passing** (434 → 506). `tests/test_devanagari.py`. D-W, PR-44.
+
+### Broke
+
+- **Choosing हिंदी got you romanised Hindi.** The onboarding button has always
+  been written in Devanagari; everything after it said "Namaste! Main Indofolk
+  AI hoon". A promise broken in the first interaction.
+
+  Two causes. Every deterministic string in this repo was romanised — that part
+  is just text. The other was the prompt: *"Reply in the user's language and
+  script. If they write Hinglish, reply in simple Hinglish."* That made the model
+  **mirror** whatever it was sent, and an older adult with an English keyboard
+  types "dawai" rather than "दवाई" regardless of what they read comfortably. So
+  it mirrored Latin, forever, for everyone.
+
+- **The commands were Latin-only**, which the conversion turned into something
+  worse than cosmetic. Our own consent screen tells a Hindi reader to type
+  "सब कुछ भूल जाओ" to erase their data — and `commands.parse` matched nothing
+  for it. **The privacy policy promises erasure on request; that promise was
+  kept only in Latin.** Same for "शुरू करें" and "चालू करो".
+
+- **`chalu karo` never matched either, and that one predates today.**
+  `r"\bchalu kar\b"` needs a non-word character after "kar", and "o" is a word
+  character. The stop message tells people to say exactly that to resume, so
+  RESUME was unreachable by its own advertised words.
+
+- **Saathi called herself male in the safety replies.** "main aapki baat sun
+  raha hoon" (self-harm) and "main salah nahi de sakta" (medical advice) —
+  masculine forms, in the two most sensitive strings in the product, against a
+  SYSTEM rule that says never to switch.
+
+### Fixed
+
+- **Script is a stored choice, stated every turn** (`prompt.script_line`), never
+  inferred from the last message. Reading and typing are different skills.
+- **Three options, not two**: हिंदी, Hinglish, English — which is also
+  WhatsApp's hard limit of three quick replies. `hi-en` becomes first-class
+  rather than legacy, because it would otherwise have fallen through `COPY` to
+  `hi` and switched existing Hinglish users to Devanagari without asking.
+- Devanagari patterns for every command, in all three scripts, plus the
+  `chalu karo` fix.
+- Feminine forms throughout the safety copy.
+
+### What it costs
+
+**Devanagari tokenises at ~1.77x Latin** — measured, not assumed: the welcome
+message is 77 tokens romanised, 136 in Devanagari. No prompt caching, and
+replies re-enter as history, so it compounds against the $5 grant (D-T).
+
+Numerals stay international. 112, 108 and 1930 are dialled, and १०८ on an
+emergency line is a hazard rather than a nicety.
+
+### Not fixed, and it is the important one
+
+**Reminders still arrive romanised** (PR-44). `reminder_fire_v2`,
+`reminder_nudge_v2` and `daily_checkin` carry romanised Hindi in Meta-approved
+body text. A template cannot be edited — it needs a new name, and Meta holds a
+deleted name for four weeks. So the one message that matters most is the one
+still in the wrong script, and a user now gets Devanagari onboarding followed by
+a romanised reminder every morning.
+
+### Tests
+
+Six existing tests failed and were **re-expressed rather than loosened** — the
+contracts are opt-in reminders, sugar-before-ambulance, and a restart phrase
+that actually restarts. That last one now extracts the quoted phrase from
+whatever the copy says and asserts it parses, so it cannot rot the next time the
+script changes.
+
+One of my own new tests was green for the wrong reason: `"Devanagari" in
+p.system` passed with `script_line` deleted from `build_prefix` entirely,
+because SYSTEM's own explanation contains the word. Found by deleting the call
+and noticing the suite stayed green. Replaced with an assertion on the whole
+line, plus one that the three scripts cannot collapse into the same prompt.
+
+
 ## 2026-07-27 (night) — the paywall, and the one thing it must never become
 
 **429 tests passing** (411 → 429). `tests/test_paywall.py`. D-U.

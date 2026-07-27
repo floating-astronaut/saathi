@@ -129,41 +129,41 @@ _PRIORITY = [
 
 _REPLIES = {
     Trigger.MEDICAL_EMERGENCY: (
-        "Yeh emergency ho sakti hai. Abhi 112 ya 108 par call kijiye, "
-        "aur ghar mein kisi ko turant bulaiye.\n\n"
+        "यह इमरजेंसी हो सकती है। अभी 112 या 108 पर कॉल कीजिए, "
+        "और घर में किसी को तुरंत बुलाइए।\n\n"
         "This may be an emergency. Please call 112 or 108 now, and call "
         "someone at home to be with you."
     ),
     Trigger.SELF_HARM: (
-        "Aap akele nahi hain, aur main aapki baat sun raha hoon. "
-        "Kripya abhi Tele-MANAS 14416 par baat kijiye — woh 24 ghante uplabdh hain.\n\n"
+        "आप अकेले नहीं हैं, और मैं आपकी बात सुन रही हूँ। "
+        "कृपया अभी Tele-MANAS 14416 पर बात कीजिए — वे 24 घंटे उपलब्ध हैं।\n\n"
         "You are not alone. Please talk to someone now: Tele-MANAS 14416, "
         "or KIRAN 1800-599-0019. Both are free and open all day and night."
     ),
     Trigger.HYPOGLYCEMIA: (
-        "Abhi turant kuch meetha khaiye — cheeni, glucose, juice ya do-teen "
-        "toffee. Phir 15 minute baad dobara sugar check kijiye.\n\n"
-        "Agar behosh jaisa lage, bolne mein dikkat ho, ya theek na lage — 112 par "
-        "call kijiye aur ghar mein kisi ko abhi bulaiye.\n\n"
+        "अभी तुरंत कुछ मीठा खाइए — चीनी, ग्लूकोज़, जूस या दो-तीन "
+        "टॉफ़ी। फिर 15 मिनट बाद दोबारा शुगर जाँच कीजिए।\n\n"
+        "अगर बेहोशी जैसा लगे, बोलने में दिक्कत हो, या ठीक न लगे — 112 पर "
+        "कॉल कीजिए और घर में किसी को अभी बुलाइए।\n\n"
         "_Eat or drink something sugary right now — sugar, glucose, juice. Check "
         "again after 15 minutes. If you feel faint, confused, or it does not "
         "improve, call 112 and get someone to come to you._"
     ),
     Trigger.MEDICAL_ADVICE: (
-        "Dawa ki matra ya badlav ke baare mein main salah nahi de sakta — "
-        "yeh sirf aapke doctor bata sakte hain. "
-        "Main aapko dawa lene ka reminder zaroor laga sakta hoon.\n\n"
+        "दवा की मात्रा या बदलाव के बारे में मैं सलाह नहीं दे सकती — "
+        "यह सिर्फ़ आपके डॉक्टर बता सकते हैं। "
+        "मैं आपको दवा लेने का रिमाइंडर ज़रूर लगा सकती हूँ।\n\n"
         "I can't advise on doses or changing medicines — only your doctor can. "
         "I can set a reminder for you, though."
     ),
     Trigger.SCAM: (
-        "Saavdhan — yeh message dhokha ho sakta hai. "
-        "Apna OTP, PIN ya bank details kisi ko mat bataiye, chahe woh bank se hone ka "
-        "daava kare. Kisi link par click mat kijiye.\n\n"
-        "Koi bhi asli police, CBI ya bank WhatsApp video call par giraftari ki "
-        "baat nahi karta. Yeh sab jhooth hota hai.\n\n"
-        "Agar paise chale gaye hain — *1930* par turant call kijiye (cyber fraud "
-        "helpline), aur ghar mein kisi ko abhi bataiye.\n\n"
+        "सावधान — यह संदेश धोखा हो सकता है। "
+        "अपना OTP, PIN या बैंक डिटेल किसी को मत बताइए, चाहे वह बैंक से होने का "
+        "दावा करे। किसी लिंक पर क्लिक मत कीजिए।\n\n"
+        "कोई भी असली पुलिस, CBI या बैंक WhatsApp वीडियो कॉल पर गिरफ़्तारी की "
+        "बात नहीं करता। यह सब झूठ होता है।\n\n"
+        "अगर पैसे चले गए हैं — *1930* पर तुरंत कॉल कीजिए (साइबर फ्रॉड "
+        "हेल्पलाइन), और घर में किसी को अभी बताइए।\n\n"
         "Careful — this looks like a scam. Never share your OTP, PIN or bank "
         "details, even if the caller says they are from the bank or the police. "
         "No real agency arrests anyone over a video call. If money has already "

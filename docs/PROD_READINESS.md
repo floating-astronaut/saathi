@@ -202,6 +202,27 @@ person who just paid, which is worse than not offering it.
 captured and the account paid, and record the PSP customer id. Do not enable
 `SAATHI_PAYMENTS_ENABLED` before this exists.
 
+### PR-44 · Reminders still arrive in romanised Hindi
+D-W put the app into Devanagari for users who chose हिंदी. The **templates did
+not follow**, because they cannot: `reminder_fire_v2`, `reminder_nudge_v2` and
+`daily_checkin` carry romanised Hindi in body text Meta has approved, editing a
+template is not possible, and a deleted name is held for four weeks
+(`LANDMINES.md`). So the one message type that matters most — the medication
+reminder — is the one still in the wrong script.
+
+The mismatch is also visible: a user gets Devanagari all through onboarding and
+then a romanised reminder every morning.
+**Fix:** submit `reminder_fire_v3`, `reminder_nudge_v3`, `daily_checkin_v2` with
+Devanagari bodies and Devanagari quick-reply labels, keeping the old names live
+until the new ones are approved. Quick-reply labels are capped at 20 characters
+and Devanagari counts by character — check before submitting, because a rejected
+template costs a review cycle.
+
+Also unresolved: a template is per-name, not per-user, so serving three scripts
+means three template sets and three approvals. Whether Hinglish keeps its own
+set, or `hi-en` users receive Devanagari reminders, is a product decision nobody
+has made.
+
 ---
 
 ## P1 — before anyone pays

@@ -22,7 +22,9 @@ SYSTEM = """You are Indofolk AI, an AI companion for an older adult in India, on
 You are a companion, not a tool: warm, unhurried, and as glad to chat as to do a task.
 
 How you speak:
-- Reply in the user's language and script. If they write Hinglish, reply in simple Hinglish.
+- Reply in the script named below. It is the user's own choice, not a guess from
+  their message: someone who chose Devanagari may still type in Latin because it
+  is what their keyboard offers, and mirroring that would take away the choice.
 - You are female. Always use feminine verb forms in Hindi ("main samajh gayi", "yaad
   rakhungi", "main jaanti hoon"). Never switch between masculine and feminine.
 - Short sentences. Plain words. No jargon, no markdown, no ** or ## - WhatsApp shows them raw.
@@ -78,6 +80,40 @@ def name_line(name: str | None) -> str:
     reads as broken to exactly the audience least able to shrug it off.
     """
     return f"The person you are speaking to is called {name}.\n" if name else ""
+
+
+#: What each stored `lang_pref` means on the wire. Keyed by the value the
+#: onboarding buttons write, so a value we have never seen cannot silently
+#: become something else.
+#:
+#: `hi-en` predates the language step and is kept for the handful of accounts
+#: that hold it: romanised Hindi, as they have always had. New users choose
+#: between `hi` and `en` only.
+SCRIPT_RULE = {
+    "hi": "Write Hindi in Devanagari (देवनागरी). Do not romanise it.",
+    "hi-en": "Write Hindi in simple romanised Latin (Hinglish), not Devanagari.",
+    "en": "Write in English.",
+}
+
+
+def script_line(lang: str | None) -> str:
+    """Tell the model which script to answer in — explicitly, every turn.
+
+    Before this the rule was "reply in the user's language and script", which
+    made the model mirror whatever it was sent. That reliably produced romanised
+    Hindi for everyone, because the onboarding copy was romanised and set the
+    tone, and because an older adult with an English keyboard often types
+    "dawai" rather than "दवाई" regardless of what they can comfortably *read*.
+
+    Reading and typing are different skills, and for this audience they diverge
+    sharply: someone who reads Devanagari fluently may still type in Latin. So
+    the script is a stored preference, not an inference from the last message.
+
+    An unknown or missing value falls back to Devanagari rather than to English
+    — the product is for older adults in India, and `DEFAULT_LANG` is already
+    `hi` in onboarding.
+    """
+    return SCRIPT_RULE.get(lang or "hi", SCRIPT_RULE["hi"]) + "\n"
 
 
 def clock_line(now_local: datetime | None) -> str:
@@ -144,7 +180,8 @@ class Prefix:
 
 def build_prefix(facts: list[tuple[str, str]], tool_tokens: int, budget: int,
                  user_name: str | None = None,
-                 now_local: datetime | None = None) -> Prefix:
+                 now_local: datetime | None = None,
+                 lang: str | None = None) -> Prefix:
     """Assemble the system prefix and enforce the budget.
 
     `now_local` must already be in the user's timezone — this function does not
@@ -156,7 +193,7 @@ def build_prefix(facts: list[tuple[str, str]], tool_tokens: int, budget: int,
     a prefix that creeps from 3k to 6k doubles the bill and nothing breaks, so
     nobody notices until the invoice.
     """
-    text = (SYSTEM + "\n" + clock_line(now_local)
+    text = (SYSTEM + "\n" + script_line(lang) + clock_line(now_local)
             + name_line(user_name) + facts_block(facts))
     total = estimate_tokens(text) + tool_tokens
     if total > budget:

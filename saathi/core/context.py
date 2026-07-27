@@ -22,6 +22,10 @@ class MessageContext:
     tz: str
     voice_pref: str
     onboarding: str
+    #: The script the user chose, not the one they happen to type in. Reading
+    #: and typing diverge for this audience: someone who reads Devanagari
+    #: comfortably may still type Latin because that is the keyboard they have.
+    lang: str = "hi"
     #: Where the account stands against its allowance: active | exhausted | paid.
     #: Resolved once in the pipeline, like `onboarding`, because `Handler.matches`
     #: is **synchronous** — an async matcher returns a truthy coroutine and would

@@ -43,13 +43,69 @@ CONSENT_VERSION = "2026-07-27.v2"
 # So: ask the language first, in both, then never repeat yourself again.
 
 ASK_LANG = (
-    "Namaste! 🙏 / Hello!\n\n"
+    "नमस्ते! 🙏 / Namaste! / Hello!\n\n"
+    "आप किस भाषा में बात करना चाहेंगे?\n"
     "Aap kis bhaasha mein baat karna chahenge?\n"
     "Which language would you like to use?"
 )
 
+#: Three choices, which is also WhatsApp's hard limit of three quick replies —
+#: so a fourth language cannot be added here without redesigning this step.
+#:
+#: "हिंदी" and "Hinglish" are the same language in two scripts, and the split is
+#: not pedantry. Reading and typing are different skills for this audience:
+#: someone perfectly comfortable reading Devanagari may only have an English
+#: keyboard, and someone who reads English signage all day may still find
+#: "kehkar bulaaun" easier than "कहकर बुलाऊँ". Each label is written in the
+#: script it selects, so the choice is legible without being explained.
+LANG_BUTTONS = [
+    ("ob:lang:hi", "हिंदी"),
+    ("ob:lang:hi-en", "Hinglish"),
+    ("ob:lang:en", "English"),
+]
+
 COPY: dict[str, dict[str, str]] = {
     "hi": {
+        "welcome": (
+            "नमस्ते! 🙏 मैं *Indofolk AI* हूँ — आपकी साथी।\n\n"
+            "मैं आपके साथ हूँ — बात करने के लिए भी, और याद रखने के लिए भी। "
+            "दवा का समय, डॉक्टर का अपॉइंटमेंट, सामान की सूची।\n\n"
+            "मैं कभी पैसे नहीं माँगती, कभी OTP नहीं माँगती, और कभी आपके खाते में "
+            "कुछ नहीं करती।\n\n"
+            "शुरू करें?"
+        ),
+        "consent_detail": (
+            "मैं यह याद रखती हूँ: आपका नाम, आपके संदेश, और जो आप मुझे याद रखने को "
+            "कहते हैं (जैसे दवा का नाम या डॉक्टर का नाम)।\n\n"
+            "आपकी आवाज़ की रिकॉर्डिंग 7 दिन बाद मिट जाती है। आपका डेटा *भारत* में "
+            "रहता है। कभी भी 'सब कुछ भूल जाओ' कहकर सब हटा सकते हैं।\n\n"
+            "पूरी जानकारी: https://n8nworld.store/privacy/"
+        ),
+        "ask_name": "बहुत अच्छा! मैं आपको क्या कहकर बुलाऊँ?",
+        "confirm_name": "मैं आपको *{name}* कहकर बुलाऊँ?",
+        "ask_reminders": (
+            "{name} जी, क्या मैं आपको चीज़ें याद दिलाऊँ — जैसे दवा का समय?"
+        ),
+        "ask_improve": (
+            "आख़िरी सवाल। क्या मैं आपकी बातों से सीख सकती हूँ, ताकि हिंदी और "
+            "दवाइयों के नाम बेहतर समझ सकूँ?\n\n"
+            "मैं आपका नाम, या किसी व्यक्ति का नाम, कभी नहीं रखती — सिर्फ़ शब्द "
+            "जैसे दवा के नाम। आप 'नहीं' कह सकते हैं, कोई फ़र्क नहीं पड़ेगा।"
+        ),
+        "done": (
+            "हो गया, {name} जी! 🌼\n\n"
+            "अब आप मुझसे कुछ भी कह सकते हैं। जैसे:\n"
+            "• \"रोज़ सुबह आठ बजे दवा का रिमाइंडर लगा दो\"\n"
+            "• \"मेरे डॉक्टर का नाम याद रखना — Dr Sharma\"\n"
+            "• \"यह संदेश समझ नहीं आया, समझाओ\"\n\n"
+            "बोलकर भी भेज सकते हैं — voice note।"
+        ),
+        "lang_changed": "ठीक है, अब मैं हिंदी में बात करूँगी। 🌼",
+        "declined": (
+            "कोई बात नहीं। जब भी मन करे, 'शुरू करें' लिख दीजिएगा।"
+        ),
+    },
+    "hi-en": {
         "welcome": (
             "Namaste! 🙏 Main *Indofolk AI* hoon — aapki saathi.\n\n"
             "Main aapke saath hoon — baat karne ke liye bhi, aur yaad rakhne ke "
@@ -136,7 +192,10 @@ COPY: dict[str, dict[str, str]] = {
 }
 
 BTN: dict[str, dict[str, str]] = {
-    "hi": {"yes_start": "Haan, shuru", "more": "Aur bataiye", "not_now": "Abhi nahi",
+    "hi": {"yes_start": "हाँ, शुरू करें", "more": "और बताइए", "not_now": "अभी नहीं",
+           "ok_start": "ठीक है, शुरू", "yes": "हाँ", "other_name": "दूसरा नाम",
+           "yes_send": "हाँ, भेजिए", "yes_fine": "हाँ, ठीक है", "no": "नहीं"},
+    "hi-en": {"yes_start": "Haan, shuru", "more": "Aur bataiye", "not_now": "Abhi nahi",
            "ok_start": "Theek hai, shuru", "yes": "Haan", "other_name": "Doosra naam",
            "yes_send": "Haan, bhejiye", "yes_fine": "Haan, theek hai", "no": "Nahi"},
     "en": {"yes_start": "Yes, let's start", "more": "Tell me more", "not_now": "Not now",
@@ -208,10 +267,7 @@ async def begin(conn, transport, user_id: int, handle: str) -> dict:
     one, because the first thing a 70-year-old reads should not be twice as long
     as it needs to be.
     """
-    await transport.send_buttons(conn, user_id, handle, ASK_LANG, _buttons(
-        ("ob:lang:hi", "हिंदी"),
-        ("ob:lang:en", "English"),
-    ))
+    await transport.send_buttons(conn, user_id, handle, ASK_LANG, _buttons(*LANG_BUTTONS))
     return {"onboarding": "new"}
 
 
