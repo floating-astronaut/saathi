@@ -11,12 +11,17 @@ reaches. The narrow unit tests below it are labelled as such and are there to
 prove the mechanism, not the wiring.
 """
 import asyncio
+import contextlib
+import hashlib
+import hmac
 import io
+import json
 import math
+import os
 import re
 import resource
 import signal
-import subprocess
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -392,12 +397,24 @@ async def test_a_size_meta_declares_is_refused_before_any_bytes_move(monkeypatch
 
 async def test_a_size_we_could_not_determine_is_not_treated_as_small(monkeypatch):
     """Meta omitting `file_size` must not disable the cap. Fail loudly, never
-    fail open."""
+    fail open.
+
+    The body is a chunked generator so that httpx sets **no `Content-Length`**
+    either. With a `bytes` body this test passed even with the streaming cap
+    deleted, because the header check caught it first — which made it a test of
+    a guard it was not naming. Now nothing but the streamed count can catch it.
+    """
+    async def body():
+        for _ in range(12):
+            yield b"x" * (256 * 1024)
+
     def handler(request):
         if request.url.path.endswith("/media-1"):
             return httpx.Response(200, json={"url": "https://cdn.example/blob",
                                              "file_size": "unknown"})
-        return httpx.Response(200, content=b"x" * (3 * MIB))
+        resp = httpx.Response(200, content=body())
+        assert "content-length" not in resp.headers, "the header would mask the cap"
+        return resp
 
     _mock_httpx(monkeypatch, handler)
     with pytest.raises(MediaTooLarge):
@@ -424,12 +441,26 @@ async def test_fetch_media_will_not_run_without_a_usable_limit(limit):
 
 # --- the renderer: proven by running it, not by reading the flags ------------
 
-async def test_render_first_page_actually_produces_a_png():
+async def test_render_first_page_actually_produces_a_png(monkeypatch):
     """`ffmpeg -version` passed for hours while every voice note failed. The
     flags here (`-singlefile`, `-scale-to`) change the *output filename*, so
-    this runs the real pdftoppm and looks at the bytes."""
+    this runs the real pdftoppm and looks at the bytes.
+
+    Also checks the directory's mode while the child is alive: `pdftoppm`
+    creates the PNG under our umask, so the rendered page — a prescription, a
+    bank letter — was briefly world-readable in /tmp.
+    """
+    seen = {}
+    real = asyncio.create_subprocess_exec
+
+    async def spy(*a, **kw):
+        seen["mode"] = stat.S_IMODE(os.stat(Path(a[-1]).parent).st_mode)
+        return await real(*a, **kw)
+
+    monkeypatch.setattr(documents.asyncio, "create_subprocess_exec", spy)
     png = await documents.render_first_page(make_pdf())
     assert png is not None and png[:4] == b"\x89PNG"
+    assert seen["mode"] == 0o700, "the rendered page was readable by other users"
 
 
 async def test_a_slow_renderer_is_killed_and_leaves_nothing_behind(monkeypatch):
@@ -440,27 +471,31 @@ async def test_a_slow_renderer_is_killed_and_leaves_nothing_behind(monkeypatch):
     is us killing it, and it is the only evidence that distinguishes a kill
     from a shrug.
     """
-    spawned = []
+    spawned, args = [], []
     real = asyncio.create_subprocess_exec
 
     async def spy(*a, **kw):
         proc = await real(*a, **kw)
         spawned.append(proc)
+        args.append(a)
         return proc
 
     monkeypatch.setattr(documents.asyncio, "create_subprocess_exec", spy)
     monkeypatch.setattr(settings, "saathi_pdf_render_timeout_s", 0.001)
-    before = set(Path("/tmp").glob("tmp*.pdf*"))
 
     with pytest.raises(documents.DocumentRejected) as exc:
         await documents.render_first_page(make_pdf())
 
     assert exc.value.reason == "render_timeout"
     assert spawned and spawned[0].returncode == -signal.SIGKILL
-    assert not subprocess.run(["pgrep", "-x", "pdftoppm"],
-                              capture_output=True).stdout.strip()
+    # Reaped, not merely signalled — and checked by pid, not by `pgrep`, which
+    # would also see a real `saathi-web` rendering somebody's PDF next door.
+    with pytest.raises(ProcessLookupError):
+        os.kill(spawned[0].pid, 0)
     # A killed renderer leaves a partial PNG and a copy of the sender's file.
-    assert set(Path("/tmp").glob("tmp*.pdf*")) == before
+    # Scoped to this render's own directory for the same reason.
+    workdir = Path(args[0][-1]).parent
+    assert workdir.name.startswith("saathi-pdf-") and not workdir.exists()
 
 
 async def test_the_file_size_rlimit_actually_stops_the_renderer(monkeypatch):
@@ -475,7 +510,13 @@ async def test_the_file_size_rlimit_actually_stops_the_renderer(monkeypatch):
 
 async def test_the_rlimits_reach_the_child_process():
     """The renderer's caps are set by `preexec_fn`, which runs in the forked
-    child and cannot be observed from here — so ask a child what it got."""
+    child and cannot be observed from here — so ask a child what it got.
+
+    `_prepare_limits()` first, because that is the production sequence:
+    `render_first_page` builds the values in the parent and `_render_limits`
+    only reads them, so that the child allocates nothing between fork and exec.
+    """
+    documents._prepare_limits()
     proc = await asyncio.create_subprocess_exec(
         sys.executable, "-c",
         "import resource;print(resource.getrlimit(resource.RLIMIT_CPU)[0],"
@@ -490,6 +531,79 @@ async def test_the_rlimits_reach_the_child_process():
     assert fsize == settings.saathi_pdf_render_max_output_mb * MIB
     # And the box's own limits were not what we just measured.
     assert resource.getrlimit(resource.RLIMIT_AS)[0] != mem
+
+
+# --- the actual entry point: a signed webhook through the real app -----------
+
+async def test_a_signed_document_webhook_is_refused_end_to_end(monkeypatch):
+    """The claim the CHANGELOG makes, as a test rather than as a scratch script.
+
+    Everything above enters at `pipeline.handle_message`. This one enters where
+    Meta does: an HMAC-signed POST to the FastAPI route, which acks immediately
+    and does the work in a detached task. It therefore covers the signature
+    check, `extract_messages`, the `create_task` hand-off, and the fact that a
+    refusal survives all of it — none of which the pipeline-level tests touch.
+    """
+    from saathi import db
+    from saathi.web import app as webapp
+
+    monkeypatch.setattr(settings, "wa_app_secret", "test-secret")
+    conn, sent = FakeConn(), []
+
+    class FakePool:
+        async def open(self): return None
+
+        @contextlib.asynccontextmanager
+        async def connection(self):
+            yield conn
+
+    async def fake_send_text(c, uid, handle, text):
+        sent.append(text)
+        return "wamid.out"
+
+    async def fake_fetch(media_id, max_bytes):
+        return b"%PDF-1.4\n" + b"x" * (max_bytes + 1)   # one byte over, whatever it is
+
+    async def fake_touch(c, uid, at=None):
+        return None
+
+    monkeypatch.setattr(db, "pool", lambda: FakePool())
+    monkeypatch.setattr(registry.get("whatsapp"), "send_text", fake_send_text)
+    monkeypatch.setattr(registry.get("whatsapp"), "fetch_media", fake_fetch)
+    monkeypatch.setattr(pipeline.window, "touch", fake_touch)
+
+    payload = {"entry": [{"changes": [{"value": {
+        "contacts": [{"wa_id": "919812345678", "profile": {"name": "Kamala"}}],
+        "messages": [{"id": "wamid.doc1", "from": "919812345678", "type": "document",
+                      "document": {"id": "media-9", "mime_type": "application/pdf",
+                                   "caption": "beta ye padho"}}]}}]}]}
+    body = json.dumps(payload).encode()
+    sig = "sha256=" + hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
+
+    transport = httpx.ASGITransport(app=webapp.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+        r = await c.post("/webhook/whatsapp", content=body,
+                         headers={"X-Hub-Signature-256": sig,
+                                  "Content-Type": "application/json"})
+        assert r.status_code == 200 and r.json() == {"ok": True}
+
+        # The ack comes back before the work is done — that is the point of the
+        # detached task, and the reason this needs waiting for at all.
+        for _ in range(200):
+            if sent:
+                break
+            await asyncio.sleep(0.01)
+
+        bad = await c.post("/webhook/whatsapp", content=body,
+                           headers={"X-Hub-Signature-256": "sha256=deadbeef"})
+        assert bad.status_code == 403
+
+    assert sent, "a signed document webhook produced no reply at all"
+    assert "too big" in sent[0].lower()
+    # The enum coercion, on the real route: nothing may reach `messages` with a
+    # kind Postgres would reject. This is what made documents unreachable.
+    logged = [p[2] for q, p in conn.calls if "insert into messages" in q and p]
+    assert logged and set(logged) <= pipeline.MSG_KINDS
 
 
 # --- mechanism, not wiring ---------------------------------------------------

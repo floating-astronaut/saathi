@@ -80,11 +80,18 @@ class Settings(BaseSettings):
     #: to ffmpeg. Tightening it is a speech-lane decision, not this one.
     saathi_max_audio_bytes: int = 16 * 1024 * 1024
 
-    #: How many inbound media messages may be *in flight* at once, process-wide.
-    #: The webhook detaches every message with `asyncio.create_task`, so without
-    #: this the number of simultaneous multi-MiB blobs in memory is whatever the
-    #: sender chooses. Four is far above real demand (a handful of elders, a few
-    #: photos a day) and caps resident media at ~32 MiB.
+    #: How many inbound **image and document** messages may be in flight at
+    #: once, process-wide. The webhook detaches every message with
+    #: `asyncio.create_task`, so without this the number of simultaneous
+    #: multi-MiB blobs is whatever the sender chooses. Four is far above real
+    #: demand (a handful of elders, a few photos a day).
+    #:
+    #: It does **not** bound all inbound media: voice notes are fetched by
+    #: `pipeline.transcribe_voice`, which never passes through this gate, so
+    #: audio concurrency is still unbounded and audio is the *primary*
+    #: modality. Gating it is a speech-lane decision, not this one — see
+    #: `PROD_READINESS.md` PR-26. So the honest ceiling here is 4 x 8 MiB of
+    #: photos and PDFs, plus however many voice notes are arriving.
     saathi_media_concurrency: int = 4
     #: How many *documents* may be parsed or rasterised at once. One, not two:
     #: PDF parsing is CPU-bound and holds the GIL, the box has 2 vCPU, and the
@@ -93,11 +100,23 @@ class Settings(BaseSettings):
     #: document is refused with a message rather than queued — an unbounded
     #: queue would answer minutes after the person gave up, and would itself be
     #: the memory leak this limit exists to prevent.
+    #:
+    #: ⚠️ **Raising this is not just a throughput knob.** `documents._parse_pool`
+    #: is sized to this value, and at 1 that is what guarantees no pypdf thread
+    #: is running when `render_first_page` forks with a `preexec_fn`. At 2 the
+    #: window opens and the child can deadlock on a malloc lock the fork
+    #: orphaned. Do not raise it without removing `preexec_fn` and enforcing the
+    #: renderer's limits some other way. See `LANDMINES.md`.
     saathi_doc_concurrency: int = 1
 
-    #: Refuse a PDF declaring more pages than this before parsing any of them.
-    #: We read 3; 200 is well past any bill, statement or report an elder is
-    #: sent, and stops a page-tree bomb being walked at all.
+    #: Refuse a PDF declaring more pages than this before *extracting or
+    #: rendering* any of them. We read 3; 200 is well past any bill, statement
+    #: or report an elder is sent.
+    #:
+    #: It does not stop the page tree being walked — counting the pages is the
+    #: walk. A 7 MiB file of 60,000 pages costs 4.6s and 295 MiB before this can
+    #: fire, which the pool, the document gate and the parse clock contain
+    #: between them. See `documents._extract_blocking`.
     saathi_pdf_max_pages: int = 200
     #: Wall clock for the pypdf text pass, which runs in a bounded thread pool
     #: rather than on the event loop. A legitimate three-page extraction is

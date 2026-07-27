@@ -210,14 +210,15 @@ reasoning for the value:
 |---|---|---|
 | Byte cap, checked at Meta's `file_size`, at `Content-Length`, and during the stream | `wa/client.py::fetch_media`, which now takes `max_bytes` with **no default** | 8 MiB PDF, 5 MiB image, 16 MiB audio |
 | Measured re-check of what actually arrived | `pipeline._handle_media`, so a transport that ignores the limit cannot fail open | — |
-| Media messages in flight, process-wide | `pipeline._MEDIA_GATE`, around the download | 4 |
-| Documents parsed or rasterised at once | `pipeline._DOC_GATE`, around parse and render | **1** — 2 vCPU, and the loop also runs the safety classifier |
-| Declared page count, refused before the page tree is walked | `documents._extract_blocking` | 200 |
+| Image and document messages in flight, process-wide | `pipeline._MEDIA_GATE`, around the download. **Not audio** — see below | 4 |
+| Documents parsed or rasterised at once | `pipeline._DOC_GATE`, around the CPU half only; released before the model call | **1** — 2 vCPU, and the loop also runs the safety classifier |
+| Declared page count, refused before extraction or rasterisation — **not** before the page tree is walked | `documents._extract_blocking` | 200 |
 | Extracted characters, per page and total | `documents._extract_blocking` | 20k / 60k |
 | `pypdf` off the event loop, in a pool sized to the document gate, with a wall clock | `documents.extract_text` | 8s |
 | `pdftoppm` wall clock, **and a kill** | `documents.render_first_page` | 15s |
-| `pdftoppm` RLIMIT_CPU / RLIMIT_AS / RLIMIT_FSIZE | `documents._render_limits`, via `preexec_fn` | 15s / 512 MiB / 32 MiB |
+| `pdftoppm` RLIMIT_CPU / RLIMIT_AS / RLIMIT_FSIZE | `documents._render_limits`, via `preexec_fn`; values pre-built by `_prepare_limits` in the parent | 15s / 512 MiB / 32 MiB |
 | Raster bounded by output pixels rather than DPI | `-scale-to`, since the page's declared size is the sender's choice | 1700 px |
+| Sender's PDF and the rendered page in a private directory | `mkdtemp`, because `pdftoppm` creates the PNG under our umask | 0700 |
 
 The (N+1)th document is **refused, not queued**, with a bilingual message that
 says what would work instead. A queue in front of CPU-bound work is the same
@@ -236,6 +237,29 @@ nine. `tests/test_media_limits.py`.
   sender can still occupy the single document slot continuously. Widened onto
   **PR-15**, where it belongs: it must cover audio and text too, and it needs
   state that survives a restart.
+- **Voice notes do not pass the media gate.** `transcribe_voice` fetches its own
+  media and is not gated, so audio concurrency is unbounded — and audio is the
+  *primary* modality, so the ungated path is the busy one. It is capped per
+  message (16 MiB, WhatsApp's own ceiling) but not in aggregate. Left
+  deliberately: gating the voice path changes latency on the feature this
+  product is built around, and that is a speech-lane decision with its own
+  measurement. The ceiling this lane can honestly claim is therefore *4 × 8 MiB
+  of photos and PDFs, plus however many voice notes are in flight* — not a
+  single resident-bytes number, as an earlier draft of the config comment said.
+- **Counting a PDF's pages is the page tree walk.** `len(reader.pages)` calls
+  `get_num_pages` → `_flatten`, so the 200-page guard cannot fire until pypdf
+  has visited every node. Measured on this box: **60,000 one-point pages fit in
+  7.07 MiB — under the 8 MiB byte cap — and cost 4.63s and 295 MiB of peak RSS
+  to count.** Reproduced independently at 100,000 pages in 7.70 MiB → 4.78s and
+  231 MiB. The walk is contained rather than prevented: it runs in the pool
+  instead of on the loop, `_DOC_GATE` = 1 serialises it, and it is inside the 8s
+  parse clock. pypdf's `_flatten` keeps a `visited` set, so a cyclic or shared
+  page tree is linear in nodes rather than unbounded. **The byte cap is what
+  actually bounds this**, and 8 MiB of page objects is ~5s and ~300 MiB.
+- **`documents._parse_pool` is never shut down.** It is created lazily and lives
+  for the life of the process, which is correct for a long-running service and
+  means a timed-out extraction's thread is never reclaimed early. No fix
+  intended; recorded so it is not mistaken for an oversight.
 - **A timed-out `pypdf` thread cannot be cancelled.** Python will not interrupt
   a thread inside C code, so a runaway extraction keeps its pool slot until it
   finishes. The event loop is returned immediately, and the pool is sized to the
@@ -437,11 +461,40 @@ reason.
 
 Recording never raises: the message has already gone out, and failing the caller
 would invite a resend of something the user has read. A failure logs at ERROR.
-`on conflict (wa_message_id) do nothing` absorbs `pipeline`'s existing insert.
+
+~~`on conflict (wa_message_id) do nothing` absorbs `pipeline`'s existing
+insert.~~ **Corrected 2026-07-28: it does not.** See PR-34.
 
 Cover in `tests/test_outbound_record.py` (8), including one that fails if `_send`
 stops calling the recorder — the others exercise it directly and would stay green
 if the call were deleted.
+
+### PR-34 · Every outbound reply is stored in `messages` twice
+`pipeline` inserts the outbound row *and* `wa/client._send` records it again at
+the wire path. PR-31 above assumed the second was absorbed by
+`on conflict (wa_message_id) do nothing`, and
+`tests/test_outbound_record.py::test_record_is_idempotent_on_message_id` says so
+in a comment. Both are wrong: pipeline's row is written **before** the send and
+therefore has `wa_message_id = NULL`, and in a unique index NULL never conflicts
+with anything, including another NULL. So the clause cannot fire, and every
+outbound message has two rows — one with an id, one without.
+
+Found during PR-26 review, which replicated the pattern onto five new refusal
+paths (`pipeline._handle_media`). Three call sites: `pipeline.py` at the media
+success path, the media refusal path, and the agent path via `ctx.meta["reply"]`.
+
+**Not fixed inside PR-26, deliberately.** Deleting only the media ones would be
+half a fix, and deleting all three is not a no-op: the two rows are not
+duplicates of each other. `log_message` runs `privacy.redact_for_storage` and
+`_record_outbound` does not, so today one copy is redacted and one is not, and
+removing pipeline's insert would leave only the unredacted copy. The correct
+change is to redact in `_record_outbound` first, then remove all three inserts
+and the now-dead `ctx.meta["reply"]` plumbing — which touches the agent path and
+`tests/test_outbound_record.py`, and wants its own lane.
+
+**Impact meanwhile:** `messages` is roughly double its true size on the outbound
+side, the `clear chat` count a user is shown is wrong, and any metric counting
+outbound rows double-counts. Nothing user-facing breaks.
 
 ### PR-33 · D-D's model bakeoff was eight utterances
 D-D chose `zai.glm-5` — the model Saathi runs on, at roughly a 60% cost premium

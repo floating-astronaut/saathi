@@ -52,13 +52,50 @@ exception (`documents.render_first_page`,
         await proc.wait()
 
 Belt and braces: give the child `RLIMIT_CPU` via `preexec_fn` too, so the kernel
-ends it even if your own timeout never runs. `preexec_fn` executes between fork
-and exec in a process that has threads, so it must contain **syscalls only** —
-no imports, no logging, nothing that takes a lock.
+ends it even if your own timeout never runs. See the next entry for what
+`preexec_fn` costs you.
 
 The same shape applies to a thread: `wait_for` around `run_in_executor` returns
 the event loop to you and leaves the thread running, and Python cannot interrupt
 a thread inside C code at all. There the only defence is to bound the pool.
+
+---
+
+## `preexec_fn` and threads: `SAATHI_DOC_CONCURRENCY` is not a throughput knob
+
+**The trap:** `saathi_doc_concurrency` looks like an ordinary tunable. Raise it
+from 1 to 2 for a bit more document throughput and you arm a deadlock that will
+present as *"PDFs sometimes hang forever"*, on a schedule nobody can reproduce.
+
+**Cause:** `documents.render_first_page` passes `preexec_fn` to
+`create_subprocess_exec` so the renderer gets its rlimits. `preexec_fn` runs in
+the child between `fork()` and `exec()`, and **only the forking thread exists in
+that child**. Any lock another thread happened to hold at the instant of the
+fork is still held, by a thread that does not exist — glibc's malloc arena lock
+among them. If `preexec_fn` allocates, the child blocks forever, before `exec`,
+holding its pipes open.
+
+At `saathi_doc_concurrency = 1` this cannot happen: `documents._parse_pool` is
+sized to the same value, so no pypdf thread is running when we fork. At 2, a
+thread is chewing on someone else's PDF at the moment of the fork, and the
+window is open.
+
+**Two rules, and the second is the one that will be forgotten:**
+
+1. `_render_limits` must contain **syscalls only** — no imports, no logging, no
+   arithmetic, no tuple literals, no `for` loop. `mb * 1024 * 1024` allocates an
+   int; `(x, x)` allocates a tuple; iterating allocates an iterator. The values
+   are pre-built by `_prepare_limits()` in the parent and only *indexed* in the
+   child.
+2. **Do not raise `saathi_doc_concurrency` without removing `preexec_fn`.** If
+   the renderer's limits are needed at a higher concurrency, enforce them with a
+   wrapper process (`prlimit`, `systemd-run --scope -p`) instead, where the
+   limits are applied after exec and no fork-with-threads window exists.
+
+**Why it is nasty:** every part of this looks harmless. The config value reads
+like a performance setting, the `preexec_fn` is three lines of syscalls, and
+raising concurrency is the obvious response to documents feeling slow. Nothing
+in either file mentions the other, which is why both now say so.
 
 ---
 

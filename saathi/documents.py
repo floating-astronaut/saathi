@@ -42,6 +42,7 @@ import logging
 import math
 import os
 import resource
+import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
@@ -98,8 +99,19 @@ def _extract_blocking(pdf: bytes, max_pages: int) -> str:
         return ""
 
     if pages > settings.saathi_pdf_max_pages:
-        # Refused before any page is touched. We read three; a document
-        # declaring hundreds is not one anybody wants read aloud.
+        # Refused before any page is *rendered or extracted*. Not before the
+        # page tree is walked — `len(reader.pages)` IS the walk (`get_num_pages`
+        # -> `_flatten`), so this guard can only fire once pypdf has visited
+        # every node. Measured on this box: 60,000 one-point pages fit in
+        # 7.07 MiB, comfortably under the 8 MiB byte cap, and cost 4.63s and
+        # 295 MiB of peak RSS to count.
+        #
+        # The guard still holds, for a narrower reason than it looks: the walk
+        # happens in the pool rather than on the event loop, `_DOC_GATE` = 1
+        # serialises it, and 4.63s is inside the 8s clock. pypdf's `_flatten`
+        # keeps a `visited` set, so a cyclic or shared page tree is linear in
+        # nodes rather than unbounded. What this line actually buys is the rest
+        # of the work — extraction and rasterisation — not the count.
         raise DocumentRejected("too_many_pages", f"{pages} pages")
 
     parts: list[str] = []
@@ -137,20 +149,44 @@ async def extract_text(pdf: bytes, max_pages: int = MAX_PAGES) -> str:
         raise DocumentRejected("parse_timeout") from None
 
 
+# The rlimit pairs `_render_limits` hands to the child, pre-built. One-element
+# lists so `_prepare_limits` can rebind them without `_render_limits` having to
+# construct anything — see its docstring for why that matters.
+_CPU: list[tuple[int, int]] = [(0, 0)]
+_AS: list[tuple[int, int]] = [(0, 0)]
+_FSIZE: list[tuple[int, int]] = [(0, 0)]
+
+
+def _prepare_limits() -> None:
+    """Compute the child's limits **in the parent**, where allocating is safe."""
+    cpu = int(math.ceil(settings.saathi_pdf_render_timeout_s))
+    _CPU[0] = (cpu, cpu)
+    _AS[0] = (settings.saathi_pdf_render_max_mem_mb * 1024 * 1024,) * 2
+    _FSIZE[0] = (settings.saathi_pdf_render_max_output_mb * 1024 * 1024,) * 2
+
+
+_prepare_limits()
+
+
 def _render_limits() -> None:
-    """Applied in the forked child, before exec. Syscalls only, on purpose.
+    """Applied in the forked child, before exec. **Syscalls only.**
 
     `preexec_fn` runs between fork and exec in a process that has threads (the
-    parse pool), where anything taking a lock can deadlock. `resource` is
-    imported at module scope for exactly that reason, and nothing in here
-    allocates, imports or logs.
+    parse pool). Only the forking thread survives into the child, so any lock
+    another thread held at the instant of the fork is still held — by nobody.
+    glibc's malloc arena lock is one of those, so an allocation here can hang
+    the child forever, and it would look like a slow PDF.
+
+    That is why `resource` is imported at module scope, why nothing here logs,
+    and why every value is computed by `_prepare_limits()` in the parent and
+    only *read* here. `mb * 1024 * 1024` looks free and is not — it builds a
+    new int, as does every tuple literal, and a `for` loop builds an iterator.
+    Indexing a list builds nothing, which is why the three values arrive that
+    way.
     """
-    cpu = int(math.ceil(settings.saathi_pdf_render_timeout_s))
-    mem = settings.saathi_pdf_render_max_mem_mb * 1024 * 1024
-    out = settings.saathi_pdf_render_max_output_mb * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
-    resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
-    resource.setrlimit(resource.RLIMIT_FSIZE, (out, out))
+    resource.setrlimit(resource.RLIMIT_CPU, _CPU[0])
+    resource.setrlimit(resource.RLIMIT_AS, _AS[0])
+    resource.setrlimit(resource.RLIMIT_FSIZE, _FSIZE[0])
 
 
 def _kill(proc) -> None:
@@ -167,10 +203,17 @@ async def render_first_page(pdf: bytes) -> bytes | None:
     `DocumentRejected` when a limit stopped us — the caller says different
     things for those two.
     """
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+    # A private directory rather than bare temp files: `pdftoppm` creates the
+    # PNG itself, under our umask, so the rendered page — someone's
+    # prescription, or their bank letter — was briefly world-readable in /tmp.
+    # `mkdtemp` is 0700, which settles it for both files whatever the umask is,
+    # and makes the cleanup a single call that cannot miss one.
+    workdir = tempfile.mkdtemp(prefix="saathi-pdf-")
+    path = os.path.join(workdir, "in.pdf")
+    with open(path, "wb") as f:
         f.write(pdf)
-        path = f.name
     png = f"{path}.png"          # -singlefile: no page-number suffix to guess
+    _prepare_limits()
     try:
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -197,9 +240,17 @@ async def render_first_page(pdf: bytes) -> bytes | None:
             await proc.wait()
             raise DocumentRejected("render_timeout") from None
         if proc.returncode != 0:
-            # An rlimit arrives here as a negative return code (SIGKILL from
-            # RLIMIT_AS's allocation failure, SIGXCPU, SIGXFSZ) — the kernel
-            # telling us the file was hostile rather than merely broken.
+            # Only two of the three rlimits arrive as a *signal*: RLIMIT_CPU
+            # (SIGXCPU) and RLIMIT_FSIZE (SIGXFSZ, measured as exit -25).
+            # **RLIMIT_AS does not kill anything** — it makes mmap/brk return
+            # ENOMEM, and what the process does next is its own business. At
+            # 8 MiB, pdftoppm cannot even map libm and exits *127*.
+            #
+            # So a positive code covers both "the file was broken" and "we
+            # starved it of address space", and they are handled the same way:
+            # return None, and the caller says it could not read the file. That
+            # fails closed and the user still gets a message — but do not read
+            # `render_resource_limit` as "every rlimit lands here".
             log.warning("pdftoppm exited %s: %s", proc.returncode, err[:200])
             if proc.returncode < 0:
                 raise DocumentRejected("render_resource_limit", f"signal {-proc.returncode}")
@@ -209,13 +260,9 @@ async def render_first_page(pdf: bytes) -> bytes | None:
                 return fh.read()
         return None
     finally:
-        # Both, always: a killed renderer leaves a partial PNG behind, and the
-        # temp PDF is a copy of the sender's file sitting on our disk.
-        for leftover in (png, path):
-            try:
-                os.unlink(leftover)
-            except FileNotFoundError:
-                pass
+        # The whole directory, always: a killed renderer leaves a partial PNG
+        # behind, and `in.pdf` is a copy of the sender's file on our disk.
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 def has_text_layer(text: str) -> bool:
