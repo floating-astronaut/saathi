@@ -585,3 +585,47 @@ Deliberately unchanged:
 - CallerDesk keys are stored and synced but **inert** — nothing references
   `CALLERDESK_*`. Wiring them needs a `DECISIONS.md` entry first, since PRD §4
   puts voice calls out of scope for v1.
+
+---
+
+## 2026-07-27 — Deploy of `117896b` to the runtime box
+
+### What was live before
+
+The box was running the 2026-07-26 23:17 artifact. **PR-23 and PR-4 were both
+absent**, so a forwarded advert containing "unsubscribe" could still pause a
+user's reminders, and any reminder created still went to a table nothing reads.
+Only PR-3's heartbeat was present, because it had been hand-copied earlier.
+
+### How it was deployed, and why not with `ops/deploy.sh`
+
+`ops/deploy.sh` cannot run here. It exports `AWS_PROFILE=mp-dev` and drives the
+box over `ssm send-command`; on the runtime box there is no such profile and
+`ssm:SendCommand` is denied to the instance role. Recorded as **PR-28**.
+
+Done instead: rollback tarball written, the four changed modules plus the new
+tests and `ops/alerting/` copied in (overlay, never mirror-delete — `evals/`
+exists only on the box), `uv sync`, `pytest`, `systemctl restart`, then the same
+verification block `deploy.sh` itself runs. No migrations changed in this deploy.
+
+### Evidence
+
+- 314 tests passing **on the box, against the live tree**.
+- units all active; 0 tracebacks or criticals since restart.
+- healthz 200 locally and through the tunnel; unsigned webhook POST 403; site 200.
+- worker kinds `['checkin', 'media_purge', 'nudge', 'reminder']`.
+- Behaviour checked against the **running** code, not the file: a forwarded
+  advert no longer matches the command capability, while a typed `stop` still
+  does.
+
+### Found while deploying
+
+- **PR-25 is worse than reported.** `remote.sh` runs without `set -e`, discards
+  migration stderr, and restarts services regardless of migration outcome. There
+  is no `schema_migrations` table either, so every migration re-runs on every
+  deploy and correctness rests entirely on idempotency.
+- `handlers.py` still has two dead `update reminder_fires` statements in the
+  cancel path. **Not a live bug** — `turns.reminder` re-checks
+  `reminders.status = 'active'` at dispatch, so a cancelled reminder is skipped
+  correctly — but it is residue of the same split-brain that caused PR-4 and
+  should be cleaned up with PR-4b.
