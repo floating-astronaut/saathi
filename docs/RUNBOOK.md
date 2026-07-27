@@ -9,11 +9,18 @@
 | Instance | `i-01b2c27883acb25ca` · t3.large · Ubuntu 26.04 · 60 GB gp3 encrypted |
 | Elastic IP | `15.252.75.191` (`eipalloc-095dc7178aceb1f5c`) |
 | Public URL | `https://saathi.n8nworld.store` |
-| Security group | `sg-0f805961424175e66` — **zero inbound rules** |
-| Access | **SSM only.** No SSH key exists; port 22 was never opened. |
+| Security group | `sg-0f805961424175e66` (`saathi-dev`) — **one inbound rule**: TCP 22 from `207.219.25.137/32`, described *"operator Mac SSH dev only"*. It is the only SG on the instance. |
+| Access | **SSM, plus SSH from the operator's Mac only.** Key `tejas-mac-saathi-ai` (ED25519, `SHA256:yvQAXHc7/QSKYDImQL8j0a5uG8n0aGZLJLcGpB102tg`) is the sole entry in `authorized_keys`. `passwordauthentication no`. |
 | Repo on box | `/home/ubuntu/saathi` |
 | Database | `saathi` on local Postgres 18.4, role `saathi` |
 | Secrets | Secrets Manager `saathi/dev/runtime` (ap-south-1) |
+
+> **Two IP pins, both silent when they break.** The SSH rule is bound to the
+> operator's Mac at `207.219.25.137/32`, and the Cloudflare token
+> `saathi-box-canonical` is bound to the EIP `15.252.75.191/32` (PR-13). A
+> residential IP reassignment locks you out of SSH; changing the EIP breaks the
+> box's Cloudflare access. Neither announces itself — you find out when the
+> thing you were about to do stops working.
 | Tunnel | `saathi-dev` `d4e9e4ad-04ca-4ebf-92af-d39c7cb5f831` |
 | Artifacts | `s3://saathi-dev-artifacts-559896294326` |
 

@@ -28,8 +28,8 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
-### DOC-1 — three docs claim no inbound port is open; SSH is open   [OPEN]
-Owner: unassigned        Opened: 2026-07-27
+### DOC-1 — three docs claim no inbound port is open; SSH is open   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
 Reading: docs/RUNBOOK.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md
 Acceptance: `README.md:99`, `docs/ARCHITECTURE.md:19` and `docs/RUNBOOK.md:12`
   describe the real ingress (SSH/22 restricted to the operator's Mac,
@@ -40,8 +40,11 @@ Notes: measured 2026-07-27 — `sshd` listens on `0.0.0.0:22` and an SSH handsha
   from the operator's Mac reaches it (`Permission denied (publickey)` proves TCP
   + banner exchange, so the security group permits 22). `RUNBOOK.md:12` calls
   `sg-0f805961424175e66` "zero inbound rules", which is false. The SG itself
-  could not be read from the runtime box — its instance role has no
-  `ec2:DescribeInstances` — so confirm the exact CIDR from the dev box or console.
+  Resolved once the IAM grant landed: `sg-0f805961424175e66` (`saathi-dev`) has
+  **exactly one** ingress rule — TCP 22 from `207.219.25.137/32`, described
+  "operator Mac SSH dev only" — and it is the only SG on the instance. Four
+  claims corrected, not three: `RUNBOOK.md`'s *Access* row also said "No SSH key
+  exists; port 22 was never opened." Recorded as PR-24. PR-23 held for SEC-2.
   **Under `docs/LANE_LIFECYCLE.md` §5 the lane that opened SSH is still OPEN, not
   closed: it changed infrastructure and never wrote back.**
 
@@ -92,9 +95,12 @@ Notes: **Codex owns `SECURITY.md` outright — no other session writes it.**
   Do **not** touch `saathi/scheduling.py`, `saathi/worker/turns.py` or
   `saathi/agent/tools/handlers.py` without re-reading them at `64a520b` — all
   three changed today. Findings against them are welcome; blind edits are not.
+  **PR-23 is reserved for you** — DOC-1 took PR-24 rather than collide with it.
   Base on `64a520b` or later. Already-known security items are lanes, not new
   findings: SEC-1 (Business Agent on our WABA), CRED-1/PR-22 (forge write
-  credentials on the runtime box), DOC-1 (SSH ingress undocumented).
+  credentials on the runtime box), and **PR-24 — SSH open to `207.219.25.137/32`**,
+  measured and documented by DOC-1 on 2026-07-27. Re-report those only if you
+  find something the existing rows miss.
 
 ### PR-4b — the reminder ack path is unreachable   [OPEN]
 Owner: unassigned        Opened: 2026-07-27

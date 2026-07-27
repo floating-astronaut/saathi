@@ -142,6 +142,23 @@ Tracked as `CRED-1` on `control-plane/ACTIVE_LANE_BOARD.md`.
 
 ## P2 — before scale
 
+### PR-23 · reserved for lane SEC-2 (Codex security review)
+Held so two concurrent sessions cannot claim the same id. If SEC-2 closes without
+needing it, leave the gap — renumbering a journal is worse than a hole in it.
+
+### PR-24 · SSH is open to the operator's Mac
+`sg-0f805961424175e66` permits TCP 22 from `207.219.25.137/32` — a single
+residential IP — and `sshd` accepts one ED25519 key with
+`passwordauthentication no`. Correct for a dev box operated by one person, and
+genuinely narrow.
+
+It is recorded because **three docs claimed the opposite for a day** (`README.md`,
+`ARCHITECTURE.md`, `RUNBOOK.md` all said no inbound port was open / zero inbound
+rules), and because it is a real attack surface that the tunnel-only story hides:
+Cloudflare fronts `:3130`, but it does not front `:22`.
+**Fix before production:** SSM Session Manager only, and drop the rule. That was
+the original design; SSH was added for convenience and the docs never caught up.
+
 ### PR-13 · Cloudflare token is IP-locked to the EIP
 `saathi-box-canonical` is locked to `15.252.75.191/32`. Correct, and it means
 **changing the EIP silently breaks the box's Cloudflare access**.
