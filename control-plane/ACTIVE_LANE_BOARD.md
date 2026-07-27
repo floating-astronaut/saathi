@@ -147,8 +147,8 @@ Notes: the display name is "Indofolk AI", not "Saathi" — "Saathi" was declined
   B2B pet products company with zero mention of Saathi. Reversible once a Saathi
   page exists there. See WA-2.
 
-### WA-2 — make "Saathi" an approvable display name   [OPEN]
-Owner: unassigned        Opened: 2026-07-27
+### WA-2 — make "Saathi" an approvable display name   [PARKED]
+Owner: unassigned        Opened: 2026-07-27 · Parked: 2026-07-27
 Reading: docs/DECISIONS.md (D-M), docs/PRD.md §2
 Acceptance: `indofolkwellness.com` presents Saathi as an Indofolk Wellness
   product; "Saathi" re-submitted and APPROVED; a `wa.me` link published so the
@@ -159,6 +159,14 @@ Notes: the WIX_API_KEY is stored and its account covers the site (site id
   is not Saathi's** — nothing published without the operator reading it first.
   The product cost of waiting is real: an elder currently receives medication
   reminders from a company name, not from the companion they talk to.
+
+  **Parked 2026-07-27.** Two things changed under it. The display name is now
+  **"Indofolk AI"**, approved, on an Indian number — so the elder is no longer
+  reading a pet-products company's name. And the operator has said the brand
+  itself is provisional: *"naming is cosmetic, I might change brand name at time
+  to prod, will decide beta testing."* Chasing approval for "Saathi" before that
+  decision would spend a review cycle on a name that may not ship. Revisit when
+  the brand is settled.
 
 ### WA-3 — surface commands and ice breakers   [CLOSED]
 Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
@@ -199,6 +207,31 @@ Result: MET. 8 commands + 4 ice breakers configured on `1266402176549539`,
   the deterministic WHAT_YOU_KNOW handler. "What do you know about me" is a
   transparency feature and must return an exact list, not a generated answer — so
   the ice breaker is worded to hit the deterministic path.
+
+### META-1 — move off MeshPilot's Meta app   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
+Reading: docs/DECISIONS.md (D-J, D-M, D-X), docs/PROD_READINESS.md (PR-5, PR-6)
+Acceptance: Saathi's own Meta app is the sole subscriber to the WABA; its own app
+  secret verifies inbound; a non-expiring token sends; MeshPilot unsubscribed;
+  inbound never gapped during the move. — MET, verified against Graph.
+Write-back: DECISIONS.md (D-X, D-J superseded), PROD_READINESS.md (PR-5 resolved,
+  PR-6 sharpened, PR-45 opened and resolved), CHANGELOG.md
+Notes: app `1019173634258664`, system user `122098890723360160`, token
+  `expires_at: 0`. Sequencing was the whole risk — callback registered while
+  subscribed to nothing, then subscribed alongside MeshPilot, then both
+  credentials swapped in one write, then MeshPilot removed. Any other order
+  fails silently, and silent is what an elder experiences as nothing arriving.
+
+  Two corrections came out of it. PR-5 called the business "borrowed" for a day
+  after D-M had recorded that `ayurpetofficial` is a display label for INDOFOLK
+  WELLNESS PRIVATE LIMITED — our own verified entity. And a session (mine)
+  reported 51 signing violations using `%G?`, which `CONTRIBUTING.md:64` says
+  cannot work here. Both were repetitions of already-resolved facts, which is the
+  failure mode a caveats journal is most prone to.
+
+  **Still unproven and it is the only thing left:** no real inbound message has
+  round-tripped through the new app. Signatures, tokens and API reads are all
+  verified; a live message is not.
 
 ### AI-1 — per-account OpenRouter keys   [BUILT, BLOCKED ON CREDITS]
 Owner: Claude (runtime box)        Opened: 2026-07-27 · Built: 2026-07-27

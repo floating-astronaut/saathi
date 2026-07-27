@@ -370,6 +370,7 @@ Two hard stops, neither fixable in code:
 "verify the business, *then* submit templates": two serial multi-day waits, not one. Business
 verification should start before anything else in the Meta lane.
 
+**Superseded 2026-07-27 (D-M, D-X): the number is +91 8071 581 944, Indian, GREEN.**
 Also note for the pilot, not for testing: the number is **+1 Canadian** and its display name is
 **"Jordan Hale"**. India rates, quality rating and template pacing key off the sender's country,
 so §14's cost model won't hold on this number, and elders would see an influencer persona's name.
@@ -530,6 +531,7 @@ wrong token → 403, unsigned POST → 403, `/healthz` → 200, `/admin` → 404
 🚩 **One blocker before Meta can deliver messages: `WA_APP_SECRET` is empty.**
 `valid_signature()` fails closed, so every real webhook POST will 403. The secret belongs to
 Meta app `1571039744742551` — the same app MeshPilot uses, where it exists as `META_APP_SECRET`.
+**Superseded 2026-07-27 (D-X):** Saathi runs on its own app `1019173634258664`.
 Reusing it or fetching a fresh copy from the app dashboard is an operator decision.
 
 **Still not done:** `WA_APP_SECRET`, registering the callback URL with Meta, TTS,

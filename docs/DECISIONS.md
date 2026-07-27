@@ -77,12 +77,49 @@ record removed.
 SSM command text is retained and visible in the AWS console. The box fetches its
 own secrets with its instance role instead.
 
-### D-J · Meta app shared with MeshPilot · 2026-07-26
-Saathi uses Meta app `1571039744742551` and the ayurpet per-BM system-user token
+### D-J · Meta app shared with MeshPilot · 2026-07-26 — SUPERSEDED 2026-07-27
+Saathi used Meta app `1571039744742551` and the ayurpet per-BM system-user token
 under business `ayurpetofficial` (verified), which owns the `Saatih AI APP` WABA.
-Operator decision, made knowingly: it couples the two products at the credential
+Operator decision, made knowingly: it coupled the two products at the credential
 layer, in exchange for a verified business and a CLOUD_API number today. A
-Saathi-owned app remains the clean end state.
+Saathi-owned app remained the clean end state.
+
+**Superseded by D-X.** The clean end state arrived: Saathi has its own app, its
+own app secret, and its own permanent system user token. Nothing is shared with
+MeshPilot at the credential layer any more.
+
+### D-X · Saathi's own Meta app; the business was never borrowed · 2026-07-27
+The migration off `1571039744742551`, and the correction of a thing three
+documents had been repeating.
+
+**Own app.** **Indofolk AI `1019173634258664`** is the sole subscriber to WABA
+`1687148075730227`. Its app secret verifies every inbound webhook — a body signed
+with it returns 200, the identical body signed with MeshPilot's returns 403. The
+access token is `type: SYSTEM_USER` with `expires_at: 0`, on system user
+`122098890723360160`, scoped to `whatsapp_business_messaging` and
+`whatsapp_business_management`. MeshPilot is unsubscribed.
+
+**Sequenced so inbound never had a gap:** register and verify the new callback
+while that app was subscribed to nothing → subscribe it *alongside* MeshPilot so
+both delivered → swap `WA_APP_SECRET` and `WA_ACCESS_TOKEN` in one write →
+unsubscribe MeshPilot. At every point at least one delivery path verified. Do it
+in any other order and inbound fails silently, which for this product means an
+elder receiving nothing and no log line naming them.
+
+**The business was never borrowed, and D-M said so first.** `ayurpetofficial`
+(`935287898727459`) is a display label. The legal entity is **INDOFOLK WELLNESS
+PRIVATE LIMITED**, verified, GSTIN `07AAHCI7432A1ZV` — the entity the privacy and
+terms pages already name. Graph agrees: `verification_status: verified` on the
+business, `ownership_type: SELF` on the WABA. PR-5 nonetheless called it borrowed
+for a further day after D-M recorded the truth.
+
+That is the part worth remembering. **A fact resolved in one document does not
+resolve the rows that repeat it**, and a caveats journal is exactly where a stale
+repetition survives longest, because every row there is *supposed* to describe
+something unfinished. Both were reconciled 2026-07-27.
+
+**Reverse it** only by a deliberate move back to a shared app, which would
+recouple two products at the credential layer for no remaining benefit.
 
 ### D-K · Training corpus is derived, opt-in, and k-anonymised · 2026-07-26
 Operator direction: *"set up training in a way where we do not break any privacy

@@ -85,9 +85,10 @@ elder not getting a medication reminder.
 
 Minting a never-expiring system user token was attempted and refused:
 `(#10) … requires that you can GENERATE_TOKEN_AUDIT_NEEDED for this business
-account`. The system user available (`122180456624889373`, "Conversions API
-System User") is not a WhatsApp admin, and business verification for
-`ayurpetofficial` may also be a gate.
+account`. The system user available at the time (`122180456624889373`,
+"Conversions API System User") was not a WhatsApp admin. Business verification
+was **not** the gate — the business is verified — the missing piece was simply a
+system user with the app assigned.
 **Fix:** create a Saathi system user in Business Manager with the Indofolk AI
 app assigned, generate a non-expiring token with `whatsapp_business_messaging`
 and `whatsapp_business_management`, and set `WA_ACCESS_TOKEN` to it. Until then
@@ -116,36 +117,51 @@ The 60-day user token is kept as `WA_ACCESS_TOKEN_USER_60DAY`. It is **not** a
 rollback target — it is a thing that expires on 2026-09-25, and should be
 deleted from the secret rather than left to look like an option.
 
-### PR-5 · Meta app and WhatsApp number are borrowed
-The app (`1571039744742551`) and the ayurpet system-user token are MeshPilot's;
-the number is **+1 Canadian** and the WABA sits under `ayurpetofficial`
-(decision D-J, made knowingly). India messaging rates, quality rating and
-template pacing all key off the sender's country, so §14's cost model does not
-hold on this number.
-**Fix:** Saathi's own Meta app, its own system user scoped to WhatsApp only, and
-an **Indian** phone number before pricing means anything.
+### PR-5 · Meta app and WhatsApp number are borrowed — RESOLVED 2026-07-27
+The original row: the app (`1571039744742551`) and the ayurpet system-user token
+were MeshPilot's, the number was **+1 Canadian**, and §14's cost model did not
+hold because rates and template pacing key off the sender's country.
 
-**Half resolved 2026-07-27 (evening).** The app is now Saathi's own — **Indofolk
-AI `1019173634258664`**, sole subscriber to WABA `1687148075730227`, its own app
-secret verifying every inbound webhook (proven: a payload signed with the new
-secret returns 200, the same payload signed with MeshPilot's returns 403).
-MeshPilot `1571039744742551` is unsubscribed and no longer receives anything.
-The number is Indian and was already ours: **+91 8071 581 944**, quality GREEN.
+**All four parts are now ours, each checked against Graph rather than assumed:**
 
-**Still borrowed:** the WABA sits under the `ayurpetofficial` business
-(`935287898727459`). The token question is settled — a permanent system user
-token on our own app (PR-45) — so what remains of this row is the business
-itself, and §14's cost model, which keys off the sender's country and is now
+| | |
+|---|---|
+| App | **Indofolk AI `1019173634258664`** — sole subscriber to the WABA |
+| Webhook signature | our own app secret: a body signed with it returns 200, the same body signed with MeshPilot's returns 403 |
+| Token | `type: SYSTEM_USER`, `expires_at: 0` — never — on system user `122098890723360160`, scoped `whatsapp_business_messaging` + `whatsapp_business_management` |
+| Number | **+91 8071 581 944**, Indian, `quality_rating: GREEN`, review APPROVED |
+
+MeshPilot `1571039744742551` is unsubscribed and receives nothing.
+
+**And the business was never borrowed.** `ayurpetofficial` (`935287898727459`) is
+a display label; the legal entity is **INDOFOLK WELLNESS PRIVATE LIMITED**,
+verified, GSTIN `07AAHCI7432A1ZV` — the same entity the privacy and terms pages
+name. D-M recorded this on 2026-07-27 and this row went on calling it borrowed
+anyway, which is the more useful lesson here: a resolved fact in one document
+does not resolve the row that repeats it. Graph confirms
+`business.verification_status: verified` and, on the WABA,
+`ownership_type: SELF` with `business_verification_status: verified`.
+
+§14's cost model can now be read honestly for the first time, because it is
 finally being read from an Indian number.
 
+**Nothing remains borrowed.** See the table above; D-J is superseded.
+
 ### PR-6 · Meta Business Agent is one toggle from taking over
-`GET /{waba}/subscribed_apps` shows Meta's Business Agent app
+`GET /{waba}/subscribed_apps` showed Meta's Business Agent app
 (`1143680903703001`) subscribed to our WABA alongside ours, with
 `rollout.enabled = false` but `ai_audience: EVERYONE`. If enabled, Meta's model
 becomes the primary responder and inbound messages never reach our deterministic
 §12 classifier — risk R7.
-**Fix:** unsubscribe it, or confirm deliberately that it stays disabled and add a
-check that alerts if it flips.
+
+**No longer present, 2026-07-27.** That same endpoint now returns exactly one
+app: Indofolk AI. Left **open** rather than closed, deliberately — the row's
+concern was never that it was subscribed, it was that Meta can subscribe it. An
+absence observed once is not a control.
+**Fix, unchanged:** a check that alerts if the subscribed-apps list ever contains
+an app we did not put there. That is a small addition to PR-3's alerting and it
+would also catch the reverse failure — our own app silently unsubscribed, which
+looks exactly like a dead product.
 
 ### PR-37 · `create_reminder` still cannot take a relative offset
 The model now has a clock, so "5 minute baad" is at least *computable*: it can
