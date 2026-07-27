@@ -85,6 +85,11 @@ Under the hood: tar → `s3://saathi-dev-artifacts-559896294326/saathi.tar.gz` �
 presigned GET fetched over SSM → migrations → `saathi-env-sync` → `uv sync` →
 tests → restart → verify.
 
+Migrations are ledgered in `schema_migrations` and only applied once; anything
+that fails there prints `MIGRATION ABORT` and stops the deploy **before** the
+restart, so the services are never brought up against a schema they do not
+match. Nothing about the test step is that careful — see PR-25.
+
 ## Secrets
 
 Never put a secret in an SSM command — command text is retained and visible in

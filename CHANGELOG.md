@@ -14,6 +14,79 @@ Conventions:
 
 ---
 
+## 2026-07-28 (deploy) — a failed migration used to restart the services anyway
+
+**337 tests passing.** No Python changed; this is `ops/deploy.sh` and two new
+files under `db/`.
+
+### Broke
+
+- **A migration could fail and the deploy would carry on and restart the
+  services.** `remote.sh` runs with `set -uo pipefail` and no `-e`, and the loop
+  was `psql ... >/dev/null 2>&1 && echo ok || echo FAILED`. The failure printed
+  a word and changed nothing else. `saathi-web` and `saathi-worker` then came
+  up against a schema they did not match.
+- **You could not find out why it failed.** `2>&1` to `/dev/null` threw away
+  psql's error. The deploy log said `FAILED` and nothing more.
+- **Every deploy silently re-ran every migration**, and two of them are not
+  idempotent — which is the part nobody had noticed. `003_admission_control`
+  ends with `update user_channels set status='active' where status='pending'`
+  and `005_onboarding` with
+  `update users set onboarding='done' where onboarding='new' and created_at < now()`.
+  Correct once, as backfills. Re-run, they **admit every pending unknown sender
+  and mark every half-onboarded user as consented** — the admission gate and
+  the consent step, both undone by deploying.
+
+  Measured rather than reasoned about: a schema-only copy of the live database,
+  one pending `user_channels` row, one `onboarding='new'` user, put through the
+  old loop. Both came out `done / active`, with all six migrations reporting
+  "ok". Everything looked healthy. It was not.
+
+### Fixed
+
+`ops/deploy.sh` now aborts before the restart. Any of — empty `SAATHI_DB_DSN`,
+ledger unavailable, migration error, ledger write error, checksum mismatch —
+prints `MIGRATION ABORT` and exits 1, and psql's stderr goes to the deploy log
+instead of `/dev/null`.
+
+New `db/schema_migrations.sql` creates the ledger
+(`version, checksum, applied_at, origin, note`) and `db/record_migration.sql`
+writes a row after each migration commits. Version is the filename; checksum is
+the sha256 of the file as applied, so editing a migration after it ran aborts
+the next deploy rather than being skipped in silence.
+
+The six migrations already on the box are **baselined, not assumed**: each is
+claimed only if a sentinel object that exists if and only if that file
+committed is visible right now. Each migration is a single `begin/commit`, so a
+visible sentinel means the whole file landed. Baselined rows are marked
+`origin='baselined'` with a **NULL checksum** — nobody watched them run, so we
+do not claim to know what ran.
+
+Verified on scratch databases on the box, dropped afterwards; the live database
+was only read (`pg_dump --schema-only`). Fresh bootstrap applies six and records
+six; second run applies none; pre-ledger database baselines six and leaves the
+canary rows at `new / pending`; partially migrated pre-ledger database baselines
+002–004 and applies 005–007; edited migration aborts with both checksums shown;
+injected failing migration prints the psql error, aborts, records nothing, and
+never reaches `systemctl restart`. What could not be tested here is the deploy
+end to end — it needs the dev box's AWS profile and SSM permissions. The
+generated `remote.sh` was extracted and read instead, and `bash -n`'d.
+
+Every psql call in the loop passes **`-X`**. `su - ubuntu` is a login shell, so
+psql would otherwise read `~ubuntu/.psqlrc`, and the ledger read is parsed on
+its field separator — one `\pset fieldsep ","` there makes every recorded
+version stop matching, and migrations that were already applied get applied
+again. Proven both ways against a planted `.psqlrc`: without `-X` the read comes
+back `002_identity_and_channels.sql","8146f0…` and the loop starts re-applying
+from 002; with `-X` all six still report "already applied". No such file exists
+on the box today. `-X` is what keeps it from ever mattering.
+
+Known window, written down in `PROD_READINESS.md` rather than smoothed over:
+the ledger insert is a separate statement from the migration's own `commit`, so
+a crash between the two leaves a migration applied but unrecorded.
+
+---
+
 ## 2026-07-28 (later still, again) — the dead reminder path is gone
 
 **337 tests passing.**
