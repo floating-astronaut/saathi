@@ -340,3 +340,66 @@ calls `enqueue(..., "nudge", ...)`, so the registered nudge handler is dead.
   but nothing tells a human. That is PR-3, blocked on `cloudwatch:PutMetricAlarm`
   and SNS (PR-22).
 - PR-4b, above.
+
+---
+
+## 2026-07-27 — Lane DOC-1: the docs said no inbound port was open
+
+### Read
+
+`README.md`, `docs/ARCHITECTURE.md`, `docs/RUNBOOK.md`, `docs/PROD_READINESS.md`,
+and the SAATHI-0 entry above.
+
+### Closed
+
+`sg-0f805961424175e66` (`saathi-dev`) has **exactly one** ingress rule: TCP 22
+from `207.219.25.137/32`, described *"operator Mac SSH dev only"*. It is the
+only security group on the instance. `sshd` accepts one ED25519 key
+(`tejas-mac-saathi-ai`) with `passwordauthentication no`.
+
+**Six** claims were wrong, not the three first counted:
+
+- `README.md` — "No inbound port is open"
+- `docs/ARCHITECTURE.md` — "No inbound port is open"
+- `docs/RUNBOOK.md` — security group "**zero inbound rules**"
+- `docs/RUNBOOK.md` — Access: "**SSM only.** No SSH key exists; port 22 was
+  never opened." Found only while editing the line above it.
+
+- `docs/BUILD_PLAN.md` — the build table's security-group and access rows
+- `docs/BUILD_PLAN.md` — "**No inbound port is open.** The security group still
+  has zero ingress rules" — both found by grepping rather than by the original
+  count, which is the argument for grepping
+
+The four current-state claims now describe the real ingress, and `RUNBOOK.md`
+gains a note that the SSH rule and the Cloudflare token are each pinned to an IP
+that breaks silently when it changes.
+
+`BUILD_PLAN.md` was **annotated, not rewritten**. It is a running log of what
+shipped, and that section is independently stale already — it records the
+*ephemeral* public IP, long since replaced by the EIP. Rewriting it would erase
+when the change happened. It gets dated "Superseded 2026-07-27" notes pointing
+at `RUNBOOK.md` and PR-24, which is the same convention `PRD.md` §0 already uses
+for its own measured-wrong claims. Recorded as **PR-24** in `PROD_READINESS.md`, with the
+production fix being SSM Session Manager and dropping the rule.
+
+### Evidence
+
+- `aws ec2 describe-security-groups` → one `IpPermissions` entry, `tcp 22-22`,
+  `207.219.25.137/32`.
+- `describe-instances` → `sg-0f805961424175e66` is the only group attached.
+- Corroborated a day earlier, before the IAM grant existed, by the operator's
+  `ssh` returning `Permission denied (publickey)` — an *authentication* failure,
+  which proves TCP and the banner exchange already succeeded.
+
+### Not rewritten, deliberately
+
+The SAATHI-0 entry above still reads "zero inbound rules, SSM-only access, no
+SSH key". That was **true when written**. This log is historical evidence and
+does not get corrected; the current-state docs are what drift. Correcting the
+log would destroy the only record of when the change actually happened.
+
+### Note on ids
+
+`PROD_READINESS.md` gains PR-24 and skips PR-23, which is held for lane SEC-2
+(Codex, running concurrently). A gap in a journal is cheaper than two sessions
+claiming one id.

@@ -269,9 +269,16 @@ VPC `vpc-06482039bff81fb9b`, three public subnets.
 |---|---|---|
 | Instance | `i-01b2c27883acb25ca` | `t3.large`, Ubuntu 26.04 LTS, 60 GB gp3 **encrypted**, IMDSv2 required |
 | Public IP | `13.232.244.182` | ephemeral — allocate an EIP before anything points DNS at it |
-| Security group | `sg-0f805961424175e66` | **zero inbound rules.** Egress open |
+| Security group | `sg-0f805961424175e66` | **zero inbound rules.** Egress open — *no longer true, see note below* |
 | IAM role | `saathi-dev-box` | `AmazonSSMManagedInstanceCore` + inline `bedrock-invoke` |
 | Access | **SSM Session Manager only** | no SSH key pair exists in this account, port 22 never opened |
+
+> **Superseded 2026-07-27.** Both rows above were true when written and are not
+> now: TCP 22 was later opened to the operator's Mac (`207.219.25.137/32`) and a
+> key added. The public IP row is stale too — the ephemeral address was replaced
+> by EIP `15.252.75.191`. Left standing rather than rewritten, because this file
+> is the record of what was built when. Current state lives in `RUNBOOK.md`;
+> the exposure is `PROD_READINESS.md` PR-24.
 
 Verified functioning, not merely running: SSM `PingStatus=Online`, a real `AWS-RunShellScript`
 returned `Ubuntu 26.04 LTS`, kernel `7.0.0-1009-aws`, 2 vCPU / 7 GB / 56 GB free, egress IP
@@ -484,6 +491,11 @@ SSH-signing and pushing; it runs no Saathi service and has no Saathi database.
 **No inbound port is open.** The security group still has zero ingress rules; traffic arrives
 only through the tunnel, and `:3130` binds `127.0.0.1`. Verified: direct `http://15.252.75.191:3130`
 is refused.
+
+> **Superseded 2026-07-27.** TCP 22 is now open to `207.219.25.137/32`. The
+> claim about the *application* still holds — `:3130` is not reachable from
+> outside — but the box is no longer without an inbound port. See `RUNBOOK.md`
+> and PR-24.
 
 **Secrets never travel through SSM.** SSM RunShellScript command text is retained and visible in
 the AWS console, so anything embedded in a command leaks into the audit trail. Instead

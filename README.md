@@ -96,8 +96,10 @@ flowchart TB
     class S0,VIS safe
 ```
 
-Everything runs on one box in ap-south-1. **No inbound port is open** — traffic
-arrives only through the tunnel, and `:3130` binds `127.0.0.1`.
+Everything runs on one box in ap-south-1. **No inbound port is open to the
+application** — user traffic arrives only through the Cloudflare tunnel, and
+`:3130` binds `127.0.0.1`. The box itself has exactly one inbound rule: TCP 22
+from the operator's Mac (`207.219.25.137/32`), for operator SSH.
 
 ### Adding a capability
 

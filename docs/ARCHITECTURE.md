@@ -17,7 +17,9 @@ WhatsApp ──webhook──▶ cloudflared ──▶ saathi-web (FastAPI, 127.0
 ```
 
 Everything runs on `i-01b2c27883acb25ca` in **ap-south-1**. No inbound port is
-open; traffic arrives only through the tunnel.
+open to the application — traffic arrives only through the tunnel. The box has
+one inbound rule, TCP 22 from `207.219.25.137/32`, for operator SSH. See
+`RUNBOOK.md`.
 
 ## The boundaries that matter
 
