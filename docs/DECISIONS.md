@@ -277,3 +277,62 @@ its own safety step is not a control.
 **Reverse it** by deleting the flag and the two instance-ID branches;
 `deploy_onbox.sh` is what the artifact path runs either way, so nothing about
 the remote deploy depends on local mode existing.
+
+### D-Q · WhatsApp Cloud API Calling is a future channel, not v1 · 2026-07-27
+Meta's WhatsApp Business Calling API can initiate and receive VoIP calls on the
+same Cloud API business number, with Graph/webhook signaling by default and SIP
+as an explicit integration path. Captured vendor transcript:
+`docs/vendor/meta/cloud-api-calling.md`. It is strategically relevant to Saathi because
+it keeps calling and chat in the same verified WhatsApp thread instead of adding
+a separate PSTN/call-center identity.
+
+It does **not** change v1. Saathi v1 remains WhatsApp chat plus inbound voice
+notes, with outbound TTS as PR-8. Live voice calls introduce a different safety
+surface: call permissions, calling hours, unanswered/rejected-call restrictions,
+possible voicemail/record retention, real-time escalation expectations, and a
+higher abuse cost if an onboarded handle can trigger repeated calls.
+
+Implementation prerequisites to re-check before any lane starts:
+
+- the number must be on WhatsApp Cloud API, not the WhatsApp Business app;
+- the app must subscribe to the `calls` webhook field unless SIP is chosen;
+- the same app must be subscribed to the WABA and have
+  `whatsapp_business_messaging` for the business number;
+- production business-initiated calling needs the required account capability
+  and a daily messaging limit of at least 2,000 unique recipients;
+- calling must be enabled in phone-number call settings, including call icon,
+  business hours, callback and restriction controls;
+- business-initiated calling availability depends on the business phone
+  number's country; the current vendor note excludes US, Canada, Egypt,
+  Vietnam and Nigeria business numbers.
+
+Public test numbers can exercise calling features, but sandbox accounts are for
+Tech Partners. Treat that as a testing constraint, not a product dependency.
+
+**Reverse/advance condition:** advance this only with a dedicated v1.1+ lane that
+adds consent language, rate limits, audit records, retention rules, caregiver
+expectations, and a safety review for real-time calls. Until then, CallerDesk or
+Cloud API Calling credentials may exist, but they stay inert.
+
+### D-R · V1 language scope expands to eleven Indian locales · 2026-07-27
+Operator decision: Saathi v1 focuses on Hindi (`hi-IN`), Bengali (`bn-IN`), Tamil (`ta-IN`), Telugu (`te-IN`), Gujarati (`gu-IN`), Kannada (`kn-IN`), Malayalam (`ml-IN`), Marathi (`mr-IN`), Punjabi (`pa-IN`), Odia (`od-IN`), and English (`en-IN`).
+
+This overturns the earlier D2 posture of Hindi + English only. The reason is
+not that the product suddenly became translation-first; it is that the channel
+and user promise are language-first, and Sarvam appears likely to be the
+load-bearing vendor for speech, normalization, evaluation, and possibly OCR.
+The vendor source shelf starts at `docs/vendor/sarvam/github-repos.md`.
+
+Consequences:
+
+- every STT/entity/time/reminder eval must report per-locale scores, not just an
+  aggregate;
+- onboarding, consent, safety classifier phrases, reminder templates, and TTS
+  voice choices need locale ownership before external users in that locale;
+- Hindi fractional-time scar tissue remains necessary but is no longer
+  sufficient; each language needs its own medicine/time/person failure set;
+- Sarvam examples and tools are source material, not architecture. Runtime
+  safety, budgets, redaction, and tool dispatch remain Saathi-owned controls.
+
+**Reverse it** only by cutting a named locale out of v1 with the reason recorded;
+otherwise future work should assume all eleven locales are in scope.
