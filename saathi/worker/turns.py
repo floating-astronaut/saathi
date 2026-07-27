@@ -197,8 +197,7 @@ async def provision_key(conn, *, turn_id, user_id, payload, scheduled_for):
     On the queue, and **never inside an onboarding turn**. Onboarding is
     deterministic and makes no model call on purpose — that property is what
     makes an open door safe — and a blocking third-party HTTP call on that path
-    would regress it. The account's first turns run on the platform default;
-    its own key takes over once this lands.
+    would regress it. Once this lands, the account's own key is available for model turns.
 
     This turn sends the user nothing, so it settles itself rather than calling
     `_settle`: there is no message id to record, and leaving it 'sent' would

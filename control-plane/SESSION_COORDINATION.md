@@ -13,6 +13,7 @@
 | Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-4 | `saathi/scheduling.py`, `saathi/worker/turns.py`, `saathi/agent/tools/handlers.py`, `tests/test_reminder_delivery.py`, `tests/test_scheduling.py` | **ended** — closed at `64a520b`, surfaces released |
 | Codex | — | 2026-07-27 | SEC-2 | `SECURITY.md` (new, owns it outright) | **ended** — closed SEC-2 at scan `c4b34ba`, surfaces released |
 | Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-3 | `saathi/metrics.py`, `saathi/worker/__main__.py`, `ops/alerting/`, `tests/test_metrics.py` | **ended** — closed, surfaces released |
+| Codex | dev `ip-172-31-32-37` | 2026-07-27T23:04Z | AI-1 follow-up | `saathi/openrouter.py`, `saathi/agent/loop.py`, `saathi/capabilities.py`, `saathi/onboarding.py`, `saathi/admin/grant.py`, `db/migrations/`, `tests/test_openrouter_keys.py`, `tests/test_onboarding.py`, docs/AI routing write-back | **ended** — runtime routing wired; migration 011 queues existing-account provisioning; live spend-through remains |
 
 **Base commit is `6dd6e72`+** (2026-07-27, end of day; it moved again after). `main` moved **51 times**
 on 2026-07-27, so any figure written here goes stale within the hour — do not

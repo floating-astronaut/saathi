@@ -1,3 +1,15 @@
+## 2026-07-27 (AI-1 correction) — key names include workspace when configured
+
+OpenRouter API key creation defaults to the Default workspace when `workspace_id` is omitted. Runtime config was missing `OPENROUTER_WORKSPACE_ID`, so the first live key batch landed in Default. Key names now include `:ws:<workspace-prefix>` when a workspace is configured, allowing a corrected remint even though revoked `ai_keys.name` values remain unique locally.
+
+## 2026-07-27 (AI-1 follow-up) — turns use per-account OpenRouter keys
+
+Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test_onboarding.py tests/test_capabilities.py tests/test_clock.py` — 57 passed.
+
+- User chat turns now resolve `users.account_id` and pass the decrypted active OpenRouter key into the agent loop, so accounts with keys spend through their own capped credential instead of the box instance role.
+- The OpenRouter runtime request is implemented through Chat Completions with constant `provider.allow_fallbacks = false`, `provider.zdr = true`, app attribution headers, and the fixed `z-ai/glm-5` model slug. Bedrock Converse remains as the no-key fallback for paths not yet account-plumbed.
+- Provisioning dedupe keys are now versioned (`provision:v2:<account_id>`) because `scheduled_turns` keeps `(kind, dedupe_key)` unique forever. Migration 011 enqueues `provision_key` for already-onboarded accounts that have no active key; migration 012 additionally provisions every already-existing active account, including the mid-onboarding users in today's live table. Live verification after deploy: all 7 accounts have active key rows with hash+ciphertext, and a real OpenRouter turn through account 3 returned `route ok` with token usage.
+
 # Changelog
 
 What changed in the code, and — more usefully — **what broke and how we found
@@ -265,9 +277,9 @@ works. The admin CLI was exercised against a real schema, not a fake connection.
 Red-checked by deletion from the production path: the prefix guard (1 failure),
 refuse-if-unconfigured (1), lowest-cap fallback (1).
 
-**Not proven: no real key has ever been minted** — the account has 0 credits, so
-every test stops at the HTTP boundary and the response-shape fallback has never
-met a real response. PR-38. Do not put a tester on this before that round trip.
+**Superseded later on 2026-07-27:** a real key was minted and revoked, and runtime
+routing was wired afterward. At the time of this entry, no real key had yet been
+observed and every test stopped at the HTTP boundary.
 
 ### What this opens, and does not close
 
@@ -1347,3 +1359,11 @@ instead of needing its own branch.
 - `Resolved` briefly had a defaulted field before a non-defaulted one.
 - Onboarding tests reached the real `send_buttons` because the spy only patched
   `send_text`, so the window guard raised on a fake connection.
+
+
+OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.
+
+
+Future provisioning guard: `openrouter.mint()` now raises `ProvisioningDisabled` if `OPENROUTER_WORKSPACE_ID` is unset, so a config drift cannot silently mint into OpenRouter Default again.
+
+Future-signup guard: `openrouter.mint()` refuses to mint unless `OPENROUTER_WORKSPACE_ID` is set, and every create-key request includes that workspace id. Verified on-box after deploy.

@@ -233,8 +233,8 @@ Notes: app `1019173634258664`, system user `122098890723360160`, token
   round-tripped through the new app. Signatures, tokens and API reads are all
   verified; a live message is not.
 
-### AI-1 — per-account OpenRouter keys   [BUILT; MINT/REVOKE PROVEN]
-Owner: Claude (runtime box)        Opened: 2026-07-27 · Built: 2026-07-27
+### AI-1 — per-account OpenRouter keys   [CLOSED]
+Owner: Codex (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
 Reading: docs/AI_ROUTING.md, docs/DECISIONS.md (D-D, D-O), docs/vendor/, PR-15
 Acceptance: a paying account gets a capped key minted from `scheduled_turns`;
   calling twice mints once; an unconfigured install refuses rather than storing a
@@ -254,8 +254,12 @@ Notes: design doc written first (THE_METHOD §1) — the code follows it, not th
 
   **Mint and revoke are now proven against the live vendor**, unintentionally: a
   user finished onboarding at 22:39 and `provision_key` minted a real key with a
-  usable hash. `DELETE /keys/{hash}` then returned `{"deleted": true}`. The
-  remaining gap is that no turn yet *routes* through the key.
+  usable hash. `DELETE /keys/{hash}` then returned `{"deleted": true}`. Runtime
+  routing is now wired in code and proven live: user chat turns resolve the
+  account key and call OpenRouter with no fallbacks/ZDR when one exists. Migration
+  012 queued every existing account; live DB verification showed all 7 accounts
+  with active keys; a real probe through account 3 returned `route ok` with token
+  usage.
 
   Confirmed live: workspace `718e8438-…` (Indofolk AI), BYOK `amazon-bedrock`
   "Indian Box" at sort_order 0, `z-ai/glm-5` available, provisioning key valid.
@@ -290,7 +294,7 @@ Notes: three defects surfaced by the conversion, all worse than cosmetic —
   be edited. That is PR-44 and it is the largest remaining gap.
 
 ### PAY-1 — the paywall, in-thread   [BUILT, INERT]
-Owner: Claude (runtime box)        Opened: 2026-07-27 · Built: 2026-07-27
+Owner: Codex (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
 Reading: docs/DECISIONS.md (D-T, D-U), docs/AI_ROUTING.md
 Acceptance: an exhausted account is answered deterministically above the agent;
   no payment tool is reachable by the model; rights (safety, onboarding,
@@ -424,3 +428,6 @@ Result: control plane added by **merge, not scaffold** — `bin/vibe-scaffold`
   would have written `docs/DOC-SYSTEM.md` and `control-plane/ENGINEERING_SUPERVISOR.md`
   alongside Saathi's existing `docs/DOC_SYSTEM.md` and `docs/ENGINEERING_SUPERVISOR.md`,
   forking two sources of truth and violating the kit's own "amend, don't fork" rule.
+
+
+OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.
