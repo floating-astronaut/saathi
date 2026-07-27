@@ -34,6 +34,25 @@ injection cannot cause harm — lives in `agent/tools/specs.py`, in what is *not
 in the tool list. No tool can move money, read an OTP, or touch a third-party
 account. `assert_no_forbidden_tools()` fails the suite if one is added.
 
+**Forwarded content is data, never command.** Text the user did not author —
+forwarded, quoted, or lifted out of an image or PDF — is `RELAYED`, and is
+enforced in **two** places, because withholding tools only ever covered the
+agent:
+
+- `agent` (priority 90) — `provenance.allowed_tools` withholds every mutating
+  tool, and `fence()` presents the text as material rather than as the user
+  speaking.
+- `commands` (priority 22) — the *matcher* requires `c.trusted`. Relayed text
+  simply does not match, and falls through to the agent that already fences it.
+  This was missed originally, and it mattered: STOP matches `\bunsubscribe\b`
+  as a substring, so a forwarded advert set `users.paused = true` and silently
+  stopped that user's reminders.
+
+Buttons (20/21) stay trusted — provenance describes text, and a tap is a
+first-party control the user physically pressed. Onboarding (10) is deliberately
+exempt: gating it would drop an un-onboarded user through to the agent and break
+"onboarding never calls the model", which is what makes an open door safe.
+
 **The 24-hour window is a hard gate, not a convention.** `wa/window.py` refuses
 free-form sends outside the window. Every outbound path funnels through
 `wa/client.py::_send`, which calls the guard first — so it is not possible to

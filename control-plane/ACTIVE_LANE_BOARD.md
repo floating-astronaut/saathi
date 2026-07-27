@@ -104,6 +104,21 @@ Notes: **Codex owns `SECURITY.md` outright — no other session writes it.**
   measured and documented by DOC-1 on 2026-07-27. Re-report those only if you
   find something the existing rows miss.
 
+### PR-23 — forwarded text could drive deterministic commands   [CLOSED]
+Owner: Claude (runtime box)        Opened: 2026-07-27 (Codex SEC-2) · Closed: 2026-07-27
+Reading: saathi/provenance.py, saathi/capabilities.py, saathi/commands.py, docs/ARCHITECTURE.md
+Acceptance: relayed text cannot reach a state-changing command; the user's own
+  typed/spoken commands still work; button presses stay trusted. — MET.
+Result: priority-22 matcher now requires `c.trusted`. 314 tests (+9), and the
+  new tests verified to fail without the guard (4 of 9 go red on revert).
+Notes: **worse than SEC-2 reported.** STOP matches `\bunsubscribe\b` as a
+  substring, and nearly every forwarded advert carries it in the footer. That set
+  `users.paused = true`, which `worker/turns._handle` honours by silently not
+  sending — so a forwarded promo stopped a user's medication reminders
+  indefinitely, with PR-4b guaranteeing nothing would reveal it. No attacker
+  needed. Onboarding (10) left unguarded on purpose: gating it would drop an
+  un-onboarded user to the agent and break "onboarding never calls the model".
+
 ### PR-4b — the reminder ack path is unreachable   [OPEN]
 Owner: unassigned        Opened: 2026-07-27
 Reading: docs/LANDMINES.md (Meta template rules), docs/PRD.md §C2, §15

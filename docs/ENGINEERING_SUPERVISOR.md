@@ -516,3 +516,72 @@ Closure evidence:
   watched live but not audited afterwards. Small read-only IAM ask.
 - I left `/saathi/authz-probe` behind earlier in the day when `DeleteLogGroup`
   was denied; the grant has since landed and the group is gone.
+
+---
+
+## 2026-07-27 — Lane PR-23: a forwarded advert stopped someone's reminders
+
+Picked up from Codex's SEC-2 finding.
+
+### Read
+
+`saathi/provenance.py`, `saathi/capabilities.py`, `saathi/commands.py`,
+`saathi/core/context.py`, `saathi/pipeline.py` (`_run_command`),
+`saathi/worker/turns.py`, `docs/ARCHITECTURE.md`.
+
+### What the lane found beyond the report
+
+SEC-2 reported that a forwarded `stop` or `clear chat` could pause a user. The
+realistic case is worse. `STOP` matches `\bunsubscribe\b` as a **substring**,
+and nearly every forwarded marketing message on Indian WhatsApp carries that
+word in its footer. The full chain:
+
+    forwarded text containing "unsubscribe"
+      -> commands capability (priority 22) matches, no provenance check
+      -> _run_command STOP -> update users set paused = true
+      -> worker/turns._handle sees paused, returns None
+      -> reminder never sent, silently, indefinitely
+
+No attacker is required — a relative forwarding a promo is enough. And because
+the ack path is unreachable (PR-4b), there is no acknowledgement gap and no
+nudge to reveal it. This is the product's worst failure reached by its most
+ordinary event.
+
+### Closed
+
+The priority-22 matcher now requires `c.trusted`. The check is in the **matcher**
+rather than the handler on purpose: an unmatched capability falls through to the
+agent, which already fences relayed text and withholds mutating tools, so the
+fix reuses behaviour we already trust instead of inventing a second refusal path.
+Relayed text is still read and explained — just never obeyed.
+
+Deliberately unchanged:
+
+- **20/21 (buttons)** key on `button_id`. Provenance describes text; a tap is a
+  first-party control the user physically pressed.
+- **10 (onboarding)** matches `not c.is_onboarded`. Guarding it would drop an
+  un-onboarded user through to the agent, breaking "onboarding never calls the
+  model" — the property that makes an open door safe. Gating it would have been
+  the intuitive move and the wrong one.
+
+### Evidence
+
+- 314 tests passing (305 before; 9 new in `tests/test_relayed_commands.py`).
+- **The new tests were verified to fail without the fix** — reverting the guard
+  turns 4 of the 9 red. A regression test that passes either way proves nothing.
+- Coverage includes the realistic advert-with-footer case, bare `stop`,
+  `delete everything`, Hinglish `band kar`, plus the things that must keep
+  working: the user's own typed and spoken commands, relayed text still reaching
+  the agent, buttons still trusted on a relayed turn.
+
+### Remains
+
+- `commands.parse` is substring-based for most patterns. Narrowing it is a
+  separate question from provenance and was left alone — the guard closes the
+  security hole regardless of how loose the patterns are.
+- PR-27 recorded: the box gained `secretsmanager:PutSecretValue` today for the
+  CallerDesk keys. Reading secrets is a confidentiality exposure; rewriting them
+  is an integrity one. Should drop back to read-only once CallerDesk is wired.
+- CallerDesk keys are stored and synced but **inert** — nothing references
+  `CALLERDESK_*`. Wiring them needs a `DECISIONS.md` entry first, since PRD §4
+  puts voice calls out of scope for v1.

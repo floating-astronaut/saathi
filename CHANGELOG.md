@@ -14,6 +14,42 @@ Conventions:
 
 ---
 
+## 2026-07-27 (later still)
+
+**314 tests passing.**
+
+### Broke
+
+- **A forwarded advert silently stopped someone's medication reminders.** No
+  error, no bounce, nothing in the logs — the reminders just never arrived
+  again. `commands` runs at priority 22, long before the agent, and matched on
+  raw text without asking who wrote it. STOP matches `\bunsubscribe\b` as a
+  *substring*, and nearly every forwarded marketing message carries that word in
+  its footer. Matching set `users.paused = true`, and `worker/turns._handle`
+  silently declines to send to a paused user. It needed no attacker — one
+  relative forwarding a promo did it, and it persisted until the user happened
+  to say "resume". Found by Codex's security scan (SEC-2); the `unsubscribe`
+  substring and the reminder consequence were traced while fixing it.
+
+### Fixed
+
+- `saathi/capabilities.py` — the priority-22 matcher now requires `c.trusted`.
+  The check lives in the *matcher*, not the handler: an unmatched capability
+  falls through to the agent, which already fences relayed text and withholds
+  mutating tools, so the safe behaviour is reused rather than reinvented.
+  Relayed text is still read and explained — just never obeyed.
+- Priorities 20/21 unchanged: they key on `button_id`, and a tap is first-party.
+- Onboarding (10) deliberately **not** guarded — gating it would drop an
+  un-onboarded user to the agent and break "onboarding never calls the model",
+  which is what makes an open door safe.
+
+### Tests
+
+`tests/test_relayed_commands.py` (9). Verified they fail without the guard —
+4 of the 9 go red when it is reverted, so they test the thing they claim to.
+
+---
+
 ## 2026-07-27 (later)
 
 Alerting built (PR-3). **305 tests passing.**
