@@ -1,35 +1,104 @@
 #!/usr/bin/env bash
 # Deploy main to the ap-south-1 box. One command, same sequence every time.
 #
-# Why an artifact rather than editing on the box or running an agent there:
-# the box has no SSH by design (SSM only), and every commit must be SSH-signed
-# with a key that lives on the dev box. Authoring there would mean copying the
-# signing key onto a second machine or committing unsigned. So: author and sign
-# here, ship an artifact, restart there.
+# Two transports, one deploy. Everything that happens *on the box* lives in
+# ops/deploy_onbox.sh and ops/deploy_verify.sh, and both transports run those
+# same two files. This script only decides how the tree gets there.
 #
-#   ops/deploy.sh              full deploy: sync, migrate, test, restart, verify
-#   ops/deploy.sh --no-test    skip the on-box test run
-#   ops/deploy.sh --check      verify only; change nothing
+#   remote (default) — from the dev box, over S3 + SSM. Why an artifact rather
+#     than editing on the box: the box has no SSH by design (SSM only), and
+#     every commit must be SSH-signed with a key that lives on the dev box.
+#     Authoring there would mean copying the signing key onto a second machine
+#     or committing unsigned. So: author and sign there, ship an artifact.
+#
+#   --local — from the runtime box itself, for the session that is already
+#     standing on the target. It skips the tar/S3/presign/SSM transport and
+#     nothing else. It does not skip the clean-tree gate, dependency sync, the
+#     tests, the migrations, the restart or the verification, because those are
+#     the deploy.
+#
+#   ops/deploy.sh                  remote: sync, migrate, test, restart, verify
+#   ops/deploy.sh --no-test        skip the on-box test run
+#   ops/deploy.sh --check          verify only; change nothing
+#   ops/deploy.sh --local          the same deploy, run on the box
+#   ops/deploy.sh --local --check  verify only, and no AWS call at all
+#   ops/deploy.sh --local --target DIR
+#                                  rehearsal against a scratch tree: real
+#                                  install, migrations, uv sync and tests, but
+#                                  no env-sync and no restart. See
+#                                  ops/deploy_onbox.sh for why that is bound to
+#                                  the target rather than to a flag.
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 INSTANCE=i-01b2c27883acb25ca
 BUCKET=saathi-dev-artifacts-559896294326
 REGION=ap-south-1
 PROFILE=mp-dev
-export AWS_PROFILE="$PROFILE" AWS_REGION="$REGION"
+CANONICAL_REPO=/home/ubuntu/saathi
 
 RUN_TESTS=1
 CHECK_ONLY=0
-for a in "$@"; do
-  case "$a" in
-    --no-test) RUN_TESTS=0 ;;
-    --check)   CHECK_ONLY=1 ;;
-    *) echo "unknown flag: $a" >&2; exit 2 ;;
+LOCAL=0
+TARGET=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-test) RUN_TESTS=0; shift ;;
+    --check)   CHECK_ONLY=1; shift ;;
+    --local)   LOCAL=1; shift ;;
+    --target)  TARGET="${2:-}"; shift 2 ;;
+    *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
+die() { echo "$*" >&2; exit 1; }
+
+# --- which box am I on? ------------------------------------------------------
+# The mode is an explicit flag, not a guess — but the flag is checked against
+# the box, and a disagreement stops the deploy. Both wrong directions cost
+# somebody an afternoon:
+#
+#   remote mode on the runtime box — "AccessDenied: ssm:SendCommand", which
+#     reads as a broken setup rather than as "you are standing on the target".
+#   local mode on the dev box — would install the tree over a checkout that is
+#     not the runtime tree and restart units that do not exist there.
+#
+# So `--local` needs *positive* identification. An unreadable instance ID is
+# not permission to continue; only the affirmative claim has to be proved.
+this_instance() {
+  local tok
+  tok=$(curl -sS -m 3 -X PUT http://169.254.169.254/latest/api/token \
+          -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null) || return 1
+  [ -n "$tok" ] || return 1
+  curl -sS -m 3 -H "X-aws-ec2-metadata-token: $tok" \
+       http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null
+}
+IID=$(this_instance || true)
+
+if [ "$LOCAL" -eq 1 ]; then
+  if [ "$IID" != "$INSTANCE" ]; then
+    echo "refusing --local: this box is not the deploy target." >&2
+    echo "  target:   $INSTANCE" >&2
+    echo "  this box: ${IID:-<instance id unreadable>}" >&2
+    echo "--local installs a tree into $CANONICAL_REPO and restarts saathi-web" >&2
+    echo "and saathi-worker. It has to be certain where it is; it is not." >&2
+    exit 1
+  fi
+else
+  if [ "$IID" = "$INSTANCE" ]; then
+    echo "refusing: you are on the deploy target ($INSTANCE), and the default" >&2
+    echo "transport reaches it over SSM from the dev box. The instance role" >&2
+    echo "saathi-dev-box is denied ssm:SendCommand and there is no '$PROFILE'" >&2
+    echo "profile here, so this would fail with an IAM error that says nothing" >&2
+    echo "about the real problem." >&2
+    echo "Use:  ops/deploy.sh --local" >&2
+    exit 1
+  fi
+  export AWS_PROFILE="$PROFILE" AWS_REGION="$REGION"
+fi
+
+[ -z "$TARGET" ] || [ "$LOCAL" -eq 1 ] || die "--target only means anything with --local"
 
 ssm() {  # run a script on the box and stream back its output
   local script="$1" timeout="${2:-900}"
@@ -58,11 +127,33 @@ json.dump({'commands': open(sys.argv[1]).read().split(chr(10))}, sys.stdout)" "$
   fi
 }
 
+on_box() {  # run a script on the box, from whichever side of the wire we are
+  local script="$1" timeout="${2:-900}"
+  if [ "$LOCAL" -eq 1 ]; then
+    sudo bash "$script"
+  else
+    ssm "$script" "$timeout"
+  fi
+}
+
 # --- refuse to deploy something that is not committed ------------------------
 # A deploy that does not correspond to a commit cannot be reproduced or rolled
 # back, and nobody can tell later what is actually running.
+#
+# Remote mode gets this cheaply: the artifact is built from a clean checkout on
+# the dev box. Local mode has no artifact and no build step, so the same
+# guarantee has to be asserted here — otherwise "deploy from the box" quietly
+# becomes "copy whatever is in this directory onto a live elder-care service",
+# which is the hand-rolling this lane exists to end. Local mode is therefore
+# gated by everything remote mode is gated by, plus two checks that only it
+# needs. It deploys the checkout that contains the deploy.sh you invoked; there
+# is deliberately no flag for pointing it at some other directory.
+VERIFY_SCRIPT="$REPO_DIR/ops/deploy_verify.sh"
+
 if [ "$CHECK_ONLY" -eq 0 ]; then
   cd "$REPO_DIR"
+  git rev-parse --git-dir >/dev/null 2>&1 \
+    || die "refusing: $REPO_DIR is not a git checkout, so there is no commit to deploy."
   if [ -n "$(git status --porcelain)" ]; then
     echo "refusing: working tree is dirty. Commit first — a deploy that does not" >&2
     echo "match a commit cannot be reproduced or rolled back." >&2
@@ -70,134 +161,83 @@ if [ "$CHECK_ONLY" -eq 0 ]; then
     exit 1
   fi
   BRANCH=$(git rev-parse --abbrev-ref HEAD)
-  [ "$BRANCH" = "main" ] || { echo "refusing: on '$BRANCH', not main" >&2; exit 1; }
-  SHA=$(git rev-parse --short HEAD)
-  say "deploying $SHA from main"
-fi
+  [ "$BRANCH" = "main" ] || die "refusing: on '$BRANCH', not main"
 
-if [ "$CHECK_ONLY" -eq 0 ]; then
-  say "package + upload"
+  if [ "$LOCAL" -eq 1 ]; then
+    # /home/ubuntu/saathi has a .git of its own: a three-commit stub with no
+    # remotes, predating the application, left behind because deploys unpack a
+    # tarball over the tree rather than pulling. It reports branch `main`, and
+    # it would pass the two checks above on a freshly deployed tree — so a
+    # session that ran ops/deploy.sh --local from inside it would sail through
+    # the gate and then install the deployed tree over itself, from a commit
+    # that is not the commit anyone thinks is running. Refused twice below, for
+    # two independent reasons, because this one has already misled a session.
+    git remote -v | grep -qi saathi || die \
+"refusing: $REPO_DIR has no git remote naming saathi. The .git inside the
+deployed tree is a stub with no remotes; it is not a source to deploy from."
+    [ "$REPO_DIR" != "$CANONICAL_REPO" ] || die \
+"refusing: $REPO_DIR is the deploy target itself. Deploy from a real checkout —
+the tree on the box is not one."
+  fi
+
+  SHA=$(git rev-parse --short HEAD)
+  if [ "$LOCAL" -eq 1 ]; then
+    say "deploying $SHA from main — local, on $INSTANCE, into ${TARGET:-$CANONICAL_REPO}"
+  else
+    say "deploying $SHA from main — remote, to $INSTANCE"
+  fi
+
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+
+  # The staged tree is built identically in both modes, so both install exactly
+  # the same bytes and run exactly the same on-box script. Only the transport
+  # between here and the box differs.
+  say "stage"
   cp -r "$REPO_DIR" "$TMP/saathi"
   rm -rf "$TMP/saathi/.git" "$TMP/saathi/.venv" "$TMP/saathi/.env" "$TMP"/saathi/.env.bak.*
-  tar czf "$TMP/saathi.tar.gz" -C "$TMP" saathi
-  aws s3 cp "$TMP/saathi.tar.gz" "s3://$BUCKET/saathi.tar.gz" --only-show-errors
-  URL=$(aws s3 presign "s3://$BUCKET/saathi.tar.gz" --expires-in 1800)
+  chmod +x "$TMP/saathi/ops/deploy_onbox.sh" "$TMP/saathi/ops/deploy_verify.sh"
+  VERIFY_SCRIPT="$TMP/saathi/ops/deploy_verify.sh"
 
-  cat > "$TMP/remote.sh" <<REMOTE
+  if [ "$LOCAL" -eq 1 ]; then
+    # An array, so a --target with an odd character in it cannot become two
+    # arguments. Remote mode never carries one: --target requires --local, so
+    # the string built for the heredoc below is always the constant path.
+    ONBOX_ARGV=(--repo "${TARGET:-$CANONICAL_REPO}")
+    [ "$RUN_TESTS" -eq 1 ] || ONBOX_ARGV+=(--no-test)
+
+    say "install, migrate, test, restart"
+    sudo bash "$TMP/saathi/ops/deploy_onbox.sh" --from "$TMP/saathi" "${ONBOX_ARGV[@]}"
+  else
+    ONBOX_ARGS="--repo $CANONICAL_REPO"
+    [ "$RUN_TESTS" -eq 1 ] || ONBOX_ARGS="$ONBOX_ARGS --no-test"
+
+    say "package + upload"
+    tar czf "$TMP/saathi.tar.gz" -C "$TMP" saathi
+    aws s3 cp "$TMP/saathi.tar.gz" "s3://$BUCKET/saathi.tar.gz" --only-show-errors
+    URL=$(aws s3 presign "s3://$BUCKET/saathi.tar.gz" --expires-in 1800)
+
+    # This heredoc is unquoted, so it expands on *this* box. Only $URL and
+    # $ONBOX_ARGS are meant to, and nothing else in it contains a dollar sign or
+    # a backtick — which is the cheapest way to keep it that way, now that the
+    # 120 delicate lines that used to live here are a file the box runs instead.
+    # A previous session put backticks in a comment here and the heredoc ran
+    # su - ubuntu at generation time, on the dev box, and hung on a password
+    # prompt.
+    cat > "$TMP/remote.sh" <<REMOTE
 set -uo pipefail
-REPO=/home/ubuntu/saathi
-rm -rf /tmp/s && mkdir -p /tmp/s
-curl -fsSL -o /tmp/s/s.tgz "$URL" || { echo "FETCH FAILED"; exit 1; }
-tar xzf /tmp/s/s.tgz -C /tmp/s && cp -r /tmp/s/saathi/. \$REPO/
-chown -R ubuntu:ubuntu \$REPO
-DSN=\$(grep -m1 '^SAATHI_DB_DSN=' \$REPO/.env | cut -d= -f2-)
-if [ -z "\$DSN" ]; then
-  echo "MIGRATION ABORT: no SAATHI_DB_DSN in \$REPO/.env — refusing to guess a database"
-  exit 1
-fi
-
-# -X on every psql below is load-bearing, not tidiness. su - ubuntu is a login
-# shell, so psql would read ~ubuntu/.psqlrc, and the ledger read below is parsed
-# on its field separator. A single pset of fieldsep or format in that file makes
-# every version look unrecorded, so all six migrations re-apply and 003/005
-# re-run their backfills — the exact corruption this loop exists to prevent.
-# No such file exists on the box today; -X is what keeps that from mattering.
-# (No backticks in this heredoc, either: it is unquoted, so they would run.)
-
-# The ledger, plus the one-time baseline of everything applied before it
-# existed. Idempotent; see db/schema_migrations.sql for why it is not itself a
-# migration.
-if ! su - ubuntu -c "psql -X '\$DSN' -q -v ON_ERROR_STOP=1 -f \$REPO/db/schema_migrations.sql" 2>&1; then
-  echo "MIGRATION ABORT: could not establish the schema_migrations ledger"
-  exit 1
-fi
-
-# One read of the ledger: "version|checksum" per line, checksum empty when the
-# row was baselined. Both fields are whitespace-free (a filename we control and
-# a hex digest), which is what lets the word-split loop below work.
-if ! APPLIED=\$(su - ubuntu -c "psql -X '\$DSN' -qtA -v ON_ERROR_STOP=1 -c 'select version, checksum from schema_migrations'"); then
-  echo "MIGRATION ABORT: could not read schema_migrations"
-  exit 1
-fi
-
-for m in \$REPO/db/migrations/*.sql; do
-  # An empty or missing db/migrations leaves the glob unexpanded. It already
-  # fails safe — psql cannot open a file called '*.sql' — but says so as a
-  # migration error, which sends the reader looking for the wrong thing.
-  if [ ! -e "\$m" ]; then
-    echo "MIGRATION ABORT: no migration files at \$REPO/db/migrations/*.sql —"
-    echo "the artifact is incomplete, not the database. Services not restarted."
-    exit 1
-  fi
-  b=\$(basename "\$m")
-  sum=\$(sha256sum "\$m" | cut -d' ' -f1)
-  if [ -z "\$sum" ]; then
-    echo "  migration \$b: could not checksum the file"
-    echo "MIGRATION ABORT: an empty checksum would be recorded as a string, not a"
-    echo "NULL, and would read back for ever as an unverifiable baselined row."
-    exit 1
-  fi
-  known=0; have=""
-  for line in \$APPLIED; do
-    case "\$line" in "\$b|"*) known=1; have=\${line#*|} ;; esac
-  done
-  if [ "\$known" = "1" ]; then
-    if [ -z "\$have" ]; then
-      echo "  migration \$b already applied (baselined, checksum unknown)"
-    elif [ "\$have" = "\$sum" ]; then
-      echo "  migration \$b already applied"
-    else
-      echo "  migration \$b CHECKSUM MISMATCH"
-      echo "    recorded \$have"
-      echo "    on disk  \$sum"
-      echo "  The file changed after it was applied, so the database is not what"
-      echo "  db/migrations says it is. Write a new migration instead; if the edit"
-      echo "  really was a no-op, update the recorded checksum by hand and say so."
-      echo "MIGRATION ABORT: services not restarted"
-      exit 1
-    fi
-    continue
-  fi
-  echo "  migration \$b applying"
-  if ! su - ubuntu -c "psql -X '\$DSN' -q -v ON_ERROR_STOP=1 -f \$m" 2>&1; then
-    echo "  migration \$b FAILED — psql error above"
-    echo "MIGRATION ABORT: services not restarted; they would run against a schema"
-    echo "they do not match. Fix the migration and redeploy."
-    exit 1
-  fi
-  if ! su - ubuntu -c "psql -X '\$DSN' -q -v ON_ERROR_STOP=1 -v ver=\$b -v sum=\$sum -f \$REPO/db/record_migration.sql" 2>&1; then
-    echo "  migration \$b applied but NOT RECORDED — it will be attempted again"
-    echo "MIGRATION ABORT: services not restarted"
-    exit 1
-  fi
-  echo "  migration \$b ok"
-done
-saathi-env-sync
-su - ubuntu -c "cd \$REPO && ~/.local/bin/uv sync --quiet --extra dev"
-if [ "$RUN_TESTS" = "1" ]; then
-  su - ubuntu -c "cd \$REPO && ~/.local/bin/uv run pytest -q 2>&1 | tail -2"
-fi
-systemctl restart saathi-web saathi-worker
-sleep 9
+rm -rf /tmp/saathi-deploy && mkdir -p /tmp/saathi-deploy
+curl -fsSL -o /tmp/saathi-deploy/s.tgz "$URL" || { echo "FETCH FAILED"; exit 1; }
+tar xzf /tmp/saathi-deploy/s.tgz -C /tmp/saathi-deploy || { echo "UNPACK FAILED"; exit 1; }
+exec bash /tmp/saathi-deploy/saathi/ops/deploy_onbox.sh --from /tmp/saathi-deploy/saathi $ONBOX_ARGS
 REMOTE
-  say "sync, migrate, test, restart"
-  ssm "$TMP/remote.sh"
+    say "install, migrate, test, restart"
+    ssm "$TMP/remote.sh"
+  fi
 fi
 
 # --- verify: active is not the same as working -------------------------------
 say "verify"
-VERIFY=$(mktemp); trap 'rm -f "$VERIFY"' EXIT
-cat > "$VERIFY" <<'REMOTE'
-for u in saathi-web saathi-worker cloudflared-saathi postgresql; do
-  printf '  %-20s %s\n' "$u" "$(systemctl is-active $u)"
-done
-echo -n "  healthz              "; curl -s --max-time 8 http://127.0.0.1:3130/healthz; echo
-echo "  worker kinds         $(journalctl -u saathi-worker --since '90 seconds ago' --no-pager | grep -o "scheduled kinds:.*" | tail -1)"
-ERR=$(journalctl -u saathi-web -u saathi-worker --since '90 seconds ago' --no-pager | grep -ciE 'traceback|critical' || true)
-echo "  errors since restart $ERR"
-REMOTE
-ssm "$VERIFY" 300
+on_box "$VERIFY_SCRIPT" 300
 
 say "public surfaces"
 printf '  %-34s %s\n' "healthz (through tunnel)" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://saathi.n8nworld.store/healthz)"

@@ -30,13 +30,30 @@ site  ──▶  the public site  ──▶  Cloudflare Pages → n8nworld.store
 
 ## Deploying
 
+Which box you are on decides the flag, and nothing else:
+
 ```bash
-ops/deploy.sh
+ops/deploy.sh            # from the dev box (us-east-2): tar -> S3 -> SSM
+ops/deploy.sh --local    # from the runtime box (ap-south-1): no S3, no SSM
 ```
 
-Never hand-roll the tar/S3/SSM sequence — that is how a migration step gets
-skipped at the wrong moment. The script refuses a dirty tree or a non-`main`
-branch on purpose.
+`--local` skips the transport and **nothing else** — same clean-tree gate, same
+`uv sync`, same tests, same ledgered migrations, same restart, same
+verification, from the same `ops/deploy_onbox.sh` the artifact path runs. It
+exists because until 2026-07-27 there was no way to deploy from the box, and a
+session that had to fixed a live vulnerability by copying four modules in by
+hand instead. Do not do that again; run the script.
+
+You cannot pick the wrong one silently: each mode checks the instance ID and
+refuses on the other box, with a message that names the flag you wanted.
+
+Never hand-roll the tar/S3/SSM sequence, and never hand-roll the local
+equivalent either — that is how a migration step gets skipped at the wrong
+moment. Both modes refuse a dirty tree or a non-`main` branch on purpose;
+`--local` also refuses a source with no saathi remote, which is what the
+vestigial `.git` inside `/home/ubuntu/saathi` looks like. See `docs/RUNBOOK.md`
+for that trap, for rehearsing a deploy against a scratch target, and for putting
+the previous tree back.
 
 ## Every commit
 
