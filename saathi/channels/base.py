@@ -58,7 +58,7 @@ class Transport(Protocol):
     async def send_template(self, conn, user_id: int, handle: str, name: str,
                             lang: str, variables: list[str]) -> str: ...
 
-    async def fetch_media(self, media_id: str) -> bytes: ...
+    async def fetch_media(self, media_id: str, max_bytes: int) -> bytes: ...
 
     def format_text(self, text: str) -> str:
         """Render model output in this channel's native markup."""
@@ -71,3 +71,20 @@ class ChannelNotAvailable(RuntimeError):
     On WhatsApp this means the 24-hour window has closed and only a template is
     deliverable. On a channel without a window it should never be raised.
     """
+
+
+class MediaTooLarge(RuntimeError):
+    """The sender's file exceeds the byte limit the caller asked for.
+
+    `fetch_media` takes its limit as an argument rather than defaulting to one,
+    so a new call site cannot inherit "no limit" by omission. Raised *instead
+    of* returning bytes: a transport that could not establish the size of what
+    it was downloading must refuse, because "I could not tell" and "it is small"
+    are not the same answer.
+    """
+
+    def __init__(self, media_id: str, size: int | None, limit: int):
+        super().__init__(
+            f"media {media_id} is {size if size is not None else 'an unknown number of'} "
+            f"bytes, over the {limit}-byte limit")
+        self.media_id, self.size, self.limit = media_id, size, limit

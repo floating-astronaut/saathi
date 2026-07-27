@@ -35,8 +35,8 @@ class WhatsAppTransport(Transport):
         return await wa.send_template(conn, user_id, handle, name, lang, variables or [],
                                       payloads=payloads or [])
 
-    async def fetch_media(self, media_id):
-        return await wa.fetch_media(media_id)
+    async def fetch_media(self, media_id, max_bytes):
+        return await wa.fetch_media(media_id, max_bytes)
 
     def format_text(self, text: str) -> str:
         return to_whatsapp_text(text)

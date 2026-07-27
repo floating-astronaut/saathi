@@ -58,5 +58,68 @@ class Settings(BaseSettings):
     #: handle before going silent. Each reply costs money.
     saathi_admission_max_replies: int = 2
 
+    # --- inbound media limits (PR-26) ---------------------------------------
+    # Admission is open, so "a valid sender" is a low bar and none of these may
+    # assume good faith. Every number below is a bound on what *one* inbound
+    # message may cost this box — 2 vCPU and 8 GiB, shared with the reminder
+    # worker, whose worst failure is a missed dose.
+
+    #: Photographs. Equal to what the vision model itself accepts, so the two
+    #: cannot drift apart and produce a blob we downloaded and then cannot use.
+    #: WhatsApp's own inbound image ceiling is 5 MB, so this refuses nothing a
+    #: user could actually send as a photo.
+    saathi_max_image_bytes: int = 5 * 1024 * 1024
+    #: PDFs. We only ever read the first `documents.MAX_PAGES` pages, and a
+    #: 300-dpi colour scan of one A4 page is 2-5 MiB — so 8 MiB covers anything
+    #: we would actually read, while bounding what a single message can hold in
+    #: memory. WhatsApp permits documents up to 100 MB; we do not.
+    saathi_max_document_bytes: int = 8 * 1024 * 1024
+    #: Voice notes. `fetch_media` refuses to run without a limit, and this is
+    #: the honest one for audio: WhatsApp's own inbound ceiling, so it refuses
+    #: nothing a phone can send while still bounding the blob we hold and hand
+    #: to ffmpeg. Tightening it is a speech-lane decision, not this one.
+    saathi_max_audio_bytes: int = 16 * 1024 * 1024
+
+    #: How many inbound media messages may be *in flight* at once, process-wide.
+    #: The webhook detaches every message with `asyncio.create_task`, so without
+    #: this the number of simultaneous multi-MiB blobs in memory is whatever the
+    #: sender chooses. Four is far above real demand (a handful of elders, a few
+    #: photos a day) and caps resident media at ~32 MiB.
+    saathi_media_concurrency: int = 4
+    #: How many *documents* may be parsed or rasterised at once. One, not two:
+    #: PDF parsing is CPU-bound and holds the GIL, the box has 2 vCPU, and the
+    #: same event loop also runs the safety classifier and every other user's
+    #: turn. One in flight leaves a core for everything else. The second
+    #: document is refused with a message rather than queued — an unbounded
+    #: queue would answer minutes after the person gave up, and would itself be
+    #: the memory leak this limit exists to prevent.
+    saathi_doc_concurrency: int = 1
+
+    #: Refuse a PDF declaring more pages than this before parsing any of them.
+    #: We read 3; 200 is well past any bill, statement or report an elder is
+    #: sent, and stops a page-tree bomb being walked at all.
+    saathi_pdf_max_pages: int = 200
+    #: Wall clock for the pypdf text pass, which runs in a bounded thread pool
+    #: rather than on the event loop. A legitimate three-page extraction is
+    #: milliseconds; 8s is several hundred times that and still short enough
+    #: that a hostile file is dropped before it matters.
+    saathi_pdf_parse_timeout_s: float = 8.0
+    #: Wall clock for `pdftoppm`. One page at this size renders in well under a
+    #: second; 15s covers a genuinely heavy vector page on a busy 2-vCPU box.
+    saathi_pdf_render_timeout_s: float = 15.0
+    #: Longest edge of the rasterised page, in pixels. Bounds the raster by the
+    #: *output* rather than by DPI, because the page's declared size is
+    #: attacker-controlled and `-r 150` on a 200-inch page is not bounded at
+    #: all. 1700px matches what 150 dpi gave for A4, which the vision model
+    #: downsamples anyway.
+    saathi_pdf_render_max_px: int = 1700
+    #: RLIMIT_AS for pdftoppm. A legitimate A4 raster working set is ~10 MiB;
+    #: 512 MiB is 50x that and far below the point where a decompression bomb
+    #: could push this box into swap and take the reminder worker with it.
+    saathi_pdf_render_max_mem_mb: int = 512
+    #: RLIMIT_FSIZE for pdftoppm — the only part of this path that writes to
+    #: disk. A 1700px PNG is 1-3 MiB.
+    saathi_pdf_render_max_output_mb: int = 32
+
 
 settings = Settings()

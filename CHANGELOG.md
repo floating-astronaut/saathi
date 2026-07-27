@@ -14,6 +14,92 @@ Conventions:
 
 ---
 
+## 2026-07-28 (hardening) — an inbound document had no limit, and never arrived
+
+**364 tests passing** (337 before). PR-26.
+
+### Broke
+
+- **Every inbound document failed before it reached the reader.** Send a PDF and
+  nothing comes back — no reply, no refusal, just a `failed handling wamid.…`
+  in the web log. `handle_message` logs the message before it dispatches, and it
+  logged WhatsApp's wire type: `insert into messages … kind = 'document'`, which
+  Postgres answers with `invalid input value for enum msg_kind: "document"`.
+  The transaction aborts and the whole turn unwinds, so the media capability at
+  priority 30 never ran. The `msg_kind` enum has six values and `document` is
+  not one of them.
+
+  Not caught by the suite for the reason `LANDMINES.md` already records: the
+  fake connection records the SQL string and never parses it. Confirmed against
+  the real database instead — `select 'document'::msg_kind` errors.
+
+  Fixed by coercing the wire type at the single write path (`_msg_kind`), which
+  logs a warning and records `text`. The row exists for dedupe and for the
+  transcript, and both survive the coercion. `MSG_KINDS` is asserted against
+  `db/schema.sql` by a test, so the two cannot drift.
+
+- **A timed-out `pdftoppm` was not killed, only abandoned.** `wait_for` cancels
+  *our wait*, not the renderer, so an overrunning rasteriser kept a core on a
+  two-core box and nothing was left holding a reference to it. It is now killed
+  and reaped, and the test asserts the child's exit status is `-9` rather than
+  asserting our exception — a shrug and a kill produce the same exception.
+
+- **A killed render left the sender's PDF and a partial PNG in `/tmp`.** Cleanup
+  only ran on the success path, and only for the one filename it guessed right.
+
+- **A `.docx` was sent to the vision model as if it were a photograph** — one
+  model call spent to produce nothing, and then silence for the user.
+
+### Fixed — resource limits on inbound media (PR-26)
+
+Onboarding is open, so "a valid sender" is a low bar. Every limit below is a
+bound on what *one* message may cost a box with 2 vCPU and 8 GiB that is also
+running the reminder worker.
+
+- **A byte cap before and during the download, not after.**
+  `wa.client.fetch_media` now takes `max_bytes` with **no default** — a new call
+  site must say what it can afford — and checks three times, cheapest first:
+  Meta's own `file_size` from the metadata call (so a 90 MB PDF costs no
+  bandwidth at all), `Content-Length`, and then the bytes as they stream, which
+  is the only one of the three we supply ourselves. A size we could not
+  determine is not treated as small. 8 MiB for PDFs, 5 MiB for photographs —
+  which is the vision model's own ceiling, so the two cannot drift and leave us
+  holding a blob we already refuse to use.
+- **`pypdf` runs off the event loop**, in a thread pool the same size as the
+  document gate, with an 8s wall clock. It was synchronous and inline: a content
+  stream that took ten seconds to decode took ten seconds of everybody else's
+  turns with it.
+- **Page count refused before the page tree is walked** (200), and extracted
+  text capped per page and in total.
+- **`pdftoppm` gets rlimits from the kernel** — CPU, address space, and file
+  size, the last being the only part of this path that writes to disk — plus a
+  15s timeout and a kill. `-scale-to` replaces `-r 150`, so the raster is
+  bounded by our configuration rather than by the page's declared size.
+- **Two backpressure gates** (`saathi/core/backpressure.py`): four media
+  messages in flight process-wide, and **one** document being parsed. The second
+  document is refused, not queued — a queue in front of CPU-bound work is the
+  same unbounded growth wearing a hat.
+- **Every refusal is a message**, bilingual and specific, saying what would work
+  instead ("send me a photo of just the page that matters"). There is no longer
+  any exit from the media path that drops the turn silently.
+
+Proven by running it, not by reading it: real `pypdf` on a real 250-page PDF,
+the real `pdftoppm` for the happy path *and* for the kill *and* for the
+`RLIMIT_FSIZE` kill (SIGXFSZ, exit `-25`), the real `httpx` stack for the
+streaming cap, and a signed document webhook driven through the real FastAPI app
+end to end. Each guard was then **deleted from the production path** and the
+test that covers it confirmed to go red — nine for nine.
+`tests/test_media_limits.py`.
+
+### Still open
+
+Per-user rate limiting. The gates bound how much runs *at once*; they do not
+bound how often one sender may ask. See `PROD_READINESS.md` PR-33 — it belongs
+with admission control, covers audio and text as well as documents, and needs
+state that survives a restart.
+
+---
+
 ## 2026-07-28 (deploy) — a failed migration used to restart the services anyway
 
 **337 tests passing.** No Python changed; this is `ops/deploy.sh` and two new

@@ -16,6 +16,7 @@ import logging
 
 import httpx
 
+from ..channels.base import MediaTooLarge
 from ..config import settings
 from .window import Channel, assert_can_send
 
@@ -175,16 +176,64 @@ async def send_audio(conn, user_id: int, wa_id: str, media_id: str) -> str:
                        {"type": "audio", "audio": {"id": media_id}}, Channel.FREEFORM)
 
 
-async def fetch_media(media_id: str) -> bytes:
-    """Resolve a media id and download it. Do this immediately — URLs expire."""
+def _as_int(value) -> int | None:
+    """An advertised size, or None if we could not establish one."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+async def fetch_media(media_id: str, max_bytes: int) -> bytes:
+    """Resolve a media id and download it. Do this immediately — URLs expire.
+
+    `max_bytes` has no default on purpose. WhatsApp accepts documents up to
+    100 MB and this box has 8 GiB shared with everything else, so a call site
+    that forgot to say what it could afford would be the whole of PR-26 back
+    again. The size is checked three times, cheapest first:
+
+    1. **Meta's own `file_size`**, from the metadata call — this costs no
+       bandwidth at all, so a 90 MB PDF is refused before a byte moves.
+    2. **`Content-Length`** on the download response.
+    3. **The bytes as they arrive.** Both of the above are supplied by someone
+       else. This one is not, and it is the one that actually holds: the
+       response is streamed and abandoned the moment it exceeds the limit,
+       rather than buffered in full and measured afterwards.
+
+    A size we could not determine is *not* treated as small — 1 and 2 are
+    advisory and only 3 decides.
+    """
+    if not isinstance(max_bytes, int) or max_bytes < 1:
+        raise ValueError(f"fetch_media needs a positive byte limit, got {max_bytes!r}")
+
     async with httpx.AsyncClient(timeout=30) as http:
         meta = await http.get(f"{GRAPH}/{media_id}", headers=_headers())
         meta.raise_for_status()
-        url = meta.json()["url"]
+        info = meta.json()
+        url = info["url"]
+
+        declared = _as_int(info.get("file_size"))
+        if declared is None:
+            log.warning("media %s advertised no usable file_size; streaming under cap",
+                        media_id)
+        elif declared > max_bytes:
+            raise MediaTooLarge(media_id, declared, max_bytes)
+
         # The CDN URL still needs the bearer token.
-        blob = await http.get(url, headers={"Authorization": f"Bearer {settings.wa_access_token}"})
-        blob.raise_for_status()
-        return blob.content
+        headers = {"Authorization": f"Bearer {settings.wa_access_token}"}
+        buf = bytearray()
+        async with http.stream("GET", url, headers=headers) as resp:
+            resp.raise_for_status()
+            length = _as_int(resp.headers.get("content-length"))
+            if length is not None and length > max_bytes:
+                raise MediaTooLarge(media_id, length, max_bytes)
+            async for chunk in resp.aiter_bytes():
+                buf += chunk
+                if len(buf) > max_bytes:
+                    # Leaving the block closes the connection; the rest of the
+                    # file is never transferred.
+                    raise MediaTooLarge(media_id, None, max_bytes)
+        return bytes(buf)
 
 
 async def upload_media(data: bytes, mime: str = "audio/ogg") -> str:

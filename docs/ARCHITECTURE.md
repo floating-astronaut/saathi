@@ -159,3 +159,38 @@ whether or how much to take is advice, and we never cross it.
 e-tickets have one, and extraction is exact and free), falling back to
 rasterising page one for scans. Page count is bounded — an elder wants the gist
 and the deadline, and an unbounded document is an unbounded bill.
+
+**Inbound media is admitted, not merely accepted.** The webhook acks Meta and
+detaches the work with `asyncio.create_task`, so without a ceiling the number of
+messages being processed at once is chosen by whoever is sending them — and
+onboarding is open, so that is anyone. Four things bound it, and each sits in
+the path a real message takes rather than in a helper somebody must remember to
+call:
+
+- **The download carries its own limit.** `fetch_media(media_id, max_bytes)` has
+  no default; a call site must say what it can afford. Meta's advertised
+  `file_size` refuses the worst cases before a byte moves, and the body is
+  streamed and abandoned at the cap rather than buffered and measured. A size we
+  could not determine is not treated as small.
+- **Two gates** (`core/backpressure.py`): four media messages in flight, one
+  document being parsed. The document gate is 1 because this box has 2 vCPU and
+  the same event loop runs the safety classifier; PDF parsing is CPU-bound and
+  holds the GIL. The (N+1)th is **refused with a message, not queued** — a queue
+  in front of CPU-bound work is unbounded growth that also answers too late to
+  be useful.
+- **The parser is not on the event loop.** `pypdf` is synchronous, so it runs in
+  a thread pool sized to the document gate, under a wall clock.
+- **The renderer is a subprocess with kernel limits.** `pdftoppm` gets CPU,
+  address-space and file-size rlimits via `preexec_fn`, a timeout, and — this
+  was missing — a kill when the timeout fires, because `wait_for` cancels our
+  wait and not the child.
+
+**A refusal is a reply.** Every exit from the media path sends something: too
+large, too long, busy, or unreadable, bilingual and naming what would work
+instead. The person on the other end may have photographed their prescription by
+accident, and silence is indistinguishable from the product being broken.
+
+One consequence worth stating: **WhatsApp's wire types are a longer list than
+the `msg_kind` enum**, and `pipeline` coerces before writing. It did not, which
+made `document` an aborted transaction and the whole media capability
+unreachable for PDFs. See `PROD_READINESS.md` PR-26.
