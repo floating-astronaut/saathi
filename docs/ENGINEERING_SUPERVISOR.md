@@ -1204,3 +1204,56 @@ twice (`2a11443`, `2d65854`). That tree is not version controlled and a deploy
 merges rather than replaces, so the loss would have been silent both times. The
 warning in RUNBOOK was written after the first occurrence and did not prevent
 the second. That suggests the fix is not a stronger warning.
+
+---
+
+## 2026-07-27 — off MeshPilot's Meta app, and two stale facts corrected
+
+Saathi now runs on its own Meta app end to end. **Indofolk AI
+`1019173634258664`** is the sole subscriber to WABA `1687148075730227`, its own
+app secret verifies every inbound webhook, and the access token is
+`type: SYSTEM_USER` with `expires_at: 0` on system user `122098890723360160`.
+MeshPilot `1571039744742551` is unsubscribed and receives nothing.
+
+**Evidence, all from Graph rather than inference.** Meta called our verify
+endpoint from a Facebook IP and got the challenge echoed. A webhook body signed
+with the new secret returns 200; the identical body signed with MeshPilot's
+returns 403. The live token reads the phone number (`+91 8071 581 944`, quality
+GREEN) and the approved templates. `subscribed_apps` returns one app.
+
+**The sequencing was the entire risk**, and it is worth writing down because the
+obvious order is the broken one. Register and verify the new callback while that
+app is subscribed to nothing; subscribe it *alongside* the old one so both
+deliver; swap `WA_APP_SECRET` and `WA_ACCESS_TOKEN` in a single write; only then
+unsubscribe the old app. At every moment at least one delivery path verifies.
+Swap the secret first and every inbound message 403s — and a rejected webhook
+never reaches the pipeline, so it never reaches a log line naming a user. The
+operator would have seen silence and nothing else.
+
+### Two facts that were already resolved and kept being repeated
+
+**PR-5 called the business borrowed for a day after D-M had corrected it.** D-M
+recorded on 2026-07-27 that `ayurpetofficial` is a portfolio display label and
+the legal entity is INDOFOLK WELLNESS PRIVATE LIMITED, verified, GSTIN
+`07AAHCI7432A1ZV` — the entity the privacy pages already name. PR-5 went on
+saying "the WABA sits under `ayurpetofficial`" as though that were a caveat.
+Graph confirms `ownership_type: SELF` and `verification_status: verified`.
+
+**And I reported 51 signing violations that were not violations**, by checking
+`%G?` — which `CONTRIBUTING.md:64` states in as many words cannot work here,
+because SSH verification needs `gpg.ssh.allowedSignersFile` and it is unset, so a
+correctly signed commit also reports `N`. D-L had already settled that signing is
+not a gate for a single-author repo.
+
+Both are the same failure, and it is one this documentation set is structurally
+prone to: **a fact resolved in one document does not resolve the rows that repeat
+it.** A caveats journal is the worst place for it, because every row there is
+supposed to describe something unfinished, so a stale row is indistinguishable
+from a live one by shape alone. The only defence that worked today was checking
+the claim against the system rather than against another document.
+
+### Still unproven
+
+No real inbound message has round-tripped through the new app. Signatures,
+tokens, subscriptions and API reads are verified; a live message is not. Health
+checks stay green either way, which is precisely why that gap matters.

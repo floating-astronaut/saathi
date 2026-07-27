@@ -14,7 +14,7 @@
 | Codex | — | 2026-07-27 | SEC-2 | `SECURITY.md` (new, owns it outright) | **ended** — closed SEC-2 at scan `c4b34ba`, surfaces released |
 | Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-3 | `saathi/metrics.py`, `saathi/worker/__main__.py`, `ops/alerting/`, `tests/test_metrics.py` | **ended** — closed, surfaces released |
 
-**Base commit is `0f46069`** (2026-07-27, end of day). `main` moved **51 times**
+**Base commit is `6dd6e72`+** (2026-07-27, end of day; it moved again after). `main` moved **51 times**
 on 2026-07-27, so any figure written here goes stale within the hour — do not
 trust this line, run:
 
