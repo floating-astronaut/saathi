@@ -1150,3 +1150,57 @@ OpenRouter approach for tracking Bedrock and Sarvam spend together.
 - `docs/AI_ROUTING.md` now points at the usage ledger.
 - `docs/PROD_READINESS.md` PR-15 now points to the ledger as the concrete design
   for audio/text/template/search caps.
+
+---
+
+## 2026-07-27 · `2d65854` deployed — the first migrations to actually apply
+
+Fourth self-deploy, `--local`, exit 0. **008 and 009 applied for real** — every
+prior deploy reported six migrations `already applied (baselined)` and applied
+nothing, so until tonight PR-25's ledger had never been exercised on its actual
+job. It recorded both with checksums (`f2929435`, `82402530`) alongside the six
+baselined rows.
+
+**Verified against the live database, not the exit code.** 6 users, 6 accounts,
+**0 users without an account** — the backfill covered everyone. All six accounts
+`active`, so nobody was paywalled by the deploy. Zero rows in `ai_keys`,
+`ai_key_events` and `account_payments`, which is correct: no key can mint with
+credits at 0 and payments are off. The deployed interpreter reports the chain as
+safety(0) → onboarding(10) → erase(20) → ack(21) → commands(22) → media(30) →
+paywall(88) → agent(90), `payments.enabled()` False, and `status_of` returning
+`active` for three real users.
+
+434 tests on the box. All four units active, healthz ok locally and through the
+tunnel, unsigned webhook 403, site 200, zero errors since restart.
+
+### What shipped in this deploy
+
+Six lanes, in the order they were found rather than planned: the clock in the
+prefix (`fa6bfc1`), the nudge resend loop (`618ce84`), the blank-ContentBlock
+crash (`c40d21a`), per-account AI keys (`27d5f43`), the paywall (`0946291`), and
+webhook field logging (`b62d8cf`). Two of them — the resend loop and the blank
+ContentBlock — were live defects affecting a real user, found by reading logs
+rather than by testing.
+
+### The pattern that has not gone away
+
+Three more instances today of green agreeing with a bug. A nudge that delivered
+perfectly and was re-sent every fifteen minutes, with `reminder()` carrying a
+comment describing that exact hazard. A paywall whose "unconfigured sends
+nothing" test passed with the kill switch deleted, because the fixture also left
+the merchant id blank. And my own misdiagnosis of the blank ContentBlock, caught
+by an existing test rather than by me: the `N > 0` in `messages.N.content.0` was
+in the error text from the first reading and named the history, not the message.
+
+The counter-measure that works remains mechanical — delete the guard from the
+production path and require the suite to go red before believing it. Every fix
+above was checked that way, and the paywall kill-switch test only exists because
+the deletion was tried before the test was trusted.
+
+### Twice in one day, the same way
+
+Work was written directly into `/home/ubuntu/saathi` twice today and rescued
+twice (`2a11443`, `2d65854`). That tree is not version controlled and a deploy
+merges rather than replaces, so the loss would have been silent both times. The
+warning in RUNBOOK was written after the first occurrence and did not prevent
+the second. That suggests the fix is not a stronger warning.
