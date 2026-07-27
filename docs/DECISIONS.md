@@ -224,12 +224,15 @@ conversation to a US provider and nothing says so. With it the request fails and
 Saathi surfaces an error. Same reasoning as D-F: a deterministic guarantee must
 not depend on instruction-following or on someone remembering a flag.
 
-**What is honestly given up.** D-D's claim was "inference stays in India". That
-remains true. But the prompt now **transits OpenRouter's infrastructure** to
-reach Mumbai, so "the data never leaves India" is no longer accurate and the
-privacy policy must not imply it. That is a real change in processors under DPDP,
-accepted knowingly, and it is the reason this decision is written down rather
-than treated as a config change.
+**The transit, stated and accepted.** Inference stays in India. The prompt
+transits OpenRouter's infrastructure to reach Mumbai. Operator decision,
+2026-07-27: accepted, and **not** a blocker.
+
+The privacy policy already draws exactly this line and needs no amendment —
+"your message text may be processed outside India during the reply. Your stored
+data … stays in India." Written before OpenRouter was considered, and accurate
+for it. Recorded here so a future reader does not re-litigate a settled point, or
+assume the policy overclaims when it does not.
 
 **Reverse it** by pointing the client back at `boto3`. The model, region and
 account are unchanged, so reversal costs nothing but the metering.

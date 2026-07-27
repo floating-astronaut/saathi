@@ -48,8 +48,17 @@ true, and a second, narrower claim becomes necessary:
 > Inference runs in Mumbai. **The prompt transits OpenRouter's infrastructure**
 > to get there.
 
-Both must be said. The privacy policy currently implies the broader "your data
-stays in India"; that wording needs to survive contact with this fact. See D-O.
+Both must be said — and **the privacy policy already says exactly this**,
+checked 2026-07-27:
+
+> models are served by Amazon across multiple regions rather than only India, and
+> where that applies your message text may be processed outside India during the
+> reply. Your stored data — messages, transcripts, reminders and remembered facts
+> — stays in India.
+
+Stored data in India; message text may transit. That is the accurate pair, it was
+written before OpenRouter was considered, and it covers this change without
+amendment. **Settled — not an open question.** See D-O.
 
 ### The setting that makes it enforceable
 
@@ -162,5 +171,4 @@ A quiet downgrade to a shared key is how you find out at the end of the month.
 - **Credits are 0** on the OpenRouter account. Keys will mint and then fail on
   first use — provisioning succeeds, spending does not. Fund before any real
   user depends on it.
-- The privacy policy wording (§3) needs to match what actually happens.
 - Whether free users get a shared platform key or no key at all.
