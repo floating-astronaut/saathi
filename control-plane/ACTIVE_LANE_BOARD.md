@@ -186,8 +186,8 @@ Result: MET. 8 commands + 4 ice breakers configured on `1266402176549539`,
   transparency feature and must return an exact list, not a generated answer — so
   the ice breaker is worded to hit the deterministic path.
 
-### AI-1 — per-account OpenRouter keys   [OPEN]
-Owner: unassigned        Opened: 2026-07-27
+### AI-1 — per-account OpenRouter keys   [BUILT, BLOCKED ON CREDITS]
+Owner: Claude (runtime box)        Opened: 2026-07-27 · Built: 2026-07-27
 Reading: docs/AI_ROUTING.md, docs/DECISIONS.md (D-D, D-O), docs/vendor/, PR-15
 Acceptance: a paying account gets a capped key minted from `scheduled_turns`;
   calling twice mints once; an unconfigured install refuses rather than storing a
@@ -208,6 +208,17 @@ Notes: design doc written first (THE_METHOD §1) — the code follows it, not th
   "Indian Box" at sort_order 0, `z-ai/glm-5` available, provisioning key valid.
   The SDK's `create()` takes `workspace_id`, `limit_reset` and `expires_at` — the
   prose docs omit all three, so trust `vendor/` and the generated client.
+
+  **Built 2026-07-27.** Migration 008 (accounts, ai_keys, ai_key_events),
+  saathi/openrouter.py, saathi/crypto.py, provision_key turn kind,
+  saathi.admin.grant. 402 tests. Every acceptance line above is met *except*
+  the one that needs money: no real key has been minted, because credits are
+  still 0. See PR-38 for the exact round trip that closes this — mint one key
+  for an operator-owned handle, spend on it, revoke it, confirm upstream.
+
+  Two design questions closed while building: free tier mints nothing (a small
+  cap would have made an open door billable), and the account tenant had to be
+  built first because none existed.
 
 ### PR-4b — the reminder ack path is unreachable   [CLOSED]
 Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-28

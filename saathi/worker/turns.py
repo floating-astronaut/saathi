@@ -189,6 +189,44 @@ async def media_purge(conn, *, turn_id, user_id, payload, scheduled_for):
     log.info("media purge tidied %s rows", n)
 
 
+# --- per-account AI key provisioning (AI-1) ----------------------------------
+
+async def provision_key(conn, *, turn_id, user_id, payload, scheduled_for):
+    """Mint this account's capped OpenRouter key.
+
+    On the queue, and **never inside an onboarding turn**. Onboarding is
+    deterministic and makes no model call on purpose — that property is what
+    makes an open door safe — and a blocking third-party HTTP call on that path
+    would regress it. The account's first turns run on the platform default;
+    its own key takes over once this lands.
+
+    This turn sends the user nothing, so it settles itself rather than calling
+    `_settle`: there is no message id to record, and leaving it 'sent' would
+    have the sweep reclaim and re-mint it every fifteen minutes.
+    """
+    from .. import openrouter
+    account_id = payload.get("account_id")
+    if not account_id:
+        await conn.execute(
+            "update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+        log.error("provision_key turn %s carried no account_id", turn_id)
+        return
+    try:
+        result = await openrouter.mint(conn, account_id)
+    except openrouter.ProvisioningDisabled as exc:
+        # Configuration, not a transient fault. Retrying a missing env var five
+        # times just delays the same answer.
+        await conn.execute(
+            "update scheduled_turns set state='failed', last_error=%s where id=%s",
+            (str(exc)[:200], turn_id))
+        log.error("provisioning disabled: %s", exc)
+        return
+    await conn.execute(
+        "update scheduled_turns set state='acked' where id=%s", (turn_id,))
+    log.info("provision_key turn %s: %s", turn_id, result)
+
+
+scheduling.register("provision_key", provision_key)
 scheduling.register("media_purge", media_purge)
 scheduling.register("reminder", reminder)
 scheduling.register("nudge", nudge)

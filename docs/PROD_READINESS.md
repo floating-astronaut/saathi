@@ -116,6 +116,31 @@ timezone confirmation. Evidence required is a live reminder that actually
 arrives, not a passing test: no reminder has yet been proven end-to-end from a
 voice note.
 
+### PR-38 · A tester's key has never actually been minted
+AI-1's machinery is built, tested and deployed, and **no real key exists**. The
+OpenRouter account holds 0 credits (`total_credits: 0`, checked 2026-07-27), so
+a minted key would authenticate and fail on first spend. Every test stops at the
+HTTP boundary; the response-shape fallback in `_extract`/`_find_hash_by_name`
+has therefore never met a real response.
+
+That fallback is the part that worries me rather than the minting: if a real
+`POST /keys` returns no hash *and* the `GET /keys` re-read fails to match on
+name, we store a key we can never revoke — and `--show` will say so, months
+later, when someone wants it gone.
+**Fix:** fund the account, mint exactly one key for one operator-owned handle,
+confirm a real turn spends against it, then revoke it and confirm the revoke
+lands upstream. Until that round trip is done, do not put a tester on this.
+
+### PR-39 · Sarvam spend cannot be attributed to a household
+One API key serves every user, so there is no way to tell whose rupees these
+were, and no way to cap one household without capping all of them. Bounded for
+now by D-S: Sarvam is STT-only, where per-turn cost is limited by
+`saathi_max_audio_bytes` rather than by a model's appetite.
+**Fix:** price `llm_calls` rows per vendor and enforce a cap *before* the call.
+`llm_calls` already records per-user model, tokens and latency; it lacks price.
+That work would also answer the same question for Bedrock, which has the
+identical gap and no sub-keys either.
+
 ---
 
 ## P1 — before anyone pays
