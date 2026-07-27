@@ -35,7 +35,9 @@ difference — the diff is usually the answer to whatever just broke.
 | File | Source | Captured |
 |---|---|---|
 | `meta/conversational-components.md` | developers.facebook.com — Conversational Components | 2026-07-27 |
+| `meta/cloud-api-calling.md` | developers.facebook.com — WhatsApp Business Calling API / Cloud API Calling | 2026-07-27 |
 | `meta/waba-subscribed-apps.md` | developers.facebook.com — Graph API v25.0 | 2026-07-27 |
+| `sarvam/github-repos.md` | GitHub — Sarvam repositories called out for Saathi language/STT/eval/OCR work — **source index, not transcript** | 2026-07-27 |
 | `vobiz/xml-dial.md` | vobiz.ai — Dial XML — **summary, not a transcript** | 2026-07-27 |
 
 ## Meta docs need a rendering browser

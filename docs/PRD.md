@@ -436,10 +436,11 @@ queue cannot.
 | # | Decision | Recommendation | Why it matters |
 |---|---|---|---|
 | **D1** | Who is the buyer — elder or adult child? | **Adult child.** Elder is the user, child pays and onboards. | Drives onboarding flow, pricing page, and whether the family thread returns in v2 |
-| **D2** | Launch languages | **Hindi + English only**, with heavy code-mixing expected. | Each added language multiplies the eval set, the phrase bank, and the TTS voice selection. Tamil/Marathi/Bengali are a v2 decision informed by where users actually come from |
+| **D2** | Launch languages | **11 Indian locales for v1:** Hindi (`hi-IN`), Bengali (`bn-IN`), Tamil (`ta-IN`), Telugu (`te-IN`), Gujarati (`gu-IN`), Kannada (`kn-IN`), Malayalam (`ml-IN`), Marathi (`mr-IN`), Punjabi (`pa-IN`), Odia (`od-IN`), English (`en-IN`). | Operator decision, 2026-07-27. This makes Sarvam the likely load-bearing speech/language vendor and means eval, phrase bank, safety classifier, consent/onboarding copy, and TTS voice choice must report per-locale results rather than a Hindi/English aggregate. |
 | **D3** | Reminders opt-in or default-on? | **Opt-in, prompted during onboarding.** | Drives template volume and therefore per-user cost; also an errorless-learning consideration — unexpected messages erode trust |
 | **D4** | Voice replies default-on or toggle? | **Toggle, default ON for users who send voice notes**, off for users who type. | Latency + cost; mirrors the user's own modality |
 | **D5** | Does the family thread come back in v2? | Defer to week 8 data. If users repeatedly forward our lists to their children manually, that is the signal. | It was the strongest earlier concept; v1 deliberately tests whether it is needed |
+| **D6** | Does WhatsApp Cloud API Calling enter v1.1? | **Defer; not v1.** Keep v1 to chat, voice notes, and TTS replies. Revisit only after consent, call-rate limits, call-hours policy, retention, and caregiver expectations are designed. | Calls are more interruptive than messages and create a real-time support promise; the attached Meta note makes the path possible, not automatically safe. |
 
 ---
 

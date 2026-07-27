@@ -983,3 +983,60 @@ deploy; that is registration, not delivery. `ffmpeg -version` also passed.
 **Cost of not fixing PR-36 now:** `worker/send_reminder.py` and
 `worker/reminder_scheduler.py` were deleted from the box by hand after this
 deploy. Every future deploy that drops a file needs the same manual step.
+
+---
+
+## 2026-07-27 — WhatsApp Cloud API Calling note recorded
+
+Operator supplied Meta's WhatsApp Business Calling API overview. Captured the
+vendor transcript at `docs/vendor/meta/cloud-api-calling.md` and recorded it as
+future-channel context, not a build commitment.
+
+### Contract updates
+
+- `docs/DECISIONS.md` D-Q now says Cloud API Calling is strategically relevant
+  but out of v1. The current product remains WhatsApp chat, inbound voice notes,
+  and future TTS replies.
+- `docs/PRD.md` open decision D6 now tracks whether Cloud API Calling enters a
+  v1.1+ lane.
+
+### Constraints captured
+
+- Calling requires the business number to be on Cloud API, the app subscribed to
+  the `calls` webhook field unless SIP is chosen, WABA/app subscription, and
+  `whatsapp_business_messaging` permission.
+- Production business-initiated calls require the account capability/messaging
+  limit threshold and phone-number calling settings. The vendor note lists US,
+  Canada, Egypt, Vietnam and Nigeria business numbers as excluded for
+  business-initiated calling.
+- Any implementation lane must add consent wording, rate limits, call-hours
+  policy, retention/audit handling, and explicit caregiver/escalation
+  expectations before enabling real-time calls.
+
+---
+
+## 2026-07-27 — V1 languages and Sarvam vendor shelf recorded
+
+Operator set v1 language focus to eleven locales: Hindi (`hi-IN`), Bengali
+(`bn-IN`), Tamil (`ta-IN`), Telugu (`te-IN`), Gujarati (`gu-IN`), Kannada
+(`kn-IN`), Malayalam (`ml-IN`), Marathi (`mr-IN`), Punjabi (`pa-IN`), Odia
+(`od-IN`), and English (`en-IN`).
+
+### Contract updates
+
+- `docs/PRD.md` D2 now reflects the eleven-locale v1 scope instead of Hindi +
+  English only.
+- `docs/DECISIONS.md` D-R records the operator decision and the consequence:
+  evals, phrase banks, safety phrases, consent/onboarding copy, and TTS voice
+  choices must be reported per locale.
+- `docs/vendor/sarvam/github-repos.md` captures the Sarvam repo shelf called out
+  by the operator: `llm_intent_entity`, `sarvam-mcp`, `llm_wer`, `skills`,
+  `Gym`, `indic_nlp_library`, and `olmOCR-bench-sarvam-api`.
+- `docs/vendor/README.md` indexes the Sarvam shelf and marks it as a source
+  index rather than an API transcript.
+
+### Guardrail
+
+Sarvam may become Saathi's biggest vendor, but vendor examples do not move
+runtime guarantees out of Saathi. Budgeting, redaction, deterministic safety,
+per-turn tool authorization, and per-locale evidence stay ours.
