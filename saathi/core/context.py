@@ -34,7 +34,17 @@ class MessageContext:
 
     @property
     def button_id(self) -> str:
-        return ((self.msg.get("interactive") or {}).get("button_reply") or {}).get("id", "")
+        """The payload behind a tap, whichever of the two shapes WhatsApp used.
+
+        Interactive messages we compose ourselves carry it at
+        `interactive.button_reply.id`. **Template** quick-replies arrive as a
+        different message type entirely — `button.payload` — which was never
+        read, so every reminder acknowledgement was silently dropped (PR-4b).
+        """
+        inter = (self.msg.get("interactive") or {}).get("button_reply") or {}
+        if inter.get("id"):
+            return inter["id"]
+        return (self.msg.get("button") or {}).get("payload", "")
 
     @property
     def trusted(self) -> bool:
