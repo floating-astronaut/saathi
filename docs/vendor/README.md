@@ -35,3 +35,15 @@ difference — the diff is usually the answer to whatever just broke.
 | File | Source | Captured |
 |---|---|---|
 | `meta/conversational-components.md` | developers.facebook.com — Conversational Components | 2026-07-27 |
+| `meta/waba-subscribed-apps.md` | developers.facebook.com — Graph API v25.0 | 2026-07-27 |
+| `vobiz/xml-dial.md` | vobiz.ai — Dial XML — **summary, not a transcript** | 2026-07-27 |
+
+## Meta docs need a rendering browser
+
+`developers.facebook.com` and `dev.wix.com` return only a `<title>` to plain HTTP
+fetching — they render in JavaScript. Capture them through the browser tooling
+(`navigate` then `get_page_text`), not `curl` or a fetch tool. A fetch tool that
+*summarises* is worse than one that fails: it returns something plausible that is
+not the page, and a summary filed as a transcript is the exact failure this
+directory exists to prevent. Mark it loudly when that happens, as
+`vobiz/xml-dial.md` does.

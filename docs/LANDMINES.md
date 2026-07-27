@@ -299,3 +299,60 @@ only their test button does.
 **Rule to keep:** before rewriting a payload the vendor calls invalid, verify it
 yourself from outside. The payload was correct the whole time; only the browser
 could not fetch it.
+
+---
+
+## Meta: the Graph API reference for `subscribed_apps` says you cannot write to it. You can.
+
+**Symptom:** you need to subscribe or unsubscribe an app from a WhatsApp Business
+Account's webhooks, read the reference page, and conclude it is impossible.
+
+**What the page says** (v25.0, captured 2026-07-27 in
+`docs/vendor/meta/waba-subscribed-apps.md`):
+
+> **Creating** — You can't perform this operation on this endpoint.
+> **Deleting** — You can't perform this operation on this endpoint.
+
+**What actually happens:**
+
+    POST /v21.0/{waba-id}/subscribed_apps   ->  {"success": true}
+
+That is how Saathi's app was subscribed to WABA `1687148075730227` on 2026-07-27.
+The reference page documents only the read.
+
+**The part that will bite you:** `POST` and `DELETE` act on **the app that owns
+the access token**, and take no app id. So you cannot unsubscribe *someone else's*
+app with your own token — `DELETE` with our token removes **us**. Removing a
+third party (a BSP or Tech Provider added by an embedded-signup flow) has to be
+done in WhatsApp Manager, or by them.
+
+That distinction matters: a Tech Provider's connect flow subscribes their app to
+your WABA, and from that moment they receive a copy of every inbound message.
+Discovering you cannot revoke it by API — after reading a page that says the
+endpoint has no write operations at all — is a bad moment to have during an
+incident. See `PROD_READINESS.md` PR-29.
+
+**Rule to keep:** check `GET /{waba}/subscribed_apps` after **any** change made
+on a partner's side. It is the only way to see who is listening.
+
+---
+
+## Chasing the wrong cause: a valid attribute removed for nothing
+
+While getting Vobiz to accept an answer URL, its console reported *"Answer URL is
+unreachable or returned invalid XML"*. Reading "invalid XML", I stripped the
+`timeout` attribute from `<Dial>` to match the vendor's minimal example, and
+redeployed.
+
+`timeout` is a **documented, valid** attribute — see
+`docs/vendor/vobiz/xml-dial.md`. It was never the problem. The real cause was
+**CORS**: their test button runs a browser-side `fetch()`, and the worker sent no
+`Access-Control-Allow-Origin`. Adding the header fixed it immediately.
+
+Two lessons, and the second is the one that cost the time:
+
+1. An error message offering two causes ("unreachable **or** invalid XML") is
+   telling you it does not know which. Do not pick the more interesting one.
+2. **I had already proved the payload was fine** — `curl` from the box returned
+   200 with valid XML before I changed anything. I changed it anyway. Evidence you
+   have already collected is worth more than a vendor's guess about your input.
