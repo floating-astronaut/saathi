@@ -297,7 +297,7 @@ Acceptable only because no real reminders exist. Both `scheduled_turns` and
 Templates do not migrate between WABAs; the old WABA's four remain approved and
 unused.
 
-### PR-31 · Onboarding messages are never recorded — including the consent text
+### PR-31 · Onboarding messages were never recorded — RESOLVED 2026-07-27
 `pipeline.py` and `worker/send_reminder.py` both insert outbound sends into
 `messages`. **`onboarding.py` does not.** Proven on the first real conversation
 (2026-07-27): the user's "Hii" was recorded, the onboarding reply the user
@@ -313,7 +313,20 @@ a user or a regulator asks *what exactly were they told and when*, the answer is
 reconstructed from a hardcoded string in a source file at some past commit, not
 from a record. `CONSENT_VERSION` is also hardcoded in two modules (PR-18), so the
 drift risk compounds.
-**Fix:** record outbound in the onboarding path as the other two paths do.
+**Resolved** by recording at `wa/client._send` — the single wire path — rather
+than in the onboarding path. Fixing only onboarding would have left the next send
+helper free to make the same omission; every caller reaching WhatsApp goes
+through `_send`, so recording there cannot be forgotten. `kind`, `body_text` and
+`template_name` are derived from the wire payload, not passed in, for the same
+reason.
+
+Recording never raises: the message has already gone out, and failing the caller
+would invite a resend of something the user has read. A failure logs at ERROR.
+`on conflict (wa_message_id) do nothing` absorbs `pipeline`'s existing insert.
+
+Cover in `tests/test_outbound_record.py` (8), including one that fails if `_send`
+stops calling the recorder — the others exercise it directly and would stay green
+if the call were deleted.
 
 ### PR-13 · Cloudflare token is IP-locked to the EIP
 `saathi-box-canonical` is locked to `15.252.75.191/32`. Correct, and it means

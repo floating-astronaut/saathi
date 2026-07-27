@@ -704,3 +704,50 @@ the verified business; nothing on record connected "Saathi" to a pet exporter.
   outside the product record.
 - **WA-2** — a Saathi page on `indofolkwellness.com`, then re-submit "Saathi",
   plus the `wa.me` link that was the original complaint.
+
+---
+
+## 2026-07-27 — PR-31: the consent text nobody kept
+
+### Found
+
+The first real conversation on the new number completed onboarding: consent,
+name, reminders, improvement — four button presses, `onboarding = done`,
+`consent_at` set. `messages` held **5 inbound, 0 outbound**.
+
+Every reply the user saw was gone. Including the consent text.
+
+`users` proves *that* they agreed and to which version. Nothing proved *what they
+read*. Under DPDP that is the wrong half to keep, and `messages` is precisely the
+table the 6-hourly verified backup protects.
+
+### Closed
+
+Recorded at `wa/client._send`, the module's own documented "single wire path",
+not in `onboarding.py`. Fixing the caller that forgot would leave the next caller
+free to forget: `pipeline` and the reminder worker each remembered separately,
+which is exactly the pattern that produced the hole. `kind`, `body_text` and
+`template_name` are derived from the payload rather than passed in, so a new send
+helper cannot opt out either.
+
+Recording never raises — the send has already happened, and failing the caller
+would invite a resend of something the user has read. Failures log at ERROR.
+
+### Evidence
+
+- 322 tests (314 before, 8 new).
+- The insert was run against **real Postgres** inside a transaction and rolled
+  back — fakes accept SQL that Postgres rejects, which this project has already
+  paid for once with `sweep_stuck`.
+- **The regression test was verified to fail.** Seven of the eight exercise
+  `_record_outbound` directly and stay green if the call is deleted from `_send`;
+  the eighth drives the wire path and goes red. I nearly shipped only the seven.
+
+### Remains
+
+- `worker/send_reminder.py` and `worker/reminder_scheduler.py` are both confirmed
+  dead — nothing imports either — and both still contain writes to
+  `reminder_fires`. Harmless, misleading, worth deleting with PR-4b.
+- PR-18 still stands: `CONSENT_VERSION` hardcoded in two modules, with nothing
+  forcing a re-consent when the text changes. Now that the text is recorded per
+  message, a mismatch is at least detectable after the fact.
