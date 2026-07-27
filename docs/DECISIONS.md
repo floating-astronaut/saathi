@@ -234,5 +234,14 @@ data … stays in India." Written before OpenRouter was considered, and accurate
 for it. Recorded here so a future reader does not re-litigate a settled point, or
 assume the policy overclaims when it does not.
 
+**ZDR narrows the residual.** Amended 2026-07-27: every request also sends the
+`zdr` parameter. OpenRouter routes only to endpoints with zero-retention
+policies, and **blocks** rather than silently choosing a retaining one. Combined
+with `allow_fallbacks: false` the guarantee becomes: *our Mumbai Bedrock or the
+request fails, and the prompt is never retained in transit.* That does not undo
+the transit itself — the wording above stands — but it is the difference between
+"passes through a US processor" and "passes through a US processor that keeps a
+copy".
+
 **Reverse it** by pointing the client back at `boto3`. The model, region and
 account are unchanged, so reversal costs nothing but the metering.

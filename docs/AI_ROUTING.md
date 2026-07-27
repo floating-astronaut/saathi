@@ -172,3 +172,68 @@ A quiet downgrade to a shared key is how you find out at the end of the month.
   first use — provisioning succeeds, spending does not. Fund before any real
   user depends on it.
 - Whether free users get a shared platform key or no key at all.
+
+---
+
+## 10. Features considered, and refused
+
+Surveyed 2026-07-27. OpenRouter's surface is wide; most of it duplicates a
+decision Saathi has already made or asks us to hand one to a third party. Written
+down so the feature list is not re-litigated from the marketing page.
+
+### Adopt
+
+| Feature | Why |
+|---|---|
+| **ZDR** (`zdr` per-request) | The mitigation for §3's residual. Routes only to endpoints with zero-retention policies, and **blocks** rather than silently degrading when none exists. OpenRouter itself does not store prompts unless logging is opted into. Set alongside `allow_fallbacks: false` — together they mean *our Mumbai Bedrock or nothing, and never retained in transit*. |
+| **Zero-completion insurance** | Empty completions are not billed. Free. |
+| **App attribution** (`HTTP-Referer`, `X-Title`) | Trivial hygiene; identifies the caller in their dashboards. |
+
+### Considered, deferred
+
+**Structured outputs.** Could firm up slot extraction — but D-D measured *this*
+model's entity accuracy through *this* path. Changing the output contract means
+re-measuring, and PR-33 already says the existing measurement is thin.
+
+**ORI eval.** Interesting for PR-9 and PR-33. See `PATTERNS_TO_BORROW.md`.
+
+**Guardrails / classifiers.** Only ever as a *second* layer. The priority-0 regex
+is not replaceable: a forwarded scam can argue with a model-based classifier; it
+cannot argue with a function that has already returned. Putting a model in front
+of it would be a regression dressed as an upgrade.
+
+**Response caching.** Note what it is: **full response caching**, not prompt
+caching. It returns a stored identical answer; it does not reuse a cached prefix.
+**So D-D's prefix budget stands** — cost remains linear in prompt size and
+`SAATHI_PREFIX_TOKEN_BUDGET` keeps its job.
+
+Its upside here is small — Saathi's turns are nearly all unique — and it carries a
+hazard: if two users ask the same question, does the second receive the first's
+cached answer? For elder health conversations that would be a cross-user leak.
+**Verify cache scoping before ever enabling it**, and do not enable it for the
+small win alone.
+
+### Refused
+
+| Feature | Why not |
+|---|---|
+| **Input/output logging**, **broadcast** | Already `false` on the workspace and must stay so. Elder health content must not be logged to a third party — PR-29's lesson, learned the same day. |
+| **Web-search plugin** | Search already runs on Vertex `asia-south1`. PR-20 was fought precisely to get it into Mumbai; their plugin routes through their providers. |
+| **Server tools / fusion** | Server-side tool execution moves the decision away from `provenance.allowed_tools()`. Same objection as the Agent SDK. |
+| **LangChain integration** | Saathi has its own loop, deliberately. |
+| **Response healing** | D-F already strips markdown in code, because a deterministic transformation must not depend on instruction-following. Healing is the same bet we refused. |
+
+### The Agent SDK, and why the loop stays ours
+
+The Agent SDK is **TypeScript-only**, so it is not available to a Python
+codebase. It would be wrong even if it were: its selling point is that the SDK
+executes tools and tracks conversation state, and that is precisely the decision
+`provenance.allowed_tools()` and `assert_no_forbidden_tools()` exist to make.
+PR-23 was this exact shape — a path reaching state-changing behaviour without
+passing the provenance check.
+
+The **Python client SDK** is fine and is used for provisioning: it is generated
+from their OpenAPI spec, so it is authoritative where the prose docs are wrong by
+omission — `workspace_id`, `limit_reset` and `expires_at` are all real parameters
+the docs page does not mention. Its dependencies are `httpx` and `pydantic`, both
+already present. Inference stays on plain `httpx`.
