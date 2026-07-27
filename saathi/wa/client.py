@@ -141,16 +141,28 @@ async def send_cta_url(conn, user_id: int, wa_id: str, body: str,
 
 
 async def send_template(conn, user_id: int, wa_id: str, name: str,
-                        lang: str = "en", variables: list[str] | None = None) -> str:
+                        lang: str = "en", variables: list[str] | None = None,
+                        payloads: list[str] | None = None) -> str:
     """Pre-approved template. The only thing deliverable outside the window.
 
     A template's job is not to say everything — it is to *get a reply*, which
     reopens the free window (§11).
+
+    `payloads` sets the quick-reply payload per button, in template order. The
+    approved templates already carry the buttons ("Ho gaya", "15 min baad"); a
+    template quick-reply returns only its *label* unless a `button` component
+    supplies a payload per message. Without one there is nothing to tie a tap to
+    the turn that produced it, which is why acknowledgements never worked
+    (PR-4b).
     """
     components = []
     if variables:
         components.append({"type": "body",
                            "parameters": [{"type": "text", "text": v} for v in variables]})
+    for i, payload in enumerate(payloads or []):
+        components.append({"type": "button", "sub_type": "quick_reply",
+                           "index": str(i),
+                           "parameters": [{"type": "payload", "payload": payload}]})
     return await _send(conn, user_id, wa_id, {
         "type": "template",
         "template": {"name": name, "language": {"code": lang}, "components": components},

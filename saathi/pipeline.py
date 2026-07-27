@@ -325,18 +325,21 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         ctx.text = ctx.transcript.text
         if ctx.transcript.corrections:
             await _contribute_corrections(conn, who.user_id, ctx.transcript)
-    elif kind == "interactive":
+    elif kind in ("interactive", "button"):
+        # "button" is what a template quick-reply arrives as. Treating it as
+        # plain text sent the payload to the model instead of the ack handler.
         ctx.text = ctx.button_id
     else:
         ctx.text = (msg.get("text") or {}).get("body", "") or ""
 
-    if kind != "interactive":
+    if kind not in ("interactive", "button"):
         ctx.message_id = await log_message(
             conn, who.user_id, "in", kind, wa_message_id=wa_mid, body=ctx.text,
             transcript=ctx.transcript.text if ctx.transcript else None,
             transcript_raw=ctx.transcript.raw if ctx.transcript else None,
             stt_ms=ctx.transcript.ms if ctx.transcript else None) or None
     else:
+        # msg_kind has no 'button' member; both taps record as interactive.
         await log_message(conn, who.user_id, "in", "interactive",
                           wa_message_id=wa_mid, body=ctx.text)
 
