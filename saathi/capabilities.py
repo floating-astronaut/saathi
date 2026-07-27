@@ -150,7 +150,7 @@ async def _agent(ctx: MessageContext) -> dict:
     turn = await agent_loop.run(
         prov.fence(ctx.text, p), facts, Handlers(ctx.conn, ctx.user_id, ctx.tz).handle,
         history=prior, user_name=ctx.display_name,
-        allowed_tools=prov.allowed_tools(names, p))
+        allowed_tools=prov.allowed_tools(names, p), tz=ctx.tz)
     if ctx.conversation_id:
         await conversation.touch(ctx.conn, ctx.conversation_id)
     await agent_loop.record(ctx.conn, turn, ctx.user_id, ctx.message_id,

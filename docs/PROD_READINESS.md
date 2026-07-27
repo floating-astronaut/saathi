@@ -94,6 +94,28 @@ becomes the primary responder and inbound messages never reach our deterministic
 **Fix:** unsubscribe it, or confirm deliberately that it stays disabled and add a
 check that alerts if it flips.
 
+### PR-37 · `create_reminder` still cannot take a relative offset
+The model now has a clock, so "5 minute baad" is at least *computable*: it can
+add five minutes and pass the result as `time_24h` with `recurrence: once` and
+today's `date`. That is the fix that shipped, and it is arithmetic done by a
+language model on the critical path of a medication reminder.
+
+There is no `in_minutes`/`in_hours` parameter, so the schema cannot make the
+illegal states unrepresentable — `recurrence: once` with a missing or stale
+`date` is still expressible, and it fails *silently*, by firing on the wrong
+day. `snooze_reminder` already takes an offset and needs no clock; the same
+shape belongs on `create_reminder`.
+
+**Also unfixed:** `users.tz` is trusted absolutely. User 15 is stored as
+`Asia/Kolkata` while the handset showed UTC−4, so "raat ko 10 baje" would have
+been delivered at 12:30 in the afternoon their time. The agreed behaviour —
+keep the stored zone, but ask in one line when the implied local time is
+implausible, and never silently re-detect — is designed and not built.
+**Fix:** an explicit offset parameter on `create_reminder`, and the one-line
+timezone confirmation. Evidence required is a live reminder that actually
+arrives, not a passing test: no reminder has yet been proven end-to-end from a
+voice note.
+
 ---
 
 ## P1 — before anyone pays

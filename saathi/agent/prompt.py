@@ -14,6 +14,7 @@ against reality rather than trusted.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 # PRD §6, compressed. Every line here is paid for 300x/user/month, so the
 # principles are stated once, tersely, rather than explained.
@@ -28,6 +29,8 @@ How you speak:
 - Exactly ONE question per turn. If you have two, ask the more important one and stop.
 - Never signal repetition. If they ask the same thing a fifth time, answer as warmly as the first.
 - If you get something wrong, say so plainly and fix it. Never blame the user.
+- Mention a stored fact only when it is relevant to what was just said. Never
+  recite what you remember to pad a reply.
 - Never say only "I didn't understand" — always offer a concrete next step or a choice.
 - NEVER show your reasoning, steps, or workings. Do the thinking silently and reply
   only with what the user should read. No "Let me parse", no bullet-point analysis.
@@ -77,6 +80,30 @@ def name_line(name: str | None) -> str:
     return f"The person you are speaking to is called {name}.\n" if name else ""
 
 
+def clock_line(now_local: datetime | None) -> str:
+    """The user's current local date, time and weekday. One line, ~14 tokens.
+
+    Without it the model has no clock at all, so "5 minute baad" is
+    uncomputable and a one-off reminder's `date` can only be *guessed*. A
+    guessed date on a medication reminder is the failure this product exists to
+    avoid — see CHANGELOG 2026-07-27 (relative reminders).
+
+    Deliberately one line, not a block: there is no prompt caching on this
+    model, so every token is paid for on every turn (~300/user/month). The zone
+    is named in IANA form rather than as an abbreviation because the model
+    reasons better about "Asia/Kolkata" than about the three overloaded letters
+    "IST", and because it is the same string the user would have to say back to
+    correct it.
+
+    `None` means the caller has no user timezone. It returns "" rather than
+    inventing one — a wrong clock is worse than no clock, and `loop.run`
+    withholds `create_reminder` entirely when the clock is absent.
+    """
+    if now_local is None:
+        return ""
+    return f"Now, where the user is: {now_local:%a %d %b %Y, %H:%M} ({now_local.tzinfo}).\n"
+
+
 def facts_block(facts: list[tuple[str, str]], limit: int = 40) -> str:
     """Render the user's known facts. Also the entity-bias vocabulary (§10).
 
@@ -109,17 +136,28 @@ class PrefixTooLarge(RuntimeError):
 class Prefix:
     system: str
     tokens: int
+    #: Did this prefix carry a clock? When false the model cannot know today's
+    #: date, so `loop.run` withholds `create_reminder` rather than letting it
+    #: guess one. Capability by absence, same as PRD §12.
+    has_clock: bool = False
 
 
 def build_prefix(facts: list[tuple[str, str]], tool_tokens: int, budget: int,
-                 user_name: str | None = None) -> Prefix:
+                 user_name: str | None = None,
+                 now_local: datetime | None = None) -> Prefix:
     """Assemble the system prefix and enforce the budget.
+
+    `now_local` must already be in the user's timezone — this function does not
+    know which zone that is and will not pick one. Callers that genuinely have
+    no user (the document-reading path) pass None and get a clockless prefix,
+    which costs them `create_reminder`.
 
     Raising is deliberate. The failure mode we are guarding against is silent:
     a prefix that creeps from 3k to 6k doubles the bill and nothing breaks, so
     nobody notices until the invoice.
     """
-    text = SYSTEM + "\n" + name_line(user_name) + facts_block(facts)
+    text = (SYSTEM + "\n" + clock_line(now_local)
+            + name_line(user_name) + facts_block(facts))
     total = estimate_tokens(text) + tool_tokens
     if total > budget:
         raise PrefixTooLarge(
@@ -127,4 +165,4 @@ def build_prefix(facts: list[tuple[str, str]], tool_tokens: int, budget: int,
             f"(system+facts ~{estimate_tokens(text)}, tools ~{tool_tokens}). "
             "Trim the fact block or the tool descriptions — there is no cache to hide behind."
         )
-    return Prefix(system=text, tokens=total)
+    return Prefix(system=text, tokens=total, has_clock=now_local is not None)
