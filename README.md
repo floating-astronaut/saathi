@@ -22,9 +22,21 @@ as a generic term, so a display name had to be chosen separately.
 **The brand name is provisional and will be settled around beta. The internal
 name is not going to change.** Keeping them decoupled is what makes a rebrand a
 copy edit instead of a refactor — so do not thread the display name through
-config, module names, log lines or table names, and do not "fix" either one to
-match the other. Renaming the brand should touch user-facing copy, the policy
-pages, and the Meta display name. Nothing else.
+config keys, module names, log lines or table names, and do not "fix" either one
+to match the other.
+
+As of 2026-07-27 the display name appears in exactly five places, all of them
+string literals a user reads:
+
+    saathi/onboarding.py:53,96     the first message, hi + en
+    saathi/identity.py:189,191     the unknown-sender reply, hi + en
+    saathi/agent/prompt.py:20      "You are Indofolk AI…" in the system prompt
+
+A rebrand is those five, plus the policy pages on both sites, plus a new display
+name submitted to Meta for review. **Keep that list to five.** If it grows —
+into a config key, a template name, a log line — the rebrand stops being a copy
+edit, and `prompt.py` in particular is inside the prefix token budget, so the
+name is not free there.
 
 ---
 
