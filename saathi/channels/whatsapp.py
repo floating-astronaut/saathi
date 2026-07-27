@@ -22,6 +22,7 @@ class WhatsAppTransport(Transport):
         supports_cta_url_button=True,
         max_text_len=4096,
         markup="whatsapp",        # *bold*, not **bold**
+        supports_payments=True,   # WhatsApp Pay via Razorpay (India)
     )
 
     async def send_text(self, conn, user_id, handle, text):
@@ -34,6 +35,9 @@ class WhatsAppTransport(Transport):
                             payloads=None):
         return await wa.send_template(conn, user_id, handle, name, lang, variables or [],
                                       payloads=payloads or [])
+
+    async def send_order_details(self, conn, user_id, handle, payload):
+        return await wa.send_order_details(conn, user_id, handle, payload)
 
     async def fetch_media(self, media_id, max_bytes):
         return await wa.fetch_media(media_id, max_bytes)

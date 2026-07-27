@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     #: key that works and bills the wrong ledger, which is worse than a failure.
     openrouter_workspace_id: str = ""
 
+    # --- WhatsApp Pay / Razorpay (the paywall) ------------------------------
+    #: Off by default. An unconfigured install tells the user their trial ended
+    #: and sends no invoice — a paywall that half-works either takes money
+    #: without delivering or promises without charging.
+    saathi_payments_enabled: bool = False
+    #: Razorpay merchant id (`acc_...`), from the WhatsApp payment configuration.
+    razorpay_merchant_id: str = ""
+    #: The configuration *name* Meta knows this gateway by, sent in every
+    #: order_details. Not the merchant id, and easy to confuse with it.
+    wa_payment_configuration_name: str = ""
+
     #: Fernet key for secrets at rest — today, minted OpenRouter keys. Empty
     #: means provisioning refuses rather than storing a plaintext, because an
     #: unencrypted API key in a table is a worse outcome than no key at all.

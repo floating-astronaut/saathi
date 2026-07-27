@@ -22,6 +22,11 @@ class MessageContext:
     tz: str
     voice_pref: str
     onboarding: str
+    #: Where the account stands against its allowance: active | exhausted | paid.
+    #: Resolved once in the pipeline, like `onboarding`, because `Handler.matches`
+    #: is **synchronous** — an async matcher returns a truthy coroutine and would
+    #: put every user behind the paywall.
+    account_status: str = "active"
     wa_message_id: str | None = None
     kind: str = "text"               # text | audio | image | document | interactive
     text: str = ""                   # resolved text (transcribed if voice)

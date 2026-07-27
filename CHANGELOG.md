@@ -14,6 +14,73 @@ Conventions:
 
 ---
 
+## 2026-07-27 (night) — the paywall, and the one thing it must never become
+
+**429 tests passing** (411 → 429). `tests/test_paywall.py`. D-U.
+
+### Added
+
+- **An in-thread paywall.** Operator decision, overriding my recommendation to
+  collect via a link-out: a WhatsApp-native product that sends people to a
+  browser has broken its own premise for exactly the users least able to follow
+  the detour. Migration 009 adds `accounts.status`, `psp_customer_id` and
+  `account_payments`; `saathi/payments.py` builds and sends the invoice.
+
+### The boundary, and what happened to it
+
+Saathi's promise was that it **never transacts**, and the scam it exists to
+blunt is not a stolen transfer — it is a trusted voice asking an elder to pay.
+After this, Saathi can ask for money. That is a real reduction and it is not
+worth describing as anything softer.
+
+What bounds it is that the reduction is one deterministic path:
+
+- **No payment tool exists.** `send_invoice`, `request_payment`,
+  `order_details`, `charge`, `refund` are all in `FORBIDDEN_TOOL_NAMES`. The
+  model cannot invoice, cannot be argued into it, and cannot be prompt-injected
+  into it — the capability is absent, not guarded. Same argument as the safety
+  regex at priority 0.
+- **One caller, one price.** No amount is ever derived from something that read
+  user text.
+- **Priority 88** — above the agent, below everything deterministic. An account
+  out of allowance keeps safety, onboarding, data erasure, reminder
+  acknowledgement, and every command including STOP. Those are rights, not
+  features to sell back to someone.
+- **Reminders keep firing.** They run from the worker and never enter the chain.
+  An unpaid bill is not a reason to stop telling someone to take their heart
+  medication.
+
+Razorpay collects; they will not take payment without a phone number or email,
+so payer identity stays with them and we keep only the join. Off by default.
+
+### The trap this design walked into and out of
+
+`Handler.matches` is **synchronous** — `dispatch` calls `if not h.matches(ctx)`.
+The first version of `_paywall_matches` was `async`, which returns a coroutine,
+which is truthy. It would have matched every message and put the **entire user
+base** behind the paywall, silently, on the first deploy. Caught before it ran,
+by reading `dispatch` rather than by a test. Account status is now resolved once
+in the pipeline onto `MessageContext`, the same way `onboarding` already was,
+and a test pins the matcher as sync.
+
+### A weak test, caught by red-checking it
+
+`test_an_unconfigured_install_says_so_but_sends_no_invoice` passed with the
+`saathi_payments_enabled` check **deleted from the source**, because the fixture
+also left the merchant id blank — so `_assert_configured` still raised, for the
+wrong reason. Added `test_the_kill_switch_alone_stops_the_invoice`, which
+configures the gateway fully and toggles only the flag. That one does go red.
+This is the sixth time green has agreed with a bug here; the difference is that
+this time the deletion was tried before the test was believed.
+
+### Inert on purpose, for now
+
+**Nothing marks an account exhausted** (PR-42) — `mark_exhausted` has no caller,
+so the paywall cannot fire yet. And **the payment webhook is not handled**
+(PR-43): a user who pays would stay paywalled. `SAATHI_PAYMENTS_ENABLED` must
+not be turned on before PR-43 exists.
+
+
 ## 2026-07-27 (night) — one captionless image broke that user's next four conversations
 
 **411 tests passing** (405 → 411). `tests/test_blank_history.py`.

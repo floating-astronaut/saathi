@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import logging
 
-from . import (commands, conversation, documents, identity, memory, onboarding,
-               provenance as prov, vision)
+from . import (accounts, commands, conversation, documents, identity, memory,
+               onboarding, payments, provenance as prov, vision)
 from .agent import loop as agent_loop
 from .agent.tools.handlers import Handlers
 from .core.context import MessageContext
@@ -137,6 +137,67 @@ async def _media(ctx: MessageContext) -> dict | None:
 
 
 register(simple("media", 30, lambda c: c.kind in ("image", "document"), _media))
+
+
+# --- 80-89 · the paywall ----------------------------------------------------
+#
+# Priority 88: below everything deterministic, immediately above the agent. That
+# placement is the design, not an implementation detail.
+#
+# What an unpaid account keeps: safety (0), onboarding (10), erasing their data
+# (20), acknowledging a reminder (21), and every command (22) — including STOP
+# and "what do you know about me". Those are not features to be sold back to
+# someone; two of them are how a person exercises a right over their own data,
+# and one is how they say "stop messaging me".
+#
+# What it loses: the model turn, and only that. **Reminders keep firing**, since
+# they run from the worker queue and never enter this chain. An unpaid bill is
+# not a reason to stop telling someone to take their heart medication, and if
+# that is ever to change it should be by a decision someone wrote down, not by
+# where a capability happened to sit.
+
+PAYWALL_COPY = {
+    "hi": ("Aapka free trial poora ho gaya hai. 🙏 Aage bhi main aapke saath "
+           "rahoon — dawai ki yaad, baat-cheet, sab kuch — to yahin se jaari "
+           "rakh sakte hain.\n\n"
+           "Aapke pehle se lagaye hue reminder chalte rahenge, chinta na karein."),
+    "en": ("Your free trial is complete. 🙏 To keep me with you — the medicine "
+           "reminders, the conversations, all of it — you can continue right "
+           "here.\n\n"
+           "Your existing reminders will keep coming, don't worry."),
+}
+
+
+def _paywall_matches(ctx: MessageContext) -> bool:
+    # Synchronous, reading a value the pipeline already resolved. `matches` is
+    # called as `if not h.matches(ctx)`, so an async version would return a
+    # coroutine — truthy — and paywall every user on the platform.
+    return ctx.account_status == "exhausted"
+
+
+async def _paywall_handle(ctx: MessageContext) -> dict:
+    row = await (await ctx.conn.execute(
+        "select lang_pref from users where id = %s", (ctx.user_id,))).fetchone()
+    lang = "en" if (row and row[0] == "en") else "hi"
+
+    # The reply is a fixed string. This is the one turn that certainly cannot
+    # ask the model for wording — we are here because there is no allowance left
+    # to ask it with.
+    await ctx.reply(PAYWALL_COPY[lang])
+
+    # The invoice is sent by this function, from a fixed price, on a path the
+    # model cannot reach and cannot be argued into. `send_invoice` refuses
+    # unless payments are explicitly configured, so on an unconfigured install
+    # the user gets the message above and nothing else.
+    try:
+        await payments.send_invoice(ctx.conn, ctx.transport, ctx.user_id, ctx.handle,
+                                    amount_minor=accounts.CONTINUE_PRICE_MINOR)
+    except payments.PaymentsDisabled as exc:
+        log.info("paywall hit for user %s; no invoice sent (%s)", ctx.user_id, exc)
+    return {"handled": "paywall"}
+
+
+register(simple("paywall", 88, _paywall_matches, _paywall_handle))
 
 
 # --- 90-99 · the agent, as the catch-all ------------------------------------
