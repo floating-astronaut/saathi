@@ -54,9 +54,36 @@ def valid_signature(body: bytes, header: str | None) -> bool:
     return hmac.compare_digest(expected, header)
 
 
+def log_unhandled_fields(payload: dict) -> list[str]:
+    """Name the webhook change fields we drop on the floor.
+
+    `extract_messages` reads only `value["messages"]`, so every other field —
+    `statuses`, and now that WhatsApp Pay is configured on this WABA, whatever
+    Meta calls payment status — is silently discarded. Silently is the problem:
+    PR-43 needs the *shape* of a real payment notification, and the honest way
+    to learn it is to see one arrive rather than to guess from prose.
+
+    Logs the field name and the value's keys. **Never the value**, which may
+    carry a payer's contact details, and which we have no consent to store.
+    Returns the names so a test can assert on them.
+    """
+    seen: list[str] = []
+    for entry in payload.get("entry", []) or []:
+        for change in entry.get("changes", []) or []:
+            field = change.get("field")
+            value = change.get("value") or {}
+            if "messages" in value:
+                continue
+            seen.append(field or "?")
+            log.info("unhandled webhook field %r with keys %s",
+                     field, sorted(value.keys()))
+    return seen
+
+
 async def _process(payload: dict) -> None:
     """Do the work off the request path. Meta times webhooks out quickly and
     retries on non-2xx, so a slow STT or model call must never delay the ack."""
+    log_unhandled_fields(payload)
     await db.pool().open()
     for msg, name in pipeline.extract_messages(payload):
         try:
