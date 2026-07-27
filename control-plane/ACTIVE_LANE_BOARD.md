@@ -197,7 +197,10 @@ Write-back: docs/AI_ROUTING.md, docs/PROD_READINESS.md, CHANGELOG.md
 Notes: design doc written first (THE_METHOD §1) — the code follows it, not the
   other way round. Model and region are unchanged (D-O), so D-D's bakeoff stands.
 
-  **Blocked on credits.** The OpenRouter account has 0. Keys will mint cleanly
+  Residency is **settled**, not open — operator decision 2026-07-27, and the
+  privacy policy already draws the stored-data / message-text line correctly.
+
+  **Blocked on credits only.** The OpenRouter account has 0. Keys will mint cleanly
   and fail on first use — provisioning succeeds, spending does not. Build and
   test the machinery, but do not put a real user on it until funded.
 
