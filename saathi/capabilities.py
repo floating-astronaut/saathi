@@ -94,8 +94,30 @@ async def _ack(ctx: MessageContext) -> dict | None:
     return {"handled": "ack", "button": ctx.button_id}
 
 
+# Provenance is checked *here*, in the matcher, not inside the handler — an
+# unmatched capability falls through to the agent, which fences relayed text and
+# withholds mutating tools. A handler that refused would have to invent its own
+# safe behaviour; declining to match reuses the one we already trust.
+#
+# Why this matters more than it looks: STOP matches `\bunsubscribe\b` as a
+# substring, and virtually every forwarded marketing message carries the word in
+# its footer. Before this guard, forwarding a promo set `users.paused = true`,
+# and `worker/turns._handle` silently declines to send reminders to a paused
+# user. A forwarded advert stopped someone's medication reminders indefinitely,
+# with no error and — because the ack path is unreachable (PR-4b) — no nudge to
+# reveal it.
+#
+# Priorities 20 and 21 stay unguarded on purpose: they key on `button_id`, and a
+# button press is a first-party control the user physically tapped.
+#
+# Onboarding (10) is deliberately NOT guarded either. It matches on
+# `not c.is_onboarded`, and making it provenance-aware would drop an
+# un-onboarded user through to the agent — breaking "onboarding never calls the
+# model", which is precisely what makes an open door safe.
 register(simple("commands", 22,
-                lambda c: bool(c.text.strip()) and commands.parse(c.text).command is not None,
+                lambda c: c.trusted
+                          and bool(c.text.strip())
+                          and commands.parse(c.text).command is not None,
                 lambda c: _command(c)))
 
 

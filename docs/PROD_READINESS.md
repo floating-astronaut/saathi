@@ -149,7 +149,7 @@ true.
 read-only (a token with `read_api` / `read_repository` and no `repo` scope).
 Tracked as `CRED-1` on `control-plane/ACTIVE_LANE_BOARD.md`.
 
-### PR-23 · Forwarded text can still trigger deterministic state changes
+### PR-23 · Forwarded text could trigger deterministic state changes — RESOLVED 2026-07-27
 `provenance.py` correctly treats forwarded, quoted, image, and document text as
 relayed content: it fences the text for the agent and withholds mutating tools.
 But deterministic commands run before the agent capability and do not check
@@ -162,10 +162,21 @@ does not reach the LLM tool loop. It is still a security boundary failure: the
 product rule is that relayed content may be read, explained, or warned about,
 but must not be obeyed.
 
-**Fix:** make the deterministic command capability provenance-aware. Relayed
-content should be summarized or warned about, not routed to state-changing
-commands; interactive button payloads can remain trusted because the user
-pressed a first-party control.
+**Worse than first reported.** STOP matches `\bunsubscribe\b` as a *substring*,
+and nearly every forwarded marketing message carries that word in its footer.
+`STOP` sets `users.paused = true`, and `worker/turns._handle` silently declines
+to send reminders to a paused user. So a relative forwarding an advert stopped
+someone's medication reminders indefinitely — no error, no bounce, and with the
+ack path unreachable (PR-4b) nothing to reveal it. No attacker required.
+
+**Resolved:** the priority-22 matcher now requires `c.trusted`. Relayed text
+falls through to the agent, which already fences it and withholds mutating
+tools, so it is still read and explained — just never obeyed. Priorities 20/21
+stay unguarded because they key on `button_id`, and a tap is a first-party
+control. Onboarding (10) is deliberately **not** guarded: gating it would drop
+an un-onboarded user to the agent and break "onboarding never calls the model".
+Regression cover in `tests/test_relayed_commands.py`, verified to fail without
+the guard.
 
 ### PR-25 · Deploy restarts services even when a migration fails
 `ops/deploy.sh` runs every migration with `psql -v ON_ERROR_STOP=1`, but the
@@ -215,6 +226,19 @@ rules), and because it is a real attack surface that the tunnel-only story hides
 Cloudflare fronts `:3130`, but it does not front `:22`.
 **Fix before production:** SSM Session Manager only, and drop the rule. That was
 the original design; SSH was added for convenience and the docs never caught up.
+
+### PR-27 · The runtime box can now rewrite Secrets Manager
+`secretsmanager:PutSecretValue` (and `DescribeSecret`) were attached to
+`saathi-dev-box` on 2026-07-27 so CallerDesk keys could be stored from the box.
+
+Reading the 13 secrets was already a confidentiality exposure if the box is
+compromised. Writing is an **integrity** one, and worse in a way that matters: a
+credential quietly repointed at an attacker's endpoint is far harder to notice
+than one stolen. The box is the internet-facing machine.
+
+**Fix:** drop back to read-only once CallerDesk is wired. If the grant was
+`secretsmanager:*` rather than `PutSecretValue` on that one resource ARN, narrow
+it now — this needed exactly one action on one secret. Related: PR-22.
 
 ### PR-13 · Cloudflare token is IP-locked to the EIP
 `saathi-box-canonical` is locked to `15.252.75.191/32`. Correct, and it means
