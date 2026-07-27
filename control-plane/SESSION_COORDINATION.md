@@ -10,7 +10,12 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
-| _none_ | | | | | |
+| Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-4 | `saathi/scheduling.py`, `saathi/worker/turns.py`, `saathi/agent/tools/handlers.py`, `tests/test_reminder_delivery.py`, `tests/test_scheduling.py` | **ended** — closed at `64a520b`, surfaces released |
+| Codex | — | 2026-07-27 | SEC-2 | `SECURITY.md` (new, owns it outright) | active |
+
+**Base commit is `64a520b`.** `main` moved twice on 2026-07-27 (`ffe9acc`,
+`64a520b`). Any session that started before those must rebase before committing,
+or it will clobber the control plane and the reminder-delivery fix.
 
 ## Rules
 
