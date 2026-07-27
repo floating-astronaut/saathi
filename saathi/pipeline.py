@@ -252,8 +252,6 @@ async def _handle_media(conn, transport, user_id: int, handle: str,
     media_id = node.get("id")
     caption = (node.get("caption") or "").strip() or None
     mime = (node.get("mime_type") or "").lower()
-    if not media_id:
-        return None
 
     is_pdf = kind == "document" and "pdf" in mime
     # The limit is chosen from what the file *is*, not from which WhatsApp
@@ -270,6 +268,14 @@ async def _handle_media(conn, transport, user_id: int, handle: str,
         await log_message(conn, user_id, "out", "text", body=body)
         log.warning("media refused for user %s: %s", user_id, reason)
         return {"handled": "media_refused", "reason": reason}
+
+    if not media_id:
+        # A media message with no id is a malformed webhook, but falling through
+        # is not the answer: no later capability handles a document, and the
+        # agent needs text this message does not carry. She would get silence
+        # for something she did send.
+        log.warning("%s message %s carries no media id", kind, wa_mid)
+        return await refuse(MEDIA_ERROR, "no_media_id")
 
     try:
         with _MEDIA_GATE.hold():
@@ -292,8 +298,16 @@ async def _handle_media(conn, transport, user_id: int, handle: str,
 
             try:
                 if is_pdf:
+                    # The gate covers the CPU half only — parse and rasterise.
+                    # It is released before the model call, which is a network
+                    # wait of 10-45s: holding a 1-of-1 slot across that would
+                    # refuse every other user's document for the whole
+                    # round-trip, to protect a core that is idle for it.
+                    # Concurrency there is bounded by `_MEDIA_GATE` instead.
                     with _DOC_GATE.hold():
-                        reading = await _read_pdf(blob, caption)
+                        material = await _parse_pdf(blob)
+                    reading = (None if material is None
+                               else await _read_parsed(material, caption))
                 elif kind == "image" or mime.startswith("image/"):
                     reading = await _look(blob, mime, caption)
                 else:
@@ -338,15 +352,27 @@ async def _look(blob: bytes, mime: str | None, caption: str | None) -> "vision.R
     return await vision.describe_image(blob, mime, caption)
 
 
-async def _read_pdf(blob: bytes, caption: str | None) -> "vision.Reading | None":
-    """Text layer first, rasterise page one second. None if neither worked."""
+async def _parse_pdf(blob: bytes) -> tuple[str, str | bytes] | None:
+    """The CPU half: text layer first, rasterise page one second.
+
+    Split from the model call so the document gate can be released between
+    them. No network here — everything in this function is work the box does
+    itself, which is exactly what the gate is rationing.
+    """
     text = await documents.extract_text(blob)
     if documents.has_text_layer(text):
-        return await _read_pdf_text(text, caption)
+        return ("text", text)
     page = await documents.render_first_page(blob)
-    if page is None:
-        return None
-    return await vision.read_document(page, "image/png", caption)
+    return None if page is None else ("page", page)
+
+
+async def _read_parsed(material: tuple[str, str | bytes],
+                       caption: str | None) -> "vision.Reading":
+    """The model half, run with the document gate already released."""
+    how, payload = material
+    if how == "text":
+        return await _read_pdf_text(payload, caption)
+    return await vision.read_document(payload, "image/png", caption)
 
 
 async def _read_pdf_text(text: str, question: str | None) -> "vision.Reading":

@@ -172,12 +172,15 @@ call:
   `file_size` refuses the worst cases before a byte moves, and the body is
   streamed and abandoned at the cap rather than buffered and measured. A size we
   could not determine is not treated as small.
-- **Two gates** (`core/backpressure.py`): four media messages in flight, one
-  document being parsed. The document gate is 1 because this box has 2 vCPU and
-  the same event loop runs the safety classifier; PDF parsing is CPU-bound and
-  holds the GIL. The (N+1)th is **refused with a message, not queued** — a queue
-  in front of CPU-bound work is unbounded growth that also answers too late to
-  be useful.
+- **Two gates** (`core/backpressure.py`): four image-or-document messages in
+  flight, one document being parsed. The document gate is 1 because this box has
+  2 vCPU and the same event loop runs the safety classifier; PDF parsing is
+  CPU-bound and holds the GIL. It covers the CPU half only and is released
+  before the model call, which is a network wait rather than work this box does.
+  The (N+1)th is **refused with a message, not queued** — a queue in front of
+  CPU-bound work is unbounded growth that also answers too late to be useful.
+  Voice notes are fetched outside both gates, which is why the resident-media
+  ceiling is a statement about photos and PDFs and not about all inbound media.
 - **The parser is not on the event loop.** `pypdf` is synchronous, so it runs in
   a thread pool sized to the document gate, under a wall clock.
 - **The renderer is a subprocess with kernel limits.** `pdftoppm` gets CPU,

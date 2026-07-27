@@ -16,7 +16,7 @@ Conventions:
 
 ## 2026-07-28 (hardening) — an inbound document had no limit, and never arrived
 
-**364 tests passing** (337 before). PR-26.
+**366 tests passing** (337 before). PR-26.
 
 ### Broke
 
@@ -50,6 +50,11 @@ Conventions:
 - **A `.docx` was sent to the vision model as if it were a photograph** — one
   model call spent to produce nothing, and then silence for the user.
 
+- **The rendered page was briefly world-readable.** `pdftoppm` creates the PNG
+  itself, under our umask, so someone's prescription or bank letter sat in
+  `/tmp` at 0644 until we deleted it. Both files now live in a `mkdtemp` 0700
+  directory, which also makes the cleanup one call that cannot miss one.
+
 ### Fixed — resource limits on inbound media (PR-26)
 
 Onboarding is open, so "a valid sender" is a low bar. Every limit below is a
@@ -69,16 +74,30 @@ running the reminder worker.
   document gate, with an 8s wall clock. It was synchronous and inline: a content
   stream that took ten seconds to decode took ten seconds of everybody else's
   turns with it.
-- **Page count refused before the page tree is walked** (200), and extracted
-  text capped per page and in total.
+- **Page count refused before extraction or rasterisation** (200), and extracted
+  text capped per page and in total. Note what this does *not* do, since the
+  first draft of this entry claimed it did: counting the pages **is** the page
+  tree walk (`len(reader.pages)` → `get_num_pages` → `_flatten`), so the guard
+  cannot fire until pypdf has visited every node. Measured: 60,000 pages fit in
+  7.07 MiB — under the byte cap — and cost 4.63s and 295 MiB of peak RSS to
+  count. The pool, the gate and the 8s clock contain that; the guard buys the
+  extraction and the render, not the count.
 - **`pdftoppm` gets rlimits from the kernel** — CPU, address space, and file
   size, the last being the only part of this path that writes to disk — plus a
   15s timeout and a kill. `-scale-to` replaces `-r 150`, so the raster is
-  bounded by our configuration rather than by the page's declared size.
-- **Two backpressure gates** (`saathi/core/backpressure.py`): four media
-  messages in flight process-wide, and **one** document being parsed. The second
-  document is refused, not queued — a queue in front of CPU-bound work is the
-  same unbounded growth wearing a hat.
+  bounded by our configuration rather than by the page's declared size. Only
+  RLIMIT_CPU and RLIMIT_FSIZE arrive as signals; **RLIMIT_AS does not kill
+  anything**, it makes `mmap` return ENOMEM, and pdftoppm then exits 127 without
+  loading libm. That path fails closed and the user still gets a message, but
+  the comment used to say otherwise.
+- **Two backpressure gates** (`saathi/core/backpressure.py`): four **image and
+  document** messages in flight process-wide, and **one** document being parsed.
+  The second document is refused, not queued — a queue in front of CPU-bound
+  work is the same unbounded growth wearing a hat. The document gate covers the
+  CPU half only and is released before the model call, which is a 10-45s network
+  wait; holding a 1-of-1 slot across that would refuse everyone else's document
+  to protect an idle core. Voice notes do **not** pass the media gate — audio
+  concurrency is still unbounded, and audio is the primary modality.
 - **Every refusal is a message**, bilingual and specific, saying what would work
   instead ("send me a photo of just the page that matters"). There is no longer
   any exit from the media path that drops the turn silently.
@@ -86,17 +105,34 @@ running the reminder worker.
 Proven by running it, not by reading it: real `pypdf` on a real 250-page PDF,
 the real `pdftoppm` for the happy path *and* for the kill *and* for the
 `RLIMIT_FSIZE` kill (SIGXFSZ, exit `-25`), the real `httpx` stack for the
-streaming cap, and a signed document webhook driven through the real FastAPI app
-end to end. Each guard was then **deleted from the production path** and the
-test that covers it confirmed to go red — nine for nine.
-`tests/test_media_limits.py`.
+streaming cap, and an HMAC-signed document webhook POSTed to the real FastAPI
+route — which is a committed test, not a scratch script, because the claim
+should stay true after the next change. Each guard was then **deleted from the
+production path** and the test that covers it confirmed to go red — nine for
+nine. `tests/test_media_limits.py`.
+
+`_render_limits` is worth one line on its own: it runs between `fork()` and
+`exec()` in a process that has threads, where an allocation can block on a
+malloc lock the fork orphaned. It said "nothing here allocates" while computing
+`mb * 1024 * 1024` and two tuple literals. The values are now built in the
+parent and only indexed in the child. This is also why
+`SAATHI_DOC_CONCURRENCY` is not a throughput knob — at 1, no pypdf thread is
+running when we fork. `LANDMINES.md` has the long version.
 
 ### Still open
 
 Per-user rate limiting. The gates bound how much runs *at once*; they do not
-bound how often one sender may ask. See `PROD_READINESS.md` PR-33 — it belongs
-with admission control, covers audio and text as well as documents, and needs
-state that survives a restart.
+bound how often one sender may ask. Widened onto `PROD_READINESS.md` **PR-15**
+— it belongs with admission control, covers audio and text as well as
+documents, and needs state that survives a restart.
+
+Every outbound media reply is stored in `messages` **twice** — `pipeline` inserts
+it and `wa.client._send` records it again at the wire path, and the `on conflict
+(wa_message_id)` that was supposed to absorb the duplicate never fires because
+pipeline's row has a NULL id and NULL never conflicts. Pre-existing on the agent
+path and now replicated onto the refusal paths. Not fixed here because the two
+rows differ — pipeline's is redacted, the wire path's is not — so deleting the
+duplicate silently drops redaction from outbound storage. Written up as PR-34.
 
 ---
 
