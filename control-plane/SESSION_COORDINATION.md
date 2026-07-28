@@ -21,11 +21,10 @@ trust this line, run:
 
     git ls-remote https://github.com/Nuraveda-Labs/saathi.git main
 
-Rebase before committing if your session started earlier. Concurrent sessions
-rebased without a conflict on 2026-07-27 because each declared its surfaces
-here first — but note that codex twice wrote directly into `/home/ubuntu/saathi`
-without a row here, and both times the work had to be rescued by hand
-(`2a11443`, `2d65854`). Declaring surfaces only helps if everyone does it.
+Create an `agent/<task>` branch from current `main` before committing. Concurrent
+sessions still declare their surfaces here first, but product state lands through
+GitHub PRs into `main`; direct writes to `/home/ubuntu/saathi` are runtime
+debugging only and must be copied back to a source branch before they count.
 
 ## Rules
 
@@ -70,8 +69,9 @@ several on the runtime box at different commits, and only one is current:
     /home/ubuntu/saathi        the deployed artifact. Its files are live, but its
                                git metadata is fossilised — HEAD reads far behind
                                main and that is expected, not a problem to fix.
-    scratch clones             created by sessions for a clean base. Stale within
-                               hours. Delete when the lane closes.
+    source clones              created by sessions for `agent/<task>` branches.
+                               Push a PR, merge to `main`, deploy, then delete
+                               when the lane closes.
 
 This has already misled once: on 2026-07-27 the deployed tree read three commits
 behind, and the honest conclusion from `git log` there was that work was missing
@@ -80,8 +80,8 @@ when it was not. **Trust `git ls-remote`, not a local HEAD:**
     git ls-remote https://github.com/Nuraveda-Labs/saathi.git main
     git ls-remote https://gitlab.com/nuraveda-lab/saathi.git main
 
-If you create a scratch clone, remove it when you are done. A clone nobody owns
-is a tree the next session will read and believe.
+If you create a source clone, remove it when you are done. A clone nobody owns is
+a tree the next session will read and believe.
 
 ## Recent handoffs
 

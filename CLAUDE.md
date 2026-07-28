@@ -37,11 +37,22 @@ reminders, speech, privacy, pricing or the WhatsApp channel.
 | Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` (remote) |
 | Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
 
-The runtime box's checkout has no remotes and no signing key. Anything you edit
-there is committed nowhere and is overwritten by the next deploy. Fine for
-debugging; never for real work. Deploys go through `ops/deploy.sh` — from the
-dev box over SSM, or **from this box with `--local`** (PR-28, 2026-07-27).
+The runtime box's `/home/ubuntu/saathi` tree is a deployed artifact with
+fossilized git. Anything you edit there is product state at risk of being
+overwritten by the next deploy. Fine for debugging; never for real work. Real
+work happens on an `agent/<task>` branch in a source checkout, then a GitHub PR
+into `main`; after the PR merges, deploy `main`. Deploys go through
+`ops/deploy.sh` — from the dev box over SSM, or **from this box with `--local`**
+(PR-28, 2026-07-27).
 Never hand-roll the tar/S3/SSM sequence.
+
+## Agent PR flow
+
+The default landing path is branch → PR → merge → deploy, run by agents end to
+end. Do not push directly to `main` unless the operator explicitly declares an
+emergency. Do not ask the operator to babysit the PR; open it, inspect the diff
+and checks, merge it when the lane acceptance is met, deploy merged `main`, then
+verify and write back.
 
 ## Working a lane
 

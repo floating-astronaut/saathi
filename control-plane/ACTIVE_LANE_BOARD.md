@@ -28,6 +28,18 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### FLOW-1 — agents land work through PRs before deploy   [CLOSED]
+Owner: Codex (runtime box)        Opened: 2026-07-28 · Closed: 2026-07-28
+Reading: docs/THE_METHOD.md, docs/AGENT_SYNC_PROTOCOL.md, CONTRIBUTING.md, docs/RUNBOOK.md
+Acceptance: repo rules say agents author on `agent/<task>` branches, open GitHub
+  PRs into `main`, inspect/merge them themselves when acceptance is met, then
+  deploy merged `main`; `/home/ubuntu/saathi` remains runtime artifact only.
+Write-back: AGENTS.md, CLAUDE.md, KIMI.md, CONTRIBUTING.md, docs/THE_METHOD.md,
+  docs/AGENT_SYNC_PROTOCOL.md, docs/RUNBOOK.md, docs/DOC_SYSTEM.md,
+  control-plane/SESSION_COORDINATION.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: operator decision 2026-07-28: PR flow is preferred even as a single dev,
+  but agents should run the loop end to end rather than waiting on the operator.
+
 ### DOC-1 — three docs claim no inbound port is open; SSH is open   [CLOSED]
 Owner: Claude (runtime box)        Opened: 2026-07-27 · Closed: 2026-07-27
 Reading: docs/RUNBOOK.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md
