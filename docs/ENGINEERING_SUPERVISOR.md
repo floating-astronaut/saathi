@@ -1383,3 +1383,24 @@ the next build order is read/explain, tasks, bills, drafts, scam shield and loca
 errand handoffs.
 
 **Remains:** implementation lanes LIFE-1..LIFE-6 are open and unassigned.
+
+## 2026-07-28 — LIFE-1 forwarded-content read/explain/action closed
+
+**Read:** `docs/DAILY_LIFE_OS.md`, `saathi/provenance.py`,
+`saathi/capabilities.py`, `tests/test_provenance.py`, `tests/test_lookup.py`, and
+existing relayed-command coverage.
+
+**Changed:** updated `provenance.fence()` and `agent/prompt.SYSTEM` so forwarded
+messages, bills, notices, screenshots and PDFs ask for explanation, amount/date/
+place/person/action extraction, scam-pressure warning and exactly one safe next
+step. Added tests in `tests/test_provenance.py` and `tests/test_lookup.py`;
+updated `docs/DAILY_LIFE_OS.md`, `CHANGELOG.md`, lane board and session row.
+
+**Verified:** focused suite `uv run pytest -q tests/test_provenance.py
+tests/test_lookup.py tests/test_relayed_commands.py tests/test_prefix_budget.py`
+— 47 passed; full suite `uv run pytest -q` — 518 passed. Existing safeguards
+remain: mutating tools are withheld on `RELAYED`, deterministic commands require
+trusted text, and relayed content remains fenced.
+
+**Remains:** LIFE-2 task manager, LIFE-3 bill-specific extraction, LIFE-4 drafting
+and LIFE-5 stronger scam shield are still open lanes.

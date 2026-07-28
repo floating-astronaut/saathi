@@ -12,6 +12,27 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-28 — forwarded content now asks for one safe next step
+
+**47 focused tests passing.** `tests/test_provenance.py`, `tests/test_lookup.py`,
+`tests/test_relayed_commands.py`, `tests/test_prefix_budget.py`. LIFE-1.
+
+### Added
+
+- Relayed/forwarded content now carries explicit daily-life instructions to the
+  model: explain what it says, extract amount/date/place/person/action when
+  present, flag scam pressure, and end with exactly one safe next step.
+- The global prompt now states the same rule for forwarded messages, bills,
+  notices, screenshots and PDFs.
+
+### Boundary
+
+This does not allow forwarded content to act. Mutating tools are still withheld
+for `RELAYED` turns, deterministic commands still require trusted text, and the
+new tests keep the original prompt-injection defence in place.
+
+---
+
 ## 2026-07-28 — cart building now produces India-first handoff links
 
 **9 focused tests passing.** `tests/test_commercial_actions.py`,

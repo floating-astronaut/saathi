@@ -10,6 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
+| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T19:13Z | LIFE-1 | `saathi/provenance.py`, `saathi/agent/prompt.py`, `tests/test_provenance.py`, `tests/test_lookup.py`, docs/write-back | **ended** — LIFE-1 implemented and verified; branch ready for PR |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T19:05Z | LIFE-0 | `docs/DAILY_LIFE_OS.md`, `docs/DOC_SYSTEM.md`, `docs/PRD.md`, `docs/DECISIONS.md`, control-plane write-back | **ended** — LIFE-0 roadmap written and queued implementation lanes |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T18:43Z | CAP-2 | `saathi/commercial_actions.py`, `saathi/agent/tools/handlers.py`, `saathi/agent/tools/specs.py`, `saathi/agent/prompt.py`, `tests/test_commercial_actions.py`, docs/write-back | **ended** — CAP-2 implemented and verified; branch ready for PR |
 | Codex | dev `ip-172-31-32-37` | 2026-07-28T18:00Z | CAP-1 | `docs/DOC_SYSTEM.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, new/updated commercial capability docs, control-plane write-back | **ended** — CAP-1 contract written; branch ready for PR |
