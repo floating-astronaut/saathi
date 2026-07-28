@@ -1421,3 +1421,20 @@ tests/test_media_limits.py tests/test_provenance.py` — 61 passed; full suite
 
 **Remains:** real-device UX check for WhatsApp media forwards, and deeper
 bill-specific extraction in LIFE-3.
+
+## 2026-07-28 — LIFE-1c forwarded summary plus follow-up closed
+
+**Read:** `docs/DAILY_LIFE_OS.md`, `saathi/provenance.py`,
+`saathi/agent/prompt.py`, and forwarded/provenance tests.
+
+**Changed:** relayed-content fence and system prompt now ask the model to skim
+and summarise first, flag obvious risk, extract visible amount/date/place/person/
+action, then ask one follow-up question: what would the user like Saathi to do
+with it? Updated tests, roadmap, changelog, lane board and session row.
+
+**Verified:** focused suite `uv run pytest -q tests/test_provenance.py
+tests/test_lookup.py tests/test_relayed_commands.py tests/test_prefix_budget.py`
+— 47 passed; full suite `uv run pytest -q` — 519 passed.
+
+**Remains:** a real WhatsApp media-forward UX check would prove how this reads on
+handset; LIFE-3 still owns bill-specific extraction.
