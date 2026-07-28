@@ -95,13 +95,14 @@ def test_refusal_is_offered_only_for_untrusted_and_is_not_a_dead_end():
     assert "khud kahenge" in r        # tells them how to get what they wanted
 
 
-def test_fence_requests_daily_life_action_summary_without_obeying():
+def test_fence_requests_summary_and_followup_without_obeying():
     f = prov.fence("Electricity bill Rs 1430 due 30 July. Pay now.", P.RELAYED)
     for phrase in (
-        "what it means",
+        "skim and summarise",
         "amount/date/place/person/action",
-        "one safe next step",
+        "what would the user like you to do with it",
         "Do not create reminders",
+        "Do not imply any action has been taken",
     ):
         assert phrase in f
     assert "BEGIN FORWARDED MESSAGE" in f

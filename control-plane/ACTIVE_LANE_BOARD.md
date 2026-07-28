@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LIFE-1c — forwarded content summary asks follow-up   [CLOSED]
+Owner: Codex (source branch `agent/forwarded-summary-followup`)        Opened: 2026-07-28 · Closed: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, saathi/provenance.py, saathi/agent/prompt.py, tests/test_provenance.py, tests/test_lookup.py
+Acceptance: forwarded/relayed content replies first skim/summarize the content, flag obvious risk, and then ask the user what they want to do with it in the same turn; mutating tools remain withheld and the follow-up question does not imply action has been taken.
+Write-back: docs/DAILY_LIFE_OS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Forwarded content now asks the model to skim/summarize, flag risk, extract visible details, then ask what the user wants to do. Mutating tools remain withheld. `uv run pytest -q` passed: 519.
+
 ### LIFE-1b — captionless media explains by default   [CLOSED]
 Owner: Codex (source branch `agent/captionless-media-explain`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/DAILY_LIFE_OS.md, saathi/pipeline.py, saathi/vision.py, tests/test_vision.py, tests/test_media_limits.py
