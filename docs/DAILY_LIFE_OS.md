@@ -72,6 +72,12 @@ to explain what the forward says, extract amount/date/place/person/action when
 present, flag scam pressure, and end with exactly one safe next step. Mutating
 tools remain withheld on `RELAYED` turns.
 
+Captionless media follow-up, 2026-07-28: a PDF or image sent without caption is
+still treated as a request to read/explain it. Captionless images default to the
+document/daily-life reading prompt, because bills, notices and screenshots often
+arrive as one media message with no text. Medicine-specific interpretation still
+requires a caption such as dawa/tablet/medicine.
+
 ### LIFE-2 — daily task manager beyond reminders
 
 Reminders are timed; many daily jobs are not. Add a lightweight task list for:

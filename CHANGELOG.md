@@ -12,6 +12,27 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-28 — captionless media explains by default
+
+**61 focused tests passing.** `tests/test_vision.py`, `tests/test_media_limits.py`,
+`tests/test_provenance.py`. LIFE-1b.
+
+### Fixed
+
+- A bill, notice or screenshot sent as a single image with no caption now uses
+  the document/daily-life reading prompt by default. The user does not have to
+  send a second text message saying "please explain this".
+- Captionless PDFs already behaved this way; the image intent classifier now
+  matches that product expectation.
+
+### Boundary
+
+Medicine-specific interpretation still requires a medicine-shaped caption such
+as dawa/tablet/medicine. Captionless media is read/explained; it still does not
+act on instructions inside the media.
+
+---
+
 ## 2026-07-28 — forwarded content now asks for one safe next step
 
 **47 focused tests passing.** `tests/test_provenance.py`, `tests/test_lookup.py`,

@@ -160,8 +160,14 @@ async def describe_image(image: bytes, mime: str | None = None,
 
 
 def classify_intent(caption: str | None) -> str:
-    """Pick the reading mode from whatever the user typed with the picture."""
-    c = (caption or "").lower()
+    """Pick the reading mode from whatever the user typed with the picture.
+
+    Captionless media is usually a forwarded bill, notice, screenshot or label
+    in this product. Read it by default rather than asking for a second message.
+    """
+    if not (caption or "").strip():
+        return "document"
+    c = caption.lower()
     if any(w in c for w in ("dawa", "goli", "medicine", "tablet", "davai", "capsule")):
         return "medicine"
     if any(w in c for w in ("padho", "padh", "likha", "read", "kya likha",
