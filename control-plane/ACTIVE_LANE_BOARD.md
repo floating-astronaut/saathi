@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LIFE-1b — captionless media explains by default   [CLOSED]
+Owner: Codex (source branch `agent/captionless-media-explain`)        Opened: 2026-07-28 · Closed: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, saathi/pipeline.py, saathi/vision.py, tests/test_vision.py, tests/test_media_limits.py
+Acceptance: captionless PDFs/images still get an immediate read/explain answer without waiting for a second user message; captionless images use the document/daily-life reading prompt by default, while medicine-specific interpretation remains caption-driven; tests pin the default.
+Write-back: docs/DAILY_LIFE_OS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Captionless images now default to document/daily-life reading; PDFs already did. Medicine-specific interpretation remains caption-driven. `uv run pytest -q` passed: 519.
+
 ### LIFE-0 — WhatsApp daily-life OS roadmap   [CLOSED]
 Owner: Codex (source branch `agent/daily-life-os-roadmap`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/PRD.md, docs/ARCHITECTURE.md, docs/COMMERCIAL_ACTIONS.md, docs/DECISIONS.md, current capability registry

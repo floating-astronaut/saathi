@@ -1404,3 +1404,20 @@ trusted text, and relayed content remains fenced.
 
 **Remains:** LIFE-2 task manager, LIFE-3 bill-specific extraction, LIFE-4 drafting
 and LIFE-5 stronger scam shield are still open lanes.
+
+## 2026-07-28 — LIFE-1b captionless media explains by default closed
+
+**Read:** `docs/DAILY_LIFE_OS.md`, `saathi/pipeline.py`, `saathi/vision.py`,
+`tests/test_vision.py`, `tests/test_media_limits.py`, and provenance tests.
+
+**Changed:** `vision.classify_intent(None)` now returns `document`, so a
+captionless image/screenshot uses the document/daily-life reading prompt rather
+than generic image description. Updated vision/media tests plus roadmap,
+CHANGELOG, lane board and session row.
+
+**Verified:** focused suite `uv run pytest -q tests/test_vision.py
+tests/test_media_limits.py tests/test_provenance.py` — 61 passed; full suite
+`uv run pytest -q` — 519 passed.
+
+**Remains:** real-device UX check for WhatsApp media forwards, and deeper
+bill-specific extraction in LIFE-3.
