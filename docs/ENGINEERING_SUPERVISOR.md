@@ -1344,3 +1344,24 @@ browser automation.
 adapters. Before any paid provider ships, wire the usage event through
 `docs/USAGE_LEDGER.md`; before any undocumented deeplink ships, add link-health
 verification.
+
+## 2026-07-28 — CAP-2 India-first cart/deeplink handoffs closed
+
+**Read:** `docs/COMMERCIAL_ACTIONS.md`, `docs/ARCHITECTURE.md`,
+`docs/DECISIONS.md` D-Y, `saathi/agent/tools/specs.py`,
+`saathi/agent/tools/handlers.py`, `saathi/agent/prompt.py`, and existing lookup /
+forbidden-tool tests.
+
+**Changed:** added `saathi/commercial_actions.py` and
+`tests/test_commercial_actions.py`; updated `build_cart` to return India-first
+provider handoff links plus the plain list; updated the tool schema and prompt
+boundary; wrote back to `docs/COMMERCIAL_ACTIONS.md`, `CHANGELOG.md`, lane board
+and session coordination.
+
+**Verified:** focused suite `uv run pytest -q tests/test_commercial_actions.py
+tests/test_prefix_budget.py` — 9 passed; full suite `uv run pytest -q` — 516
+passed. Tests cover provider selection, URL encoding, secret-like text omitted
+from provider URLs, handler boundary text, and `assert_no_forbidden_tools()`.
+
+**Remains:** no live paid adapters, no movie/flight offer APIs, and no link-health
+cron yet. Those require separate lanes.

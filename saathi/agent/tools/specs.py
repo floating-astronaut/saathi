@@ -89,14 +89,19 @@ TOOLS: list[dict] = [
         "toolSpec": {
             "name": "build_cart",
             "description": (
-                "Compile a numbered shopping list the user can read or forward. "
-                "Does NOT order or pay for anything."
+                "Compile a numbered shopping list plus India-first provider "
+                "search/deeplink handoffs. Does NOT order, book or pay."
             ),
             "inputSchema": {"json": {
                 "type": "object",
                 "properties": {
                     "items": {"type": "array", "items": {"type": "string"}},
                     "note": {"type": "string"},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["grocery", "food", "events", "travel"],
+                        "description": "grocery by default; food/restaurants, events/movies, or travel",
+                    },
                 },
                 "required": ["items"],
             }},
