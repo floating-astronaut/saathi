@@ -28,6 +28,56 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LIFE-0 — WhatsApp daily-life OS roadmap   [CLOSED]
+Owner: Codex (source branch `agent/daily-life-os-roadmap`)        Opened: 2026-07-28 · Closed: 2026-07-28
+Reading: docs/PRD.md, docs/ARCHITECTURE.md, docs/COMMERCIAL_ACTIONS.md, docs/DECISIONS.md, current capability registry
+Acceptance: repo docs state the product frame as a WhatsApp operating system for daily life for non-tech-savvy 40+/elder users; the next capability lanes are explicitly ordered around read/explain, task management, bills/due dates, drafting, scam shield and local errands; commercial handoff remains subordinate to daily-life utility.
+Write-back: docs/DOC_SYSTEM.md, docs/PRD.md, docs/DECISIONS.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. `docs/DAILY_LIFE_OS.md` defines the frame; D-Z records the decision; LIFE-1..LIFE-6 are queued as implementation lanes.
+
+
+### LIFE-1 — read/explain/action from forwarded content   [OPEN]
+Owner: unassigned        Opened: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, docs/PRD.md §4-5, saathi/provenance.py, saathi/documents.py, saathi/vision.py, saathi/capabilities.py
+Acceptance: forwarded text/image/PDF/SMS-like content is treated as third-party data, summarized in the user's script, flags amount/date/action/scam risk, and offers exactly one safe next step; forwarded content cannot trigger commands or mutating tools.
+Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Highest-value daily WhatsApp behavior. Build before rare shopping/travel sophistication.
+
+### LIFE-2 — lightweight daily task manager   [OPEN]
+Owner: unassigned        Opened: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, docs/PRD.md §5, saathi/agent/tools/specs.py, saathi/agent/tools/handlers.py, db/migrations/
+Acceptance: user can create/list/mark-done/postpone tasks by natural language; a task may have no due time; reminders can attach to tasks without making every task a reminder.
+Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Examples: call plumber, send report, follow up, buy later.
+
+### LIFE-3 — bills and due-date extraction   [OPEN]
+Owner: unassigned        Opened: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, docs/COMMERCIAL_ACTIONS.md, docs/ARCHITECTURE.md, saathi/documents.py, saathi/vision.py, saathi/safety/classifier.py
+Acceptance: from forwarded SMS/image/PDF, extract biller, amount and due date; offer reminder; warn on scam-shaped payment pressure; never follows payment links server-side.
+Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Payment remains outside agent; explanation and reminder only.
+
+### LIFE-4 — draft replies and messages   [OPEN]
+Owner: unassigned        Opened: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, docs/PRD.md §6, saathi/agent/prompt.py, tests/test_devanagari.py
+Acceptance: user can ask for short WhatsApp-ready drafts in their selected script for family, landlord, doctor, society, office or support messages; no hidden send action is implied.
+Write-back: docs/DAILY_LIFE_OS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Likely prompt/tool surface only; preserve one-question rule.
+
+### LIFE-5 — stronger scam shield   [OPEN]
+Owner: unassigned        Opened: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, docs/foundations/SAFETY_AND_CLINICAL.md, docs/ARCHITECTURE.md, saathi/safety/classifier.py, tests/test_safety.py
+Acceptance: deterministic patterns cover courier/customs/police, electricity-disconnect threats, loan/investment/lottery, fake job/pension, urgent UPI/payment pressure and remote-support app requests; lower-risk suspicious content gets warning plus safe next step.
+Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Safety priority 0 remains non-negotiable.
+
+### LIFE-6 — local errand and app handoffs   [OPEN]
+Owner: unassigned        Opened: 2026-07-28
+Reading: docs/DAILY_LIFE_OS.md, docs/COMMERCIAL_ACTIONS.md, saathi/commercial_actions.py, saathi/lookup/web.py, saathi/net_policy.py
+Acceptance: local errands produce free/official Google Maps/search/app handoffs for plumber/electrician/shop/clinic/lab/pharmacy and similar India-first tasks; no paid vendor, login, booking, order or checkout.
+Write-back: docs/DAILY_LIFE_OS.md, docs/COMMERCIAL_ACTIONS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Builds on CAP-2; requires real phone link checks before claiming app-open behavior.
+
 ### CAP-2 — India-first cart and deeplink handoffs   [CLOSED]
 Owner: Codex (source branch `agent/india-cart-links`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/COMMERCIAL_ACTIONS.md, docs/ARCHITECTURE.md, docs/DECISIONS.md (D-Y), saathi/agent/tools/specs.py, saathi/agent/tools/handlers.py, saathi/agent/prompt.py
