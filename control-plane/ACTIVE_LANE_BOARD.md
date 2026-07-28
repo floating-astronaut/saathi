@@ -266,15 +266,16 @@ Notes: design doc written first (THE_METHOD §1) — the code follows it, not th
   The SDK's `create()` takes `workspace_id`, `limit_reset` and `expires_at` — the
   prose docs omit all three, so trust `vendor/` and the generated client.
 
-  **Built 2026-07-27.** Migration 008 (accounts, ai_keys, ai_key_events),
-  saathi/openrouter.py, saathi/crypto.py, provision_key turn kind,
-  saathi.admin.grant. 402 tests. Every acceptance line above is met *except*
-  the one that needs money: no real key has been minted, because credits are
-  still 0. See PR-38 for the exact round trip that closes this — mint one key
-  for an operator-owned handle, spend on it, revoke it, confirm upstream.
+  **Closed 2026-07-27.** Migration 008 added accounts and key tables; 011 queued
+  already-onboarded accounts; 012 queued every existing active account. Runtime
+  routing now resolves an account key before the agent call. The earlier
+  "blocked on credits" and "no real key has been minted" notes were wrong: BYOK
+  spends against our Bedrock account, all 7 live accounts now have active
+  workspace-scoped keys, and live probes proved both revoke/remint and
+  spend-through.
 
-  Two design questions closed while building: free tier mints nothing (a small
-  cap would have made an open door billable), and the account tenant had to be
+  Two design questions closed while building: every free account gets its own
+  one-time $5 key after onboarding completes, and the account tenant had to be
   built first because none existed.
 
 ### LANG-1 — a user who chose हिंदी was answered in Latin   [CLOSED]
