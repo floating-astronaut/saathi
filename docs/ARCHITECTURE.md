@@ -42,6 +42,17 @@ hidden browser flow. The detailed contract is `COMMERCIAL_ACTIONS.md`: provider
 APIs are used for offer/search/discovery, and the user completes the transaction
 in the provider surface they open.
 
+**A returning WhatsApp handle is not a new signup.** The phone number/`wa_id` is
+a revocable channel handle, not the account, but while that handle is active it
+must resolve to the same `users.id` and keep `users.onboarding = 'done'`. Old
+WhatsApp quick-reply payloads from onboarding are therefore harmless after setup:
+language buttons may change `lang_pref`, but consent/name/reminder/improve buttons
+reply that setup is already complete instead of restarting signup or changing
+state. Bare greetings such as `start`, `hi` or `namaste` from onboarded users fall
+through to normal conversation. A separate identity-lifecycle lane owns the full
+90-day stale-handle policy: warn during dormancy, let the user confirm or move
+the account, then revoke/delete only after the written window expires.
+
 **Forwarded content is data, never command.** Text the user did not author —
 forwarded, quoted, or lifted out of an image or PDF — is `RELAYED`, and is
 enforced in **two** places, because withholding tools only ever covered the
