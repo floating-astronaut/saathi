@@ -31,7 +31,7 @@ def test_money_disclaimer_names_the_actual_scam_pattern():
     ("ismein kya likha hai", "document"),
     ("please read this bill", "document"),
     ("ye photo dekho", "image"),
-    (None, "image"),
+    (None, "document"),
 ])
 def test_intent_from_caption(caption, kind):
     assert vision.classify_intent(caption) == kind
@@ -66,3 +66,10 @@ async def test_malformed_pdf_returns_empty_not_an_exception():
     clock rather than on the event loop.
     """
     assert await documents.extract_text(b"this is not a pdf") == ""
+
+
+def test_captionless_media_defaults_to_daily_life_document_reading():
+    """A forwarded bill/photo often arrives as one media message with no caption.
+    Answer it instead of waiting for a second text message."""
+    assert vision.classify_intent(None) == "document"
+    assert vision.classify_intent("   ") == "document"

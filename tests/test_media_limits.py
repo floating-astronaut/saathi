@@ -171,11 +171,11 @@ async def test_a_photo_sent_as_a_file_is_held_to_the_image_limit(wire, monkeypat
     we download 8 MiB and then throw it away inside `vision._ask`."""
     captured = {}
 
-    async def fake_describe(image, mime=None, question=None):
+    async def fake_read(image, mime=None, question=None):
         captured["bytes"] = len(image)
-        return vision.Reading("a picture", None, "image")
+        return vision.Reading("a bill", None, "document")
 
-    monkeypatch.setattr(vision, "describe_image", fake_describe)
+    monkeypatch.setattr(vision, "read_document", fake_read)
     wire.blob = b"\xff\xd8" + b"x" * (4 * MIB)
     out = await pipeline.handle_message(
         FakeConn(), doc_msg("w.img", mime="image/jpeg"))
