@@ -36,12 +36,12 @@ Write-back: docs/DOC_SYSTEM.md, docs/PRD.md, docs/DECISIONS.md, docs/ENGINEERING
 Notes: MET. `docs/DAILY_LIFE_OS.md` defines the frame; D-Z records the decision; LIFE-1..LIFE-6 are queued as implementation lanes.
 
 
-### LIFE-1 — read/explain/action from forwarded content   [OPEN]
-Owner: unassigned        Opened: 2026-07-28
+### LIFE-1 — read/explain/action from forwarded content   [CLOSED]
+Owner: Codex (source branch `agent/forwarded-content-actions`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, docs/PRD.md §4-5, saathi/provenance.py, saathi/documents.py, saathi/vision.py, saathi/capabilities.py
 Acceptance: forwarded text/image/PDF/SMS-like content is treated as third-party data, summarized in the user's script, flags amount/date/action/scam risk, and offers exactly one safe next step; forwarded content cannot trigger commands or mutating tools.
 Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
-Notes: Highest-value daily WhatsApp behavior. Build before rare shopping/travel sophistication.
+Notes: MET. Relayed fence/prompt now asks for explanation, amount/date/place/person/action extraction, scam pressure flag and one safe next step. Mutating tools remain withheld. `uv run pytest -q` passed: 518.
 
 ### LIFE-2 — lightweight daily task manager   [OPEN]
 Owner: unassigned        Opened: 2026-07-28
