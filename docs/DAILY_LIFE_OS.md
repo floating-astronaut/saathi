@@ -1,6 +1,6 @@
 # Daily-life OS roadmap
 
-Status: **product frame accepted 2026-07-28; roadmap written, implementation lanes not started.**
+Status: **product frame accepted 2026-07-28; LIFE-1 forwarded-content guidance implemented; remaining lanes open.**
 
 Saathi is a **WhatsApp operating system for daily life** for non-tech-savvy 40+
 and elder users in India. It is not a generic chatbot, shopping bot, booking
@@ -66,6 +66,11 @@ bills, screenshots and PDFs. Saathi should answer:
 Acceptance for implementation: forwarded text/image/PDF stays fenced as
 third-party content, cannot trigger commands, and produces a concise explanation
 plus one next action.
+
+Built 2026-07-28: the relayed-content fence and system prompt now tell the model
+to explain what the forward says, extract amount/date/place/person/action when
+present, flag scam pressure, and end with exactly one safe next step. Mutating
+tools remain withheld on `RELAYED` turns.
 
 ### LIFE-2 — daily task manager beyond reminders
 

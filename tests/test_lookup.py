@@ -120,3 +120,10 @@ def test_prompt_still_allows_direct_answers_for_conversation():
     """Requiring a lookup for chat would make a companion feel like a search box."""
     from saathi.agent.prompt import SYSTEM
     assert "chat, feelings" in SYSTEM
+
+
+def test_prompt_has_forwarded_content_daily_life_rules():
+    from saathi.agent.prompt import SYSTEM
+    assert "forwards or shows you" in SYSTEM
+    assert "Extract amount, date, place, person and action" in SYSTEM
+    assert "End with exactly one safe next step" in SYSTEM
