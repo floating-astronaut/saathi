@@ -1310,3 +1310,11 @@ Future provisioning guard: `openrouter.mint()` now raises `ProvisioningDisabled`
 **Changed:** `openrouter.mint()` now raises `ProvisioningDisabled` when `OPENROUTER_WORKSPACE_ID` is unset, before any upstream call. The create-key body always includes `workspace_id`, and configured-workspace key names include `:ws:718e8438`. Onboarding still queues `provision_key` on completion via `openrouter.provision_dedupe_key(account_id)`.
 
 **Verified:** focused tests `tests/test_openrouter_keys.py tests/test_onboarding.py` passed (39). Full suite passed locally (511) and during on-box deploy (511). Runtime value-blind config check: workspace id length 36, sha256 prefix `8ae3feeb`, target match true. Deployed source check confirmed the fail-closed guard and `body["workspace_id"]` assignment are present. Future key-name dry check produced `saathi:account:999:plan:free:env:dev:ws:718e8438`; no vendor key was minted by the dry check. Final service verifier passed.
+
+## 2026-07-28 — FLOW-1: PR-first agent workflow
+
+**Operator decision:** even for a single-developer repo, agents should not default to direct pushes to `main` or runtime-artifact scratchpad work. The default landing path is now branch → GitHub PR → agent review/merge → deploy merged `main` → runtime verification. Agents run that loop themselves and ask the operator only on real blockers or explicit review requests.
+
+**Changed:** `CONTRIBUTING.md` now owns the branch/PR/merge/deploy flow; `AGENTS.md`, `CLAUDE.md`, and `KIMI.md` point agents away from `/home/ubuntu/saathi` as a workbench; `docs/THE_METHOD.md` records the PR checkpoint; `docs/AGENT_SYNC_PROTOCOL.md` records the source/PR workflow; `docs/RUNBOOK.md` says deploy only merged `main`; `docs/DOC_SYSTEM.md` registers `CONTRIBUTING.md` as branch/deploy workflow owner; `control-plane/SESSION_COORDINATION.md` updates scratch-clone language to source-branch language.
+
+**Verified:** docs-only diff checked with `git diff --check`. This change itself was authored on `agent/pr-first-workflow` to exercise the new rule.

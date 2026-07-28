@@ -34,9 +34,10 @@ two agents editing one surface.
 | Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
 
 This split is the single most common source of drift on this project. The
-runtime checkout has no remotes and no signing key; it also runs *behind* the
-remotes, because it is a deploy artifact rather than a working tree. An agent
-that reads the runtime checkout and assumes it is `main` will be wrong.
+runtime checkout is a deploy artifact rather than a working tree. An agent that
+reads `/home/ubuntu/saathi` and assumes it is `main` will be wrong. Real work
+uses an `agent/<task>` branch in a source checkout, a GitHub PR into `main`, and
+only then a deploy of merged `main`.
 
 Before trusting any file on the runtime box, check it against the remote:
 
@@ -48,6 +49,14 @@ git ls-remote https://gitlab.com/nuraveda-lab/saathi.git main
 Both should report the same SHA. Both remotes are kept in sync by an explicit
 dual push from the dev box — there is deliberately **no mirror**, because a
 mirror is a second writer and `site` builds Cloudflare Pages on push.
+
+## Agent PR flow
+
+The default landing path is branch → PR → merge → deploy, run by agents end to
+end. Do not push directly to `main` unless the operator explicitly declares an
+emergency. Do not ask the operator to babysit the PR; open it, inspect the diff
+and checks, merge it when the lane acceptance is met, deploy merged `main`, then
+verify and write back.
 
 ## Orchestrating
 
