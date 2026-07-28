@@ -41,8 +41,11 @@ positive case too.
 | Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
 
 The runtime box is where live verification actually happens — services, real
-webhooks, real audio. But its checkout has no remotes and no signing key, so
-anything edited there is committed nowhere and is overwritten by the next deploy.
+webhooks, real audio. But `/home/ubuntu/saathi` is a deployed artifact with
+fossilized git, so anything authored there is product state at risk of being
+overwritten. Author real work on `agent/<task>` branches in a real source checkout
+(a fresh `/tmp/saathi-<task>` clone is fine), open a PR, merge to `main`, then
+deploy `main`.
 
 Verify on the runtime box. Author on the dev box.
 

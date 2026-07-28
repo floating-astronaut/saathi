@@ -28,6 +28,31 @@ site  ──▶  the public site  ──▶  Cloudflare Pages → n8nworld.store
 3. Preview builds are allowed for `site-*` branches. Use them to review copy
    before it is public.
 
+
+## Agent workflow — branch, PR, merge, deploy
+
+Agents do **not** normally push straight to `main`, and they do not author real
+work in `/home/ubuntu/saathi`. The default flow for application work is:
+
+1. Start from current `main` in a real source checkout. On the runtime box, make
+   a fresh scratch clone such as `/tmp/saathi-<lane>`; `/home/ubuntu/saathi` is
+   the deployed artifact, not a workbench.
+2. Create a task branch named `agent/<lane-or-task>`.
+3. Claim/update the lane and session coordination docs before editing shared
+   surfaces.
+4. Make the change, update required docs, and run the relevant tests on the
+   branch.
+5. Push the branch and open a GitHub PR into `main`. The agent opens it; the
+   operator does not need to be kept in the loop unless there is a real blocker.
+6. The agent reviews the PR diff/checks itself, then merges it to `main` when the
+   lane acceptance is met. Use a normal merge/squash/merge-commit as appropriate;
+   do not leave unmerged agent branches carrying product state.
+7. Deploy **only from `main` after the PR is merged**, then verify on the runtime
+   box and write back closure evidence.
+
+Direct pushes to `main` are for explicit operator emergencies only, and the
+reason must be written in `docs/ENGINEERING_SUPERVISOR.md`.
+
 ## Deploying
 
 Which box you are on decides the flag, and nothing else:
@@ -49,7 +74,9 @@ refuses on the other box, with a message that names the flag you wanted.
 
 Never hand-roll the tar/S3/SSM sequence, and never hand-roll the local
 equivalent either — that is how a migration step gets skipped at the wrong
-moment. Both modes refuse a dirty tree or a non-`main` branch on purpose;
+moment. Deploy still only accepts `main`: after the PR is merged, deploy that
+merged `main` commit. Both modes refuse a dirty tree or a non-`main` branch on
+purpose;
 `--local` also refuses a source with no saathi remote, which is what the
 vestigial `.git` inside `/home/ubuntu/saathi` looks like. See `docs/RUNBOOK.md`
 for that trap, for rehearsing a deploy against a scratch target, and for putting
