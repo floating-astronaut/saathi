@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### ID-1 — returning WhatsApp handle must not restart onboarding   [CLOSED]
+Owner: Codex (source branch `agent/returning-whatsapp-handle-onboarding`)        Opened: 2026-07-28 · Closed: 2026-07-28
+Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/foundations/GLOSSARY.md, saathi/identity.py, saathi/onboarding.py, saathi/capabilities.py, saathi/pipeline.py, tests/test_capabilities.py, tests/test_onboarding.py
+Acceptance: once a WhatsApp handle has an onboarded Saathi user, tapping old onboarding/start controls must not create or restart signup, must not mutate `users.onboarding` away from `done`, and must answer with the same user still active; not-yet-onboarded handles still stay on the deterministic onboarding path. The 90-day stale/recycled-number lifecycle is documented as the next identity lane unless fully implemented here.
+Write-back: docs/ARCHITECTURE.md, docs/DECISIONS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Already-onboarded users pressing old `ob:*` onboarding buttons cannot restart signup or move `users.onboarding` away from `done`; old language buttons still change language. Focused suite passed: 32. Full suite passed: 521. The 90-day stale-handle warning/confirm/move/delete lifecycle remains queued as a separate identity lane.
+
 ### LIFE-1c — forwarded content summary asks follow-up   [CLOSED]
 Owner: Codex (source branch `agent/forwarded-summary-followup`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/DAILY_LIFE_OS.md, saathi/provenance.py, saathi/agent/prompt.py, tests/test_provenance.py, tests/test_lookup.py
@@ -56,6 +63,13 @@ Reading: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, docs/PRD.md §4-5, saathi/
 Acceptance: forwarded text/image/PDF/SMS-like content is treated as third-party data, summarized in the user's script, flags amount/date/action/scam risk, and offers exactly one safe next step; forwarded content cannot trigger commands or mutating tools.
 Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
 Notes: MET. Relayed fence/prompt now asks for explanation, amount/date/place/person/action extraction, scam pressure flag and one safe next step. Mutating tools remain withheld. `uv run pytest -q` passed: 518.
+
+### ID-2 — stale WhatsApp handle 90-day lifecycle   [OPEN]
+Owner: unassigned        Opened: 2026-07-28
+Reading: docs/ARCHITECTURE.md, docs/foundations/GLOSSARY.md, docs/DECISIONS.md (D-AA), saathi/identity.py, saathi/worker/turns.py, db/migrations/, tests/test_identity.py
+Acceptance: a handle with no inbound message for the written stale window is nudged before risk, can confirm continued ownership or move the account to a new number, and is revoked/deleted only after 90 days of dead air according to the recorded lifecycle policy.
+Write-back: docs/ARCHITECTURE.md, docs/DECISIONS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Product rule from operator: number is not the account, but an active chat must not be lost; recycling protection starts only after sustained dead air and warnings.
 
 ### LIFE-2 — lightweight daily task manager   [OPEN]
 Owner: unassigned        Opened: 2026-07-28

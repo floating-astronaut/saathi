@@ -96,3 +96,58 @@ def test_adding_a_capability_needs_no_pipeline_edit():
     # the dispatcher must not name individual capabilities
     for feature in ("classify(", "onboarding.begin", "commands.parse", "vision."):
         assert feature not in src, f"pipeline still hardcodes {feature!r}"
+
+
+class _Transport:
+    def __init__(self):
+        self.texts = []
+    def format_text(self, text):
+        return text
+    async def send_text(self, conn, uid, handle, text):
+        self.texts.append(text)
+        return "m"
+
+
+class _Conn:
+    def __init__(self):
+        self.sql = []
+    async def execute(self, q, params=None):
+        self.sql.append(" ".join(q.split()))
+        low = q.lower()
+        row = ("done",) if "select onboarding" in low else ("hi",)
+        class Cur:
+            async def fetchone(self): return row
+            async def fetchall(self): return []
+        return Cur()
+
+
+async def test_onboarded_user_old_onboarding_button_does_not_restart_signup():
+    conn, transport = _Conn(), _Transport()
+    ctx = MessageContext(
+        conn=conn, transport=transport, channel="whatsapp", handle="91",
+        msg={"interactive": {"button_reply": {"id": "ob:consent:no"}}},
+        user_id=1, display_name="Kamala", tz="Asia/Kolkata",
+        voice_pref="auto", onboarding="done", lang="hi", kind="interactive",
+    )
+
+    out = await capabilities._onboarding_handle(ctx)
+
+    assert out == {"handled": "onboarding", "onboarding": "already_done"}
+    assert transport.texts
+    assert "onboarding = 'new'" not in " ".join(conn.sql)
+
+
+async def test_onboarded_user_old_language_button_still_changes_language():
+    conn, transport = _Conn(), _Transport()
+    ctx = MessageContext(
+        conn=conn, transport=transport, channel="whatsapp", handle="91",
+        msg={"interactive": {"button_reply": {"id": "ob:lang:en"}}},
+        user_id=1, display_name="Kamala", tz="Asia/Kolkata",
+        voice_pref="auto", onboarding="done", lang="hi", kind="interactive",
+    )
+
+    out = await capabilities._onboarding_handle(ctx)
+
+    assert out["onboarding"] == "done"
+    assert any("set lang_pref" in q for q in conn.sql)
+    assert "onboarding = 'consent'" not in " ".join(conn.sql)
