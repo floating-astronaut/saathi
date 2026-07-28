@@ -2,6 +2,10 @@
 
 Status: **contract written 2026-07-28; implementation not started.**
 
+Default posture, added 2026-07-28: **India-first and low-vendor-cost.** Use the
+GCP/Google search stack already wired for Saathi, free/official URL builders, and
+popular Indian app/web deeplinks before considering any new paid vendor.
+
 Owns: shopping, cart assembly, flights, movie/event tickets, local service links,
 and any internet capability that helps a user move from an intent to a third-party
 merchant, marketplace, booking flow or map/app surface.
@@ -43,7 +47,42 @@ is defined by absence.** A future implementation may add tools named
 `make_provider_link`; it must not add tools named like `checkout`, `place_order`,
 `book_flight`, `buy_ticket`, `charge`, `login`, `read_otp` or their equivalents.
 
-## 2. What the market has already cracked
+
+## 2. India-first, low-cost path
+
+The default implementation path is **not** "find a specialist vendor API for
+each vertical." That adds cost, contracts and new processors before the product
+has earned them. Saathi already has GCP/Google search wired; use that for
+discovery and use Indian app/web surfaces for handoff.
+
+Preferred order:
+
+1. **Plain list + Indian app names.** For groceries, food, medicines, taxis,
+   movies and travel, first produce a clean list and name the likely Indian apps
+   to open: Blinkit, Zepto, Swiggy Instamart, BigBasket, Zomato, Swiggy,
+   BookMyShow, Paytm/Insider-style event surfaces, MakeMyTrip, Cleartrip, Ixigo,
+   IRCTC, Ola, Uber and Google Maps. This costs no vendor call beyond the model
+   turn and any already-approved search.
+2. **Official web/search URLs.** Prefer documented or stable web URLs that open
+   the provider/app when installed and fall back to the browser. Build only
+   visible intent into the URL: query, city, destination, date, venue or item
+   names. Do not build URLs that imply checkout, payment, login or account state.
+3. **Google Maps URLs for local intent.** Maps URLs are the safest first
+   deeplink primitive: they require no API key, work across devices, support
+   search/directions, and are officially documented.
+4. **GCP/Google search summaries.** When a provider has no stable URL builder,
+   use the existing Google search path to find the official page or current
+   public result, then hand off with citations.
+5. **New paid vendor APIs only after evidence.** Duffel, Amadeus, Ticketmaster
+   and similar APIs are examples of shapes that exist, not defaults. Add one
+   only when there is a specific India use case, acceptable terms, a cost row in
+   `USAGE_LEDGER.md`, and tests proving stale-price and no-transaction behavior.
+
+This means the first useful implementation is modest: a `build_cart` renderer,
+URL builders, and India-specific provider templates. It should feel practical in
+WhatsApp without creating another monthly vendor bill.
+
+## 3. What the market has already cracked
 
 ### Offer/search APIs
 
@@ -155,7 +194,7 @@ Sources:
 - OpenAI Operator announcement: https://openai.com/index/introducing-operator/
 - OpenAI Computer-Using Agent: https://openai.com/index/computer-using-agent/
 
-## 3. Saathi capability tiers
+## 4. Saathi capability tiers
 
 Use these tiers for every commercial/internet feature. A lower tier is always a
 valid completion of the user's task; higher tiers are convenience, not the
@@ -172,24 +211,27 @@ contract.
 The UX must make the boundary visible in ordinary words: "I found options" or
 "I made the list" rather than "I booked" or "I ordered".
 
-## 4. Implementation sequence
+## 5. Implementation sequence
 
 1. Keep `build_cart` as the first commercial capability, because its tier-0 list
    is useful even with no provider contract and matches the PRD's daily-use bet.
 2. Add an explicit `commercial_actions` module for URL builders and commercial
    result rendering. Do not hide this inside generic web search.
-3. Add provider adapters only where the source permits search/discovery use:
-   maps URLs, event discovery, flight offer search, product search pages or
-   documented affiliate/deeplink formats.
-4. Store result snapshots with source, generated_at, expiry, provider and query
+3. Add India-specific provider templates before paid adapters: Google Maps,
+   BookMyShow/event pages, grocery app search links, food app search links,
+   travel/IRCTC search pages, and generic official-site search fallback.
+4. Add provider adapters only where the source permits search/discovery use and
+   the cost/terms are justified: maps URLs, event discovery, flight offer search,
+   product search pages or documented affiliate/deeplink formats.
+5. Store result snapshots with source, generated_at, expiry, provider and query
    slots. Do not store cookies, checkout state, payment state or third-party
    account ids.
-5. If a provider call costs money, write it to `vendor_usage_events` per
+6. If a provider call costs money, write it to `vendor_usage_events` per
    `USAGE_LEDGER.md` before relying on it at scale.
-6. Any result that quotes or summarizes a third-party page is fenced as third-
+7. Any result that quotes or summarizes a third-party page is fenced as third-
    party content, the same way web search results are today.
 
-## 5. Required tests before shipping a commercial adapter
+## 6. Required tests before shipping a commercial adapter
 
 - `assert_no_forbidden_tools()` still passes and the new tool names do not match
   transactional verbs.
@@ -204,7 +246,7 @@ The UX must make the boundary visible in ordinary words: "I found options" or
 - The WhatsApp message uses buttons or short links where possible, but the body
   still contains enough text to be useful if the link fails.
 
-## 6. Open product questions
+## 7. Open product questions
 
 - Which geography comes first: India-only providers, or global providers with
   graceful India gaps?
