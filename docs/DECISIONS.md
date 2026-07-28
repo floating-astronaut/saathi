@@ -539,3 +539,35 @@ has approved, and a template cannot be edited — it needs a new name, and Meta
 holds a deleted name for four weeks (`LANDMINES.md`). **So reminders and nudges
 still arrive romanised for everyone.** That is the largest remaining gap and it
 is the core of the product. See PR-44.
+
+### D-Y · Commercial internet actions stop at deeplink handoff · 2026-07-28
+Saathi will support shopping, cart assembly, flights, movie/event tickets and
+other internet action capabilities only up to the point where the user receives
+a visible shortlist, list, cart draft, provider search URL, deeplink, directions
+URL or booking URL. The transaction itself remains outside Saathi.
+
+This preserves the original product promise in `PRD.md` §1/§4: the hard part for
+the elder is articulating the request and navigating the interface, not handing
+an agent power to spend. The agent can make the next step obvious; the user and
+the merchant still complete it.
+
+Research on 2026-07-28 shows the industry has largely converged on two patterns:
+structured offer/search/discovery APIs, and browser/computer-use agents. The
+first is acceptable here when used only for search and links: IATA NDC, Duffel
+and Amadeus separate flight offers from order creation, Ticketmaster separates
+event discovery from partner transactions, Google Maps exposes URL builders, and
+schema.org/Google structured data describes products and potential actions that
+can be linked to. The second is explicitly not v1 for Saathi: a browser agent
+that can fill forms, preserve cookies and request sensitive takeover is too broad
+for an elder WhatsApp thread whose safety guarantee is capability absence.
+
+`COMMERCIAL_ACTIONS.md` is the source of truth. Future tools may be named
+`search_flights`, `search_events`, `build_cart`, `make_maps_link` or similar.
+They must not be named or behave like `checkout`, `place_order`, `buy_ticket`,
+`book_flight`, `charge`, `login`, `read_otp` or equivalents. Any reversal needs a
+new dated decision that says exactly which boundary is being reduced and why.
+
+This does not change D-C: flight search is still out of v1 because it is not a
+daily-retention capability and has commercial/search-volume risk. It does define
+how flights come back in v1.1: offer search + shortlist + official handoff link,
+not booking.

@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### CAP-1 — commercial deeplinks and internet action capabilities   [CLOSED]
+Owner: Codex (source branch `agent/commercial-deeplinks-research`)        Opened: 2026-07-28 · Closed: 2026-07-28
+Reading: docs/PRD.md §4-5, docs/ARCHITECTURE.md, docs/DECISIONS.md (D-C, D-E), docs/PROD_READINESS.md, docs/AI_ROUTING.md, current vendor/web research
+Acceptance: Saathi has a durable architecture/product contract for shopping, cart-building, flights, movie tickets and similar internet capabilities: allowed outcomes stop at shortlist/list/deeplink/cart draft, forbidden outcomes still include purchase, payment, OTP, credentials, logged-in account automation or hidden third-party actions; implementation sequencing and verification rules are recorded for future agents.
+Write-back: docs/DOC_SYSTEM.md, docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Research captured in `docs/COMMERCIAL_ACTIONS.md`; D-Y records that commercial internet actions stop at visible shortlist/list/deeplink/cart draft. Code follows only after this contract.
+
 ### FLOW-1 — agents land work through PRs before deploy   [CLOSED]
 Owner: Codex (runtime box)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/THE_METHOD.md, docs/AGENT_SYNC_PROTOCOL.md, CONTRIBUTING.md, docs/RUNBOOK.md
