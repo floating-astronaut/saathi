@@ -12,6 +12,21 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-28 — returning WhatsApp users do not restart signup
+
+**Focused tests passing:** `uv run pytest -q tests/test_capabilities.py tests/test_language_change.py tests/test_onboarding.py` — 32 passed. Full suite: `uv run pytest -q` — 521 passed. ID-1.
+
+### Fixed
+
+- Old onboarding quick replies from an already-onboarded WhatsApp chat no longer
+  restart signup or move `users.onboarding` away from `done`. Language buttons
+  still work; consent/name/reminder/improve buttons answer that setup is already
+  complete.
+- Bare `start`/`hi` greetings from onboarded users remain normal conversation,
+  so clicking the WhatsApp chat entrypoint does not create a second signup path.
+
+---
+
 ## 2026-07-28 — forwarded content summarizes before asking what next
 
 **47 focused tests passing.** `tests/test_provenance.py`, `tests/test_lookup.py`,
