@@ -1318,3 +1318,29 @@ Future provisioning guard: `openrouter.mint()` now raises `ProvisioningDisabled`
 **Changed:** `CONTRIBUTING.md` now owns the branch/PR/merge/deploy flow; `AGENTS.md`, `CLAUDE.md`, and `KIMI.md` point agents away from `/home/ubuntu/saathi` as a workbench; `docs/THE_METHOD.md` records the PR checkpoint; `docs/AGENT_SYNC_PROTOCOL.md` records the source/PR workflow; `docs/RUNBOOK.md` says deploy only merged `main`; `docs/DOC_SYSTEM.md` registers `CONTRIBUTING.md` as branch/deploy workflow owner; `control-plane/SESSION_COORDINATION.md` updates scratch-clone language to source-branch language.
 
 **Verified:** docs-only diff checked with `git diff --check`. This change itself was authored on `agent/pr-first-workflow` to exercise the new rule.
+
+## 2026-07-28 — CAP-1 commercial deeplinks and internet action contract closed
+
+**Read:** `AGENTS.md`, `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`docs/THE_METHOD.md`, `docs/ROLES.md`, `control-plane/ACTIVE_LANE_BOARD.md`,
+`control-plane/SESSION_COORDINATION.md`, `docs/PRD.md`, `docs/ARCHITECTURE.md`,
+`docs/DECISIONS.md`, `docs/PROD_READINESS.md`, `docs/LANDMINES.md`,
+`docs/AI_ROUTING.md`, `docs/USAGE_LEDGER.md`, and current external docs for
+IATA NDC, Duffel, Amadeus, Ticketmaster Discovery, schema.org Actions, Google
+product/merchant structured data, Google Maps URLs, WhatsApp catalog/product
+messages, Agentic Commerce Protocol, and OpenAI browser-agent/Operator docs.
+
+**Changed:** added `docs/COMMERCIAL_ACTIONS.md`; registered it in
+`docs/DOC_SYSTEM.md`; amended `docs/ARCHITECTURE.md`; appended decision D-Y to
+`docs/DECISIONS.md`; closed CAP-1 on the lane board and ended the session row.
+
+**Verified:** `git diff --check` passed for the tracked doc edits before close.
+The acceptance contract is represented in docs: Saathi may search, compare,
+assemble, and hand off with visible links or cart drafts; it may not purchase,
+pay, reserve, log in, read OTPs, touch third-party accounts, or run hidden
+browser automation.
+
+**Remains:** implementation lanes for `build_cart`/deeplink builders/provider
+adapters. Before any paid provider ships, wire the usage event through
+`docs/USAGE_LEDGER.md`; before any undocumented deeplink ships, add link-health
+verification.

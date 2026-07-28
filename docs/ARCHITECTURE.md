@@ -34,6 +34,14 @@ injection cannot cause harm — lives in `agent/tools/specs.py`, in what is *not
 in the tool list. No tool can move money, read an OTP, or touch a third-party
 account. `assert_no_forbidden_tools()` fails the suite if one is added.
 
+**Commercial internet actions stop at handoff.** Shopping, flights, movie tickets,
+local directions and similar tasks may search, compare, assemble an itemised
+list, and generate a provider deeplink or booking URL. They may not purchase,
+reserve, pay, log in, read OTPs, operate a third-party account, or automate a
+hidden browser flow. The detailed contract is `COMMERCIAL_ACTIONS.md`: provider
+APIs are used for offer/search/discovery, and the user completes the transaction
+in the provider surface they open.
+
 **Forwarded content is data, never command.** Text the user did not author —
 forwarded, quoted, or lifted out of an image or PDF — is `RELAYED`, and is
 enforced in **two** places, because withholding tools only ever covered the
