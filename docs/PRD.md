@@ -44,6 +44,14 @@ The bet: for this user, the hard part was never the transaction. It was *articul
 request, remembering the details, and navigating an interface built for 25-year-olds.*
 An agent that removes those three frictions is valuable even with zero purchasing power.
 
+
+**Amended 2026-07-28 — product frame.** Saathi is best understood as a
+**WhatsApp operating system for daily life** for non-tech-savvy 40+ and elder
+users in India. The core verbs are read, explain, remind, draft, remember, check
+safety and open the right place. Shopping/cart and travel links are subordinate
+to that frame, not the center of the product. `DAILY_LIFE_OS.md` owns the current
+roadmap.
+
 ---
 
 ## 2. Problem & evidence
