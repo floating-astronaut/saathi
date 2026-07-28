@@ -126,4 +126,4 @@ def test_prompt_has_forwarded_content_daily_life_rules():
     from saathi.agent.prompt import SYSTEM
     assert "forwards or shows you" in SYSTEM
     assert "Extract amount, date, place, person and action" in SYSTEM
-    assert "End with exactly one safe next step" in SYSTEM
+    assert "what would they like you to do with it" in SYSTEM

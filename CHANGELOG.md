@@ -12,6 +12,24 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-28 — forwarded content summarizes before asking what next
+
+**47 focused tests passing.** `tests/test_provenance.py`, `tests/test_lookup.py`,
+`tests/test_relayed_commands.py`, `tests/test_prefix_budget.py`. LIFE-1c.
+
+### Changed
+
+- Forwarded content now defaults to: skim and summarise first, flag obvious risk,
+  extract amount/date/place/person/action when visible, then ask one question:
+  what would you like me to do with this?
+
+### Boundary
+
+The question is only a follow-up. It does not imply Saathi acted on the forward;
+mutating tools are still withheld and commands still require trusted text.
+
+---
+
 ## 2026-07-28 — captionless media explains by default
 
 **61 focused tests passing.** `tests/test_vision.py`, `tests/test_media_limits.py`,

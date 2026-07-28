@@ -68,9 +68,10 @@ third-party content, cannot trigger commands, and produces a concise explanation
 plus one next action.
 
 Built 2026-07-28: the relayed-content fence and system prompt now tell the model
-to explain what the forward says, extract amount/date/place/person/action when
-present, flag scam pressure, and end with exactly one safe next step. Mutating
-tools remain withheld on `RELAYED` turns.
+to skim and summarise the forward first, extract amount/date/place/person/action
+when present, flag scam pressure, and then ask one follow-up question: what would
+the user like Saathi to do with it? Mutating tools remain withheld on `RELAYED`
+turns, so the follow-up does not imply any action has been taken.
 
 Captionless media follow-up, 2026-07-28: a PDF or image sent without caption is
 still treated as a request to read/explain it. Captionless images default to the

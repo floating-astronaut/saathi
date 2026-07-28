@@ -10,6 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
+| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T20:11Z | LIFE-1c | `saathi/provenance.py`, `saathi/agent/prompt.py`, `tests/test_provenance.py`, `tests/test_lookup.py`, docs/write-back | **ended** — LIFE-1c implemented and verified; branch ready for PR |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T20:05Z | LIFE-1b | `saathi/vision.py`, `tests/test_vision.py`, `docs/DAILY_LIFE_OS.md`, `CHANGELOG.md`, supervisor/control-plane write-back | **ended** — LIFE-1b implemented and verified; branch ready for PR |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T19:13Z | LIFE-1 | `saathi/provenance.py`, `saathi/agent/prompt.py`, `tests/test_provenance.py`, `tests/test_lookup.py`, docs/write-back | **ended** — LIFE-1 implemented and verified; branch ready for PR |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T19:05Z | LIFE-0 | `docs/DAILY_LIFE_OS.md`, `docs/DOC_SYSTEM.md`, `docs/PRD.md`, `docs/DECISIONS.md`, control-plane write-back | **ended** — LIFE-0 roadmap written and queued implementation lanes |
