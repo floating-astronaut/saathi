@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from dateutil.rrule import rrulestr
 
-from ... import memory
+from ... import commercial_actions, memory
 from ...lookup import base as lookup
 
 _DAYS = {"mon": "MO", "tue": "TU", "wed": "WE", "thu": "TH",
@@ -166,10 +166,20 @@ class Handlers:
     # --- cart --------------------------------------------------------------
 
     async def _build_cart(self, a: dict) -> dict:
-        # Tier 3 of PRD §C4 is the contract: a clean numbered list, always.
-        items = [str(i).strip() for i in a.get("items", []) if str(i).strip()]
-        listing = "\n".join(f"{n}. {item}" for n, item in enumerate(items, 1))
-        return {"items": items, "list": listing, "note": a.get("note")}
+        # Tier 0 is the contract: a clean numbered list, always. Provider links
+        # are visible handoffs only; no checkout/session/account state exists.
+        handoff = commercial_actions.build_cart_handoff(
+            a.get("items", []), note=a.get("note"), kind=a.get("kind") or "grocery",
+        )
+        return {
+            "items": handoff.items,
+            "list": handoff.list,
+            "note": a.get("note"),
+            "query": handoff.query,
+            "provider_links": [p.__dict__ for p in handoff.providers],
+            "omitted_from_links": handoff.omitted_from_links,
+            "boundary": "I made links to search/open the provider. I did not order, book or pay.",
+        }
 
     # --- introspection & control (C1, §13, D4) -----------------------------
 
