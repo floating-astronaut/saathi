@@ -868,6 +868,31 @@ must own the cross-vendor ledger for Sarvam STT/TTS/OCR, WhatsApp templates and
 future paid search. Langfuse may mirror it; LiteLLM is deferred unless we need a
 self-hosted LLM gateway.
 
+**Widened 2026-07-28 — gaps the existing row understates:**
+
+- **No per-IP rate limit on the webhook endpoint.** FastAPI has no middleware
+  for this. Meta is the only legitimate caller, but if their retry logic goes
+  aggressive or the webhook URL is ever leaked, there is no backstop before the
+  application layer.
+- **No model-call budget.** The agent loop (`pipeline.py` → `agent/loop.py`) can
+  be invoked arbitrarily many times in parallel. On `zai.glm-5` (Bedrock) cost
+  scales linearly with concurrency — there is no per-user or global spend cap
+  before the call.
+- **No burst protection.** `asyncio.create_task` in `web/app.py:104` launches
+  every message immediately. No semaphore, no queue, no smoothing. A webhook
+  batch of 50 messages creates 50 concurrent tasks, each potentially calling STT
+  and the model.
+- **The webhook is unbounded in processing.** Text messages have no concurrency
+  gate at all — only media and documents do (`backpressure.py`). A text-only
+  flood is entirely unbounded: no download cost, but unlimited safety checks and
+  model turns.
+
+Together these mean a single user or a single webhook batch can saturate the
+box's model budget, STT quota, and CPU for everyone else. The fix is a
+per-user sliding window (Postgres-backed, covering all modalities) plus a
+global concurrency semaphore on the agent loop, with a quiet refusal path so
+the box does not pay to argue.
+
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during
 internal testing and will look broken to anyone who does not know why.
