@@ -10,6 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
+| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T19:05Z | LIFE-0 | `docs/DAILY_LIFE_OS.md`, `docs/DOC_SYSTEM.md`, `docs/PRD.md`, `docs/DECISIONS.md`, control-plane write-back | **ended** — LIFE-0 roadmap written and queued implementation lanes |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T18:43Z | CAP-2 | `saathi/commercial_actions.py`, `saathi/agent/tools/handlers.py`, `saathi/agent/tools/specs.py`, `saathi/agent/prompt.py`, `tests/test_commercial_actions.py`, docs/write-back | **ended** — CAP-2 implemented and verified; branch ready for PR |
 | Codex | dev `ip-172-31-32-37` | 2026-07-28T18:00Z | CAP-1 | `docs/DOC_SYSTEM.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, new/updated commercial capability docs, control-plane write-back | **ended** — CAP-1 contract written; branch ready for PR |
 | Claude | runtime `i-01b2c27883acb25ca` | 2026-07-27 | PR-4 | `saathi/scheduling.py`, `saathi/worker/turns.py`, `saathi/agent/tools/handlers.py`, `tests/test_reminder_delivery.py`, `tests/test_scheduling.py` | **ended** — closed at `64a520b`, surfaces released |

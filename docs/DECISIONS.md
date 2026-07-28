@@ -579,3 +579,23 @@ or web handoffs. Duffel, Amadeus, Ticketmaster and ACP remain useful research
 patterns, but they are not defaults for this product now. New vendor APIs require
 a specific India use case, acceptable terms, usage-ledger accounting and a fresh
 implementation lane.
+
+### D-Z · Saathi is a WhatsApp operating system for daily life · 2026-07-28
+Operator accepted the framing: Saathi is a WhatsApp operating system for daily
+life for non-tech-savvy 40+ and elder users in India. This supersedes the weaker
+mental model of a generic chatbot with some reminders, and it prevents the
+commercial-action lanes from pulling the product toward shopping or booking as
+the center of gravity.
+
+The durable verbs are: read this, explain this, remind me, draft this, remember
+this, is this safe, open the right place, and tell me the next step. This matches
+how the target user already lives: WhatsApp is the inbox, document tray, family
+thread, notice board and support channel.
+
+Roadmap order follows daily recurrence and safety value: forwarded-message
+reading, task management, bill/due-date extraction, message drafting and scam
+shield outrank rare-event sophistication such as flight search or full cart
+automation. `DAILY_LIFE_OS.md` owns the lane list and acceptance shape.
+
+This decision does not weaken the no-transaction boundary. It strengthens it:
+the product value is navigation and comprehension, not autonomous spend.

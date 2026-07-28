@@ -1365,3 +1365,21 @@ from provider URLs, handler boundary text, and `assert_no_forbidden_tools()`.
 
 **Remains:** no live paid adapters, no movie/flight offer APIs, and no link-health
 cron yet. Those require separate lanes.
+
+## 2026-07-28 — LIFE-0 daily-life OS roadmap closed
+
+**Read:** `docs/DOC_SYSTEM.md`, `docs/PRD.md`, `docs/ARCHITECTURE.md`,
+`docs/COMMERCIAL_ACTIONS.md`, `docs/DECISIONS.md`, current capability registry
+and the active lane board.
+
+**Changed:** added `docs/DAILY_LIFE_OS.md`; registered it in `docs/DOC_SYSTEM.md`;
+amended the PRD summary with the accepted product frame; appended decision D-Z;
+queued LIFE-1 through LIFE-6 on `control-plane/ACTIVE_LANE_BOARD.md`; ended the
+session row.
+
+**Verified:** docs-only lane; `git diff --check` to run before commit. Acceptance
+met in docs: Saathi is framed as a WhatsApp operating system for daily life, and
+the next build order is read/explain, tasks, bills, drafts, scam shield and local
+errand handoffs.
+
+**Remains:** implementation lanes LIFE-1..LIFE-6 are open and unassigned.
