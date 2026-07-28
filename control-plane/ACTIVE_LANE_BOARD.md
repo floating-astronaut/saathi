@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### CAP-2 — India-first cart and deeplink handoffs   [CLOSED]
+Owner: Codex (source branch `agent/india-cart-links`)        Opened: 2026-07-28 · Closed: 2026-07-28
+Reading: docs/COMMERCIAL_ACTIONS.md, docs/ARCHITECTURE.md, docs/DECISIONS.md (D-Y), saathi/agent/tools/specs.py, saathi/agent/tools/handlers.py, saathi/agent/prompt.py
+Acceptance: `build_cart` returns the plain numbered list plus safe India-first provider handoff links without any checkout/payment/login/account behavior; tests cover URL encoding, provider selection, no forbidden tools, and prompt-injected/search-like item text remaining inert.
+Write-back: docs/COMMERCIAL_ACTIONS.md, docs/ARCHITECTURE.md if boundary changes, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. `build_cart` returns a numbered list plus India-first provider handoff links through pure URL builders; no paid vendor adapters or transactional surfaces. `uv run pytest -q` passed: 516.
+
 ### CAP-1 — commercial deeplinks and internet action capabilities   [CLOSED]
 Owner: Codex (source branch `agent/commercial-deeplinks-research`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/PRD.md §4-5, docs/ARCHITECTURE.md, docs/DECISIONS.md (D-C, D-E), docs/PROD_READINESS.md, docs/AI_ROUTING.md, current vendor/web research

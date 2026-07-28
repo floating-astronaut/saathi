@@ -12,6 +12,29 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-28 — cart building now produces India-first handoff links
+
+**9 focused tests passing.** `tests/test_commercial_actions.py`,
+`tests/test_prefix_budget.py`. CAP-2.
+
+### Added
+
+- `build_cart` still returns the plain numbered list as the contract, but now
+  also returns visible provider handoff links for India-first surfaces: Blinkit,
+  Zepto, BigBasket, Swiggy Instamart by default, with food/events/travel variants.
+- The handoff builder is pure code: no vendor HTTP call, no paid API, no cookies,
+  no account state, no checkout flow.
+- OTP/card/account-shaped item text is omitted from URLs while staying visible
+  in the readable list, so prompt-injected or secret-like cart text does not
+  become a provider query.
+
+### Boundary
+
+The prompt and tool schema now say list/link handoff is allowed, but ordering,
+booking, reserving, payment and account access remain absent.
+
+---
+
 What changed in the code, and — more usefully — **what broke and how we found
 out**. Most of the entries below were discovered by running the thing, not by
 reading it, and several looked healthy right up until they didn't.

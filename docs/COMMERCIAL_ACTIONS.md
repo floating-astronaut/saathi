@@ -1,6 +1,6 @@
 # Commercial actions and deeplinks
 
-Status: **contract written 2026-07-28; implementation not started.**
+Status: **CAP-2 implemented 2026-07-28 for cart/list provider handoffs; paid/live provider adapters not started.**
 
 Default posture, added 2026-07-28: **India-first and low-vendor-cost.** Use the
 GCP/Google search stack already wired for Saathi, free/official URL builders, and
@@ -81,6 +81,17 @@ Preferred order:
 This means the first useful implementation is modest: a `build_cart` renderer,
 URL builders, and India-specific provider templates. It should feel practical in
 WhatsApp without creating another monthly vendor bill.
+
+### CAP-2 implementation
+
+Built 2026-07-28: `build_cart` now returns a clean numbered list plus visible
+India-first provider handoff links. It uses pure URL builders only: no network,
+no paid provider call, no cookies, no account state, no checkout and no hidden
+browser action. Grocery handoffs prefer Blinkit, Zepto, BigBasket and Swiggy
+Instamart; food/events/travel categories choose Indian search/link surfaces and
+Google Maps where useful. Secret-shaped text such as OTPs, card-like numbers,
+PIN/password/account terms and long digit runs is kept in the readable list but
+omitted from provider URLs.
 
 ## 3. What the market has already cracked
 
