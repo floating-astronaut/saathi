@@ -571,3 +571,11 @@ This does not change D-C: flight search is still out of v1 because it is not a
 daily-retention capability and has commercial/search-volume risk. It does define
 how flights come back in v1.1: offer search + shortlist + official handoff link,
 not booking.
+
+**Amended 2026-07-28: India-first and no new paid vendors by default.** The
+implementation path starts from the GCP/Google search stack already wired for
+Saathi, official URL builders such as Google Maps URLs, and popular Indian app
+or web handoffs. Duffel, Amadeus, Ticketmaster and ACP remain useful research
+patterns, but they are not defaults for this product now. New vendor APIs require
+a specific India use case, acceptable terms, usage-ledger accounting and a fresh
+implementation lane.
