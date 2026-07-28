@@ -48,6 +48,14 @@ Agents are not interchangeable. Assign lanes to the agent that's best at them
 
 This is a default, not a wall — all can code. The point is to exploit strengths.
 
+## 3.5 PR checkpoint
+
+Agents land work through a GitHub PR by default, even for a single-developer
+repo. The PR is not bureaucracy; it is the visible checkpoint where the branch
+diff, tests, docs, and lane acceptance are checked before `main` changes. Agents
+open, inspect and merge their own PRs unless the operator explicitly asks to
+review. After merge, deploy `main` and verify the runtime.
+
 ## 4. Write back
 
 A lane is **not closed** until:

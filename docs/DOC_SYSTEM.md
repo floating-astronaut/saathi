@@ -61,6 +61,7 @@ a measurement disagree, the measurement wins and `DECISIONS.md` records it.
 |---|---|
 | `THE_METHOD.md` | The core loop: docs first → lanes assigned → code → write back → no drift. |
 | `AGENT_SYNC_PROTOCOL.md` | The multi-agent contract. Source-of-truth order, handoffs, mandatory write-backs. |
+| `CONTRIBUTING.md` | Agent workflow / branch policy, branch separation, commit/push/deploy rules. |
 | `ROLES.md` | Division of labour. Claude builds, Codex verifies, Kimi orchestrates. |
 | `LANE_LIFECYCLE.md` | How a lane moves from OPEN to CLOSED, and what closing requires. |
 | `../control-plane/ACTIVE_LANE_BOARD.md` | **The live queue.** Every lane, its owner, its state. If the board and reality disagree, fix the board. |

@@ -65,6 +65,13 @@ journalctl -u saathi-worker -f
 
 ## Deploy
 
+### Source rule before deploy
+
+Deploy only merged `main`. Agent work starts on `agent/<task>` in a source
+checkout, opens a GitHub PR, merges to `main` after the agent verifies the diff
+and tests, and only then deploys. `/home/ubuntu/saathi` is the runtime artifact;
+never use it as the source branch for a deploy.
+
 **Two transports, one deploy.** Which one you use depends only on which box you
 are sitting on. Everything that happens *on the target* is in
 `ops/deploy_onbox.sh` and `ops/deploy_verify.sh`, and both transports run those

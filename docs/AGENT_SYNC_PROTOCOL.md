@@ -96,7 +96,23 @@ Before coding, read:
 - the repo's `control-plane/ACTIVE_LANE_BOARD.md` when present
 - the relevant spoke docs for the task
 
-## 8. Execution rule
+
+## 8. Source and PR workflow
+
+Default landing path for agent work is **branch → PR → merge → deploy**.
+
+- Author real work in a source checkout on `agent/<lane-or-task>`, never in the
+  runtime artifact `/home/ubuntu/saathi`.
+- Push the branch and open a GitHub PR into `main`. The agent owns this step; the
+  operator is not a required reviewer unless they explicitly ask to be.
+- Before merging, the agent must inspect the PR diff, confirm required tests and
+  docs/write-back passed, and confirm the lane acceptance.
+- Merge the PR to `main`, then deploy merged `main` through the documented deploy
+  path and verify on the runtime box.
+- Direct pushes to `main` require explicit operator emergency instruction and a
+  supervisor-log note explaining why the PR checkpoint was skipped.
+
+## 9. Execution rule
 
 When an agent has the access needed to finish a lane end to end — deploy, env,
 build, test, verify — it does so itself instead of handing shell steps back to
