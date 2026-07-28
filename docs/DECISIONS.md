@@ -236,8 +236,8 @@ as its product.
 ### D-O · OpenRouter routes to our own Mumbai Bedrock; fallbacks are disabled · 2026-07-27
 Saathi calls `z-ai/glm-5` through OpenRouter instead of `boto3` → Bedrock
 directly when an active account key exists. Design in `AI_ROUTING.md`. Runtime
-routing was wired on 2026-07-27; the remaining proof is a real spend-through turn
-with a minted key.
+routing, workspace-scoped key minting, and a real spend-through turn were all
+proven live on 2026-07-27.
 
 **Why at all.** Per-account API keys with hard USD caps, minted programmatically.
 That is `PROD_READINESS.md` PR-15's fix: today an onboarded user can send
