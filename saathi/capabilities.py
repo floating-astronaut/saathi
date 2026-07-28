@@ -45,8 +45,26 @@ register(simple("safety", 0, _safety_matches, _safety_handle))
 
 # --- 10-19 · onboarding ------------------------------------------------------
 
+ONBOARDED_ONBOARDING_COPY = {
+    "hi": ("आपका setup पहले से पूरा है। यहाँ से signup दोबारा शुरू नहीं होगा। "
+           "आप बस बताइए, क्या करना है?"),
+    "hi-en": ("Aapka setup pehle se poora hai. Yahan se signup dobara shuru "
+              "nahi hoga. Bas bataiye, kya karna hai?"),
+    "en": ("You're already set up. This won't restart signup. Just tell me what "
+           "you need."),
+}
+
+
+def _onboarding_matches(ctx: MessageContext) -> bool:
+    return (not ctx.is_onboarded) or ctx.button_id.startswith("ob:")
+
+
 async def _onboarding_handle(ctx: MessageContext) -> dict | None:
-    if ctx.kind == "interactive":
+    if ctx.button_id.startswith("ob:"):
+        if ctx.is_onboarded and not ctx.button_id.startswith("ob:lang:"):
+            await ctx.reply(ONBOARDED_ONBOARDING_COPY.get(
+                ctx.lang, ONBOARDED_ONBOARDING_COPY["hi"]))
+            return {"handled": "onboarding", "onboarding": "already_done"}
         out = await onboarding.handle_button(
             ctx.conn, ctx.transport, ctx.user_id, ctx.handle,
             ctx.button_id, ctx.display_name)
@@ -59,9 +77,7 @@ async def _onboarding_handle(ctx: MessageContext) -> dict | None:
     return {"handled": "onboarding", **out} if out is not None else None
 
 
-register(simple("onboarding", 10,
-                lambda c: not c.is_onboarded or c.button_id.startswith("ob:"),
-                _onboarding_handle))
+register(simple("onboarding", 10, _onboarding_matches, _onboarding_handle))
 
 
 # --- 20-29 · deterministic commands -----------------------------------------

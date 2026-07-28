@@ -1438,3 +1438,13 @@ tests/test_lookup.py tests/test_relayed_commands.py tests/test_prefix_budget.py`
 
 **Remains:** a real WhatsApp media-forward UX check would prove how this reads on
 handset; LIFE-3 still owns bill-specific extraction.
+
+## 2026-07-28 — ID-1 returning WhatsApp handle onboarding restart closed
+
+**Read:** `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`, `docs/ARCHITECTURE.md`, `docs/foundations/GLOSSARY.md`, `docs/DAILY_LIFE_OS.md`, `saathi/identity.py`, `saathi/onboarding.py`, `saathi/capabilities.py`, `saathi/pipeline.py`, `tests/test_capabilities.py`, `tests/test_onboarding.py`, and `tests/test_language_change.py`.
+
+**Changed:** `saathi/capabilities.py` now treats old onboarding quick replies from already-onboarded users as idempotent: `ob:lang:*` may change language, while old consent/name/reminder/improve buttons reply that setup is already complete and do not mutate onboarding. Added regression coverage in `tests/test_capabilities.py`. Updated `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `CHANGELOG.md`, lane board and session coordination.
+
+**Verified:** focused suite `uv run pytest -q tests/test_capabilities.py tests/test_language_change.py tests/test_onboarding.py` — 32 passed; full suite `uv run pytest -q` — 521 passed.
+
+**Remains:** ID-2 owns the full stale-handle lifecycle: warning nudges, confirm/move account, and revocation/deletion only after the written 90-day dead-air period.

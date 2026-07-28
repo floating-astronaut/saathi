@@ -599,3 +599,16 @@ automation. `DAILY_LIFE_OS.md` owns the lane list and acceptance shape.
 
 This decision does not weaken the no-transaction boundary. It strengthens it:
 the product value is navigation and comprehension, not autonomous spend.
+
+### D-AA · Returning WhatsApp handles do not restart signup · 2026-07-28
+A WhatsApp number is still only a revocable handle, not the account, but an
+active handle that has already completed onboarding must not be treated as a new
+signup when the user taps an old entrypoint or onboarding quick reply in the same
+chat. The handler may let an old language button update `lang_pref`; every other
+old onboarding button replies that setup is already complete and leaves
+`users.onboarding = 'done'`.
+
+The number-recycling protection remains a lifecycle rule, not an excuse to lose
+the user immediately: stale handles should be warned and reverified through a
+written window, with account move/confirm paths, before revocation or deletion
+after the 90-day dead-air period.
