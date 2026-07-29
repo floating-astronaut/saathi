@@ -916,10 +916,17 @@ requests are silent. Duplicated WhatsApp webhooks are rejected before either
 control and consume no slot.
 
 This resolves the immediate single-process overload and per-user frequency
-gap. It does **not** yet add a Cloudflare/per-IP edge limit, a cross-process
-distributed global semaphore, or monetary/vendor spend caps. The latter remains
-the `USAGE_LEDGER.md` lane; do not call PR-15 fully closed until those scope
-decisions are implemented or explicitly retired.
+gap. **Cloudflare edge backstop added 2026-07-29:** zone `n8nworld.store` now
+blocks requests to `POST /webhook/whatsapp` above 30 per 10 seconds per source
+IP with a JSON 429 response (Free-plan minimum period/mitigation: 10 seconds).
+A valid signed empty WhatsApp envelope still returned 200; an unsigned request
+returned 403, proving the application signature gate remained behind the edge
+rule.
+
+LEDGER-1 has now supplied the observe-only accounting primitives (migration
+015, atomic idempotent holds and append-only events), but no paid wrapper is
+wired or capped yet. PR-15 remains open until vendor hooks/enforcement and the
+cross-process global decision are complete or explicitly retired.
 
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during

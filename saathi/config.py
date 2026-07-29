@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     #: until this cooldown expires rather than paying to argue with a flood.
     saathi_limit_notice_cooldown_s: int = 600
 
+    # Vendor ledger starts observe-only. Enforcement is enabled only after every
+    # paid call site settles/release its reservation and reconciliation is proven.
+    saathi_usage_ledger_mode: str = "observe"
+
     # --- inbound media limits (PR-26) ---------------------------------------
     # Admission is open, so "a valid sender" is a low bar and none of these may
     # assume good faith. Every number below is a bound on what *one* inbound

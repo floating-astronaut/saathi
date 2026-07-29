@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LEDGER-1 — vendor usage ledger foundation   [IN PROGRESS]
+Owner: Codex (source branch `agent/vendor-ledger-foundation`)        Opened: 2026-07-29
+Reading: docs/USAGE_LEDGER.md §11, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15), db/migrations/, saathi/config.py, saathi/worker/__main__.py
+Acceptance: append-only vendor usage events plus idempotent atomic reservation, settlement, release and expiry APIs; observe-only default; fake-connection concurrency tests; no paid-call behavior changes.
+Write-back: docs/USAGE_LEDGER.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md, docs/RUNBOOK.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: Slice A of the approved direct-Bedrock/vendor-ledger plan. It creates accounting primitives only; per-vendor hooks and enforcement remain later slices.
+
 ### RATE-1 — bound inbound turn concurrency   [CLOSED]
 Owner: Codex (source branch `agent/rate-limit-admission`)        Opened: 2026-07-29 · Closed: 2026-07-29
 Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15, PR-26), docs/USAGE_LEDGER.md, saathi/pipeline.py, saathi/core/backpressure.py, saathi/web/app.py
