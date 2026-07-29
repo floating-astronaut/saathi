@@ -188,6 +188,24 @@ passed. Full suite: `uv run pytest -q` — 535 passed. OBS-2.
 
 ---
 
+## 2026-07-29 - Phase 2 cutover: saathi.n8nworld.store now served from new dev box
+
+All four services (saathi-web, saathi-worker, cloudflared-saathi, postgresql@16-main)
+running on ip-172-31-41-224 (15.206.170.88). Public healthz proving through the
+tunnel, Bedrock converse() returning live via SSO-profile AWS_PROFILE=saathi.
+Original box cloudflared stopped; web/worker/postgres kept for rollback.
+
+### Added
+- ops/saathi-web.service, ops/saathi-worker.service, ops/cloudflared-saathi.service
+- AWS_PROFILE=saathi systemd drop-ins for Bedrock/CloudWatch auth
+
+### Verified
+- https://saathi.n8nworld.store/healthz 200 (new box pg:16.14)
+- /webhook/whatsapp 403 (unsigned, correct)
+- uv run pytest -q - 577 passed
+- Bedrock converse() returns live response via AWS_PROFILE=saathi
+- Worker running with 6 scheduled kinds
+
 ## 2026-07-29 - in-region tracing: spans on the critical path, zero PII in telemetry
 
 **Focused tests passing:** 11 passed (test_observability.py). Full suite: 532 passed. OBS-1.
