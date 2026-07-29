@@ -10,6 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
+| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T10:05Z | OBS-3 | `saathi/observability.py`, `tests/test_observability.py`, tracing docs, Secrets Manager/runtime env | **ended** — Logfire project binding implemented and verified; branch ready for PR |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T09:48Z | CRED-1 follow-up | SSH config plus `CONTRIBUTING.md`, `docs/RUNBOOK.md`, `docs/LANDMINES.md`, CRED-1 notes | **ended** — GitLab SSH key configured; GitLab mirror synced over SSH; docs branch ready |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T08:55Z | OBS-2 | `saathi/observability.py`, `tests/test_observability.py`, `ops/setup-tracing.sh`, `ops/saathi-jaeger.service`, `ops/saathi-otelcol.service`, docs/write-back | **ended** — OBS-2 implemented and verified; branch ready for PR |
 | Clawcore | runtime i-01b2c27883acb25ca | 2026-07-29T08:38Z | OBS-1 | saathi/observability.py etc | ended - OBS-1 implemented, PRs #11+#12 merged, deployed, verified |

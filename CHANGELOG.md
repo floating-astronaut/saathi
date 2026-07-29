@@ -12,6 +12,22 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - tracing can export to Logfire project when token is present
+
+**Focused tests passing:** `uv run pytest -q tests/test_observability.py` — 15
+passed. Full suite: `uv run pytest -q` — 536 passed. OBS-3.
+
+### Changed
+
+- `observability.init()` now configures Logfire cloud export as
+  `send_to_logfire="if-token-present"`, so the project write token decides
+  whether spans are sent to Pydantic Logfire.
+- The local OTel Collector export remains wired alongside cloud export.
+- Privacy constraints are unchanged: `inspect_arguments=False`, fixed
+  attribute allow-list, no message text/transcript/name/medicine/query params.
+
+---
+
 ## 2026-07-29 - tracing follow-up: span failures cannot affect turns
 
 **Focused tests passing:** `uv run pytest -q tests/test_observability.py` — 14

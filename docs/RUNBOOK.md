@@ -369,11 +369,19 @@ Select service "saathi" in the Jaeger UI. Spans appear as:
 
 ### Enabling
 
-Tracing is disabled by default. To enable:
-  sudo sed -i "/Environment=/a Environment=SAATHI_TRACING_ENABLED=1" /etc/systemd/system/saathi-web.service
-  sudo sed -i "/Environment=/a Environment=SAATHI_TRACING_ENABLED=1" /etc/systemd/system/saathi-worker.service
-  sudo systemctl daemon-reload
-  sudo systemctl restart saathi-web saathi-worker
+Tracing is disabled unless `SAATHI_TRACING_ENABLED=1` is present in the runtime
+environment. Logfire cloud export is additionally gated on `LOGFIRE_TOKEN`.
+Set both through Secrets Manager, not by editing `.env` or systemd units:
+
+```bash
+ops/set-secret.sh SAATHI_TRACING_ENABLED LOGFIRE_TOKEN
+ops/deploy.sh --local
+```
+
+`LOGFIRE_TOKEN` is the Pydantic Logfire project write token. As of 2026-07-29 it
+points at project `indofolk-ai`. The broader Pydantic API key is not needed by
+the app runtime; do not store it unless a CLI/API management operation requires
+it.
 
 ### Troubleshooting
 

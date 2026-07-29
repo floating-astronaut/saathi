@@ -73,15 +73,18 @@ first-party control the user physically pressed. Onboarding (10) is deliberately
 exempt: gating it would drop an un-onboarded user through to the agent and break
 "onboarding never calls the model", which is what makes an open door safe.
 
-**Tracing is in-region and PII-free.** Spans go through the logfire SDK to a
-local OTel Collector receiver on `127.0.0.1:4317`, then from the collector to
-local Jaeger OTLP on `127.0.0.1:4318`. Jaeger stores locally with badger
+**Tracing is privacy-hardened and token-gated.** Spans go through the logfire
+SDK to the local OTel Collector receiver on `127.0.0.1:4317`, then from the
+collector to local Jaeger OTLP on `127.0.0.1:4318`. If `LOGFIRE_TOKEN` is
+present, the same scrubbed spans also go to the operator's Pydantic Logfire
+project (`indofolk-ai` as of 2026-07-29). Jaeger stores locally with badger
 storage (7-day TTL, 4 GiB cap), and its UI is available only via SSH tunnel to
 `127.0.0.1:16686`. Only a fixed allow-list of attributes reaches spans: kind,
 latency, tokens, tool name, hop count, model id, error class, trigger enum.
 Message text, transcripts, names, medicines and query parameters are scrubbed
-(`saathi/observability.py`). Tracing is best-effort: collector, exporter, or
-Jaeger failures never block a turn and no new inbound port is opened.
+(`saathi/observability.py`). Tracing is best-effort: collector, exporter,
+Logfire, or Jaeger failures never block a turn and no new inbound port is
+opened.
 
 **The 24-hour window is a hard gate, not a convention.** `wa/window.py` refuses
 free-form sends outside the window. Every outbound path funnels through
