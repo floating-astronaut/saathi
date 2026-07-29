@@ -92,8 +92,8 @@ Acceptance: forwarded text/image/PDF/SMS-like content is treated as third-party 
 Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
 Notes: MET. Relayed fence/prompt now asks for explanation, amount/date/place/person/action extraction, scam pressure flag and one safe next step. Mutating tools remain withheld. `uv run pytest -q` passed: 518.
 
-### ID-2 — stale WhatsApp handle 90-day lifecycle   [OPEN]
-Owner: unassigned        Opened: 2026-07-28
+### ID-2 — stale WhatsApp handle 90-day lifecycle   [IN PROGRESS]
+Owner: Codex (source branch `agent/stale-whatsapp-handle-lifecycle`)        Opened: 2026-07-28 · Claimed: 2026-07-29
 Reading: docs/ARCHITECTURE.md, docs/foundations/GLOSSARY.md, docs/DECISIONS.md (D-AA), saathi/identity.py, saathi/worker/turns.py, db/migrations/, tests/test_identity.py
 Acceptance: a handle with no inbound message for the written stale window is nudged before risk, can confirm continued ownership or move the account to a new number, and is revoked/deleted only after 90 days of dead air according to the recorded lifecycle policy.
 Write-back: docs/ARCHITECTURE.md, docs/DECISIONS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md

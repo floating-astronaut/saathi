@@ -12,6 +12,17 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - stale WhatsApp handles cannot inherit an elder's account (ID-2)
+
+- A WhatsApp handle silent for 60 days now receives a content-free check-in;
+  after 90 days of uninterrupted silence the handle is revoked, not the user.
+- A returning stale handle is blocked before conversation/history, message
+  logging, transcription, tools, memory or the model. It must explicitly
+  continue or request a 15-minute move code for a new number.
+- `MOVE <six-digit-code>` works only from a blank new handle; it transfers the
+  account, makes the new handle primary, and revokes the old one. Bare digits
+  and established accounts cannot consume a move code.
+
 ## 2026-07-29 - Meta responder guard (SEC-1)
 
 - Added an hourly systemd guard that fails loudly if Saathi's own WhatsApp

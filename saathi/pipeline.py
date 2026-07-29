@@ -573,17 +573,57 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     who = await identity.resolve(conn, channel, handle, contact_name,
                                  dm_policy=settings.saathi_dm_policy)
 
+    if await already_seen(conn, wa_mid):
+        log.info("duplicate webhook for %s, ignoring", wa_mid)
+        return {"skipped": "duplicate"}
+
+    # A brand-new handle may present the short move code issued in a guarded
+    # stale-handle chat.  Do this before admission/onboarding so the temporary
+    # identity created by `resolve` never gets a second signup or an agent turn.
+    text = (msg.get("text") or {}).get("body", "") if kind == "text" else ""
+    move = identity.MOVE_CODE_RE.match(text)
+    if move:
+        moved = await identity.move_to_new_handle(conn, move.group(1), channel, handle)
+        if moved:
+            if transport.capabilities.has_session_window:
+                await window.touch(conn, moved)
+            await transport.send_text(conn, moved, handle,
+                                      "Your account is now on this number. / Aapka account ab is number par hai.")
+            return {"handled": "identity_move"}
+
     # Admission: under `pairing` an unknown handle never reaches the chain.
     if who.status == "pending" and settings.saathi_dm_policy == "pairing":
+        if transport.capabilities.has_session_window:
+            await window.touch(conn, who.user_id)
         if await identity.should_explain(conn, who.user_channel_id,
                                          settings.saathi_admission_max_replies):
             await transport.send_text(conn, who.user_id, handle, identity.ADMISSION_REPLY)
         log.info("unadmitted handle %s/%s — not processed", channel, handle)
         return {"skipped": "not_admitted"}
 
-    if await already_seen(conn, wa_mid):
-        log.info("duplicate webhook for %s, ignoring", wa_mid)
-        return {"skipped": "duplicate"}
+    # This gate is deliberately before window/conversation/transcription/logging
+    # and the capability chain.  A recycled number must not learn stored facts,
+    # cause a reminder change, or spend model/STT budget merely by sending text.
+    if who.needs_reverification:
+        if transport.capabilities.has_session_window:
+            await window.touch(conn, who.user_id)
+        button = ((msg.get("interactive") or {}).get("button_reply") or {}).get("id")
+        button = button or (msg.get("button") or {}).get("payload", "")
+        if button == "idv:continue":
+            await identity.confirm_reverification(conn, who.user_id, who.user_channel_id)
+            await transport.send_text(conn, who.user_id, handle,
+                                      "Thank you. Your access is active again. / Shukriya, aapka access phir se chalu hai.")
+            return {"handled": "identity_reverified"}
+        if button == "idv:move":
+            code = await identity.issue_link_code(conn, who.user_id, channel)
+            await transport.send_text(conn, who.user_id, handle,
+                                      "On your new number, send: MOVE " + code + ". This code expires in 15 minutes.")
+            return {"handled": "identity_move_code"}
+        await transport.send_buttons(
+            conn, who.user_id, handle,
+            "This number has been quiet for a while. Before I open your saved information, please confirm it is still yours. / Is number par kaafi din se baat nahi hui. Aapki saved baatein kholne se pehle, kripya confirm karein ki yeh number ab bhi aapka hai.",
+            [("idv:continue", "Yes, continue"), ("idv:move", "New number")])
+        return {"handled": "identity_reverification_required"}
 
     # This is deliberately before audio transcription and before the capability
     # chain. A rate check after either point would still spend STT/model money.

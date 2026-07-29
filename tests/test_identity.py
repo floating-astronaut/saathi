@@ -13,6 +13,17 @@ def test_dormancy_window_is_inside_indian_recycling_period():
     assert identity.DORMANT_AFTER.days >= 30      # not so twitchy it nags
 
 
+def test_revocation_waits_for_the_full_written_dead_air_window():
+    assert identity.DORMANT_AFTER.days == 60
+    assert identity.REVOKE_AFTER.days == 90
+    assert identity.REVOKE_AFTER > identity.DORMANT_AFTER
+
+
+def test_move_code_is_explicit_and_never_a_bare_six_digits():
+    assert identity.MOVE_CODE_RE.match("MOVE 123456")
+    assert not identity.MOVE_CODE_RE.match("123456")
+
+
 def test_link_codes_expire_quickly():
     assert identity.LINK_CODE_TTL.total_seconds() <= 30 * 60
 

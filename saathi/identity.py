@@ -24,6 +24,7 @@ delivered on an already-trusted channel, never by matching a name or a number.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -35,7 +36,9 @@ log = logging.getLogger("saathi.identity")
 # A handle silent this long is not assumed to be the same human on its return.
 # 90 days is when Indian recycling becomes possible; we re-verify well inside it.
 DORMANT_AFTER = timedelta(days=60)
+REVOKE_AFTER = timedelta(days=90)
 LINK_CODE_TTL = timedelta(minutes=15)
+MOVE_CODE_RE = re.compile(r"^\s*move\s+(\d{6})\s*$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -72,13 +75,14 @@ async def resolve(conn, channel: str, channel_user_id: str,
 
     if row:
         uc_id, user_id, last_seen, name, tz, voice, status = row
-        dormant = (datetime.now(timezone.utc) - last_seen) > DORMANT_AFTER
+        dormant = status == "reverify" or (datetime.now(timezone.utc) - last_seen) > DORMANT_AFTER
         await conn.execute(
             """update user_channels
                   set last_seen_at = now(),
+                      status = case when %s then 'reverify'::channel_status else status end,
                       display_name = coalesce(%s, display_name)
                 where id = %s""",
-            (display_name, uc_id))
+            (dormant, display_name, uc_id))
         if display_name:
             await conn.execute(
                 "update users set display_name = coalesce(%s, display_name) where id = %s",
@@ -126,6 +130,7 @@ async def resolve(conn, channel: str, channel_user_id: str,
 
     r = await (await conn.execute(
         "select tz, voice_reply_pref from users where id = %s", (user_id,))).fetchone()
+    await schedule_reverify(conn, user_id, uc_id, datetime.now(timezone.utc))
     log.info("new identity %s via %s", user_id, channel)
     return Resolved(user_id, uc_id, display_name, r[0], r[1],
                     is_new=True, needs_reverification=False, status=new_status)
@@ -134,8 +139,25 @@ async def resolve(conn, channel: str, channel_user_id: str,
 async def mark_verified(conn, user_channel_id: int) -> None:
     """Record that the human behind this handle was re-established just now."""
     await conn.execute(
-        "update user_channels set verified_at = now(), last_seen_at = now() where id = %s",
+        """update user_channels set status = 'active', verified_at = now(), last_seen_at = now()
+            where id = %s""",
         (user_channel_id,))
+
+
+async def schedule_reverify(conn, user_id: int, user_channel_id: int, last_seen) -> None:
+    """Book the 60-day check from the latest positive evidence of this handle."""
+    from .worker import turns  # noqa: F401 - registers the scheduled kind
+    from . import scheduling
+    when = last_seen + DORMANT_AFTER
+    await scheduling.enqueue(
+        conn, user_id, "reverify", when,
+        payload={"user_channel_id": user_channel_id, "stage": "warn"},
+        dedupe_key=f"reverify:warn:{user_channel_id}:{int(last_seen.timestamp())}")
+
+
+async def confirm_reverification(conn, user_id: int, user_channel_id: int) -> None:
+    await mark_verified(conn, user_channel_id)
+    await schedule_reverify(conn, user_id, user_channel_id, datetime.now(timezone.utc))
 
 
 async def revoke(conn, channel: str, channel_user_id: str, reason: str = "") -> int:
@@ -192,6 +214,46 @@ async def redeem_link_code(conn, code: str, channel: str, channel_user_id: str,
         (user_id, channel, channel_user_id, display_name))
     log.info("linked %s/%s to identity %s", channel, channel_user_id, user_id)
     return user_id
+
+
+async def move_to_new_handle(conn, code: str, channel: str, channel_user_id: str) -> int | None:
+    """Consume a move code on a brand-new handle and make it the primary claim.
+
+    A code is delivered only to the old handle during the gated re-verification
+    flow.  The receiver must still be a blank, not-yet-onboarded identity: this
+    prevents a code typed into an established person's chat from stealing it.
+    """
+    source = await (await conn.execute(
+        """select c.id, c.user_id, u.onboarding::text
+             from user_channels c join users u on u.id=c.user_id
+            where c.channel=%s and c.channel_user_id=%s and c.revoked_at is null""",
+        (channel, channel_user_id))).fetchone()
+    if not source or source[2] != "new":
+        return None
+    target = await (await conn.execute(
+        """update channel_link_codes set consumed_at = now()
+             where code=%s and channel=%s and consumed_at is null and expires_at > now()
+         returning user_id""", (code, channel))).fetchone()
+    if not target:
+        return None
+    target_user_id = target[0]
+    if source[1] == target_user_id:
+        return None
+    source_channel_id, source_user_id, _ = source
+    await conn.execute(
+        """update user_channels set is_primary=false, revoked_at=now()
+             where user_id=%s and is_primary and revoked_at is null""", (target_user_id,))
+    await conn.execute(
+        """update user_channels set user_id=%s, is_primary=true, status='active',
+                  verified_at=now(), last_seen_at=now()
+             where id=%s""", (target_user_id, source_channel_id))
+    # This shell was created only to receive the move code.  It has not entered
+    # onboarding or logged content, so soft-deleting it avoids an orphan that
+    # looks like a real second person while retaining FK-safe audit history.
+    await conn.execute("update users set deleted_at=now() where id=%s", (source_user_id,))
+    await schedule_reverify(conn, target_user_id, source_channel_id, datetime.now(timezone.utc))
+    log.info("moved identity %s to %s/%s", target_user_id, channel, channel_user_id)
+    return target_user_id
 
 
 # --- admission ---------------------------------------------------------------
