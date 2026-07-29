@@ -33,6 +33,13 @@ two agents editing one surface.
 | Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` |
 | Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
 
+> **Runtime migrating (2026-07-29):** moving to successor box
+> `ip-172-31-41-224` (ap-south-1). Webhook hostname and `saathi-dev` tunnel
+> unchanged; only the connector moves. Until the new box runs the services and
+> cutover is verified, the original box still serves `saathi.n8nworld.store`.
+> New box has AWS CLI + SSO for the **mcc org** only, not `559896294326`. See
+> `docs/RUNBOOK.md` and `docs/PROD_READINESS.md`.
+
 This split is the single most common source of drift on this project. The
 runtime checkout is a deploy artifact rather than a working tree. An agent that
 reads `/home/ubuntu/saathi` and assumes it is `main` will be wrong. Real work

@@ -43,6 +43,24 @@
 | Tunnel | `saathi-dev` `d4e9e4ad-04ca-4ebf-92af-d39c7cb5f831` |
 | Artifacts | `s3://saathi-dev-artifacts-559896294326` |
 
+> **Runtime migration in progress (2026-07-29).** The application is moving from
+> the box above to a successor runtime box:
+
+| | Successor box (migration target) |
+|---|---|
+| Hostname | `ip-172-31-41-224` |
+| Region | ap-south-1 (Mumbai) — egress `15.206.170.88` (AWS) |
+| Instance id | _TBD — IMDS is blocked on this box; fill in from the console_ |
+| Repo on box | `/home/ubuntu/saathi` |
+| AWS CLI | configured: Identity Center SSO `mcc`, profiles `mcc` (621481811158, AdministratorAccess) and `mcc-dev` (635860424621, DevAdmin). Usable for any AWS work in the **mcc org**. `session-manager-plugin` installed. |
+| **Not** reachable | the Saathi account `559896294326` (different AWS org) — Saathi's own S3/Secrets/SSM stay out of reach from here. |
+| State | app, worker, Postgres and the `saathi-dev` tunnel connector are **not yet running here**. The original box still serves `saathi.n8nworld.store` until the connector is repointed and the cutover is verified. See `docs/PROD_READINESS.md`. |
+
+The migration moves the tunnel connector onto the successor box; the webhook
+hostname (`saathi.n8nworld.store`) and the `saathi-dev` tunnel itself do not
+change. The original box (`i-01b2c27883acb25ca`) must stay up until cutover is
+verified end-to-end (`/healthz` through the new connector, live webhook).
+
 The us-east-2 MeshPilot box holds only a git checkout, used for SSH-signing and
 pushing. It runs no Saathi service and has no Saathi database.
 

@@ -56,6 +56,14 @@ verify against the owning docs and current files before editing.
 | Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` |
 | Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
 
+> **Runtime migrating (2026-07-29):** the runtime is moving from
+> `i-01b2c27883acb25ca` to a successor box `ip-172-31-41-224` (ap-south-1). The
+> webhook hostname and `saathi-dev` tunnel are unchanged; only the connector
+> moves. Until the new box runs the services and the cutover is verified, the
+> original box still serves `saathi.n8nworld.store`. See `docs/RUNBOOK.md` and
+> `docs/PROD_READINESS.md`. The new box has AWS CLI + SSO for the **mcc org**
+> (`mcc`, `mcc-dev`) — not the Saathi account `559896294326`.
+
 The runtime box is where live verification actually happens — services, real
 webhooks, real audio. But `/home/ubuntu/saathi` is a deployed artifact with
 fossilized git, so anything authored there is product state at risk of being
