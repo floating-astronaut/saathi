@@ -22,7 +22,8 @@ from __future__ import annotations
 import logging
 
 from . import (accounts, commands, conversation, documents, identity, memory,
-               media_store, onboarding, privacy, provenance, training, vision)
+               media_store, observability, onboarding, privacy, provenance,
+               training, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -613,9 +614,10 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         await log_message(conn, who.user_id, "in", "interactive",
                           wa_message_id=wa_mid, body=ctx.text)
 
-    result = await dispatch(ctx)
-    if ctx.meta.get("reply"):
-        await log_message(conn, who.user_id, "out", "text", body=ctx.meta["reply"])
+    with observability.span("pipeline.handle_message", kind="pipeline"):
+        result = await dispatch(ctx)
+        if ctx.meta.get("reply"):
+            await log_message(conn, who.user_id, "out", "text", body=ctx.meta["reply"])
     return {"channel": channel, **result}
 
 
