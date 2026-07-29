@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### OBS-2 — tracing follow-up safety and localhost binding   [CLOSED]
+Owner: Codex (source branch `agent/fix-obs1-tracing-safety`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/RUNBOOK.md, saathi/observability.py, ops/setup-tracing.sh, ops/saathi-otelcol.service, ops/saathi-jaeger.service, tests/test_observability.py
+Acceptance: tracing spans preserve application exceptions, tracing enter/exit failures degrade to no-op behavior, OTel Collector and Jaeger do not bind the same OTLP port, Jaeger binds localhost only, and focused/full tests pass.
+Write-back: docs/RUNBOOK.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. `observability.span()` now preserves application exceptions and swallows tracing enter/exit failures only. Collector receives on `127.0.0.1:4317`; Jaeger OTLP listens on `127.0.0.1:4318`, with no `0.0.0.0` OTLP bind. Focused suite passed: 14. Full suite passed: 535.
+
 ### ID-1 — returning WhatsApp handle must not restart onboarding   [CLOSED]
 Owner: Codex (source branch `agent/returning-whatsapp-handle-onboarding`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/foundations/GLOSSARY.md, saathi/identity.py, saathi/onboarding.py, saathi/capabilities.py, saathi/pipeline.py, tests/test_capabilities.py, tests/test_onboarding.py
@@ -543,4 +550,3 @@ Reading: docs/THE_METHOD.md, docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/PROD_
 Acceptance: logfire SDK configured with inspect_arguments=False, OTLP exporter to localhost:4317, saathi/observability.py enforces a fixed allow-list of span attributes, tracing spans cover pipeline.handle_message → safety.classify → speech → agent.loop.run → each model call and tool handler, best-effort init, otelcol+jaeger systemd units exist and listen on 127.0.0.1 only, uv run pytest -q passes with no regression.
 Write-back: docs/ARCHITECTURE.md (new boundary + no-PII-in-spans rule), docs/DECISIONS.md (D-AB), docs/RUNBOOK.md (two new units + how to query), CHANGELOG.md (symptom first), docs/PROD_READINESS.md (new infra row), docs/ENGINEERING_SUPERVISOR.md (evidence appended), control-plane/SESSION_COORDINATION.md
 Notes: MET. PRs #11 (code) + #12 (docs) merged (squash). Deployed 8b2fe16 via ops/deploy.sh --local. 532 tests passed, zero regressions. All spans wired. Tracing disabled by default (SAATHI_TRACING_ENABLED unset). Setup script and systemd units exist but not yet run — infra install is a separate ops/setup-tracing.sh step at enable time.
-

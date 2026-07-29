@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import os
+from pathlib import Path
 
 import pytest
 
@@ -42,6 +43,14 @@ class _FakeSpanContext:
 
     def __exit__(self, *args):
         pass
+
+
+class _FailingExitSpan:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        raise RuntimeError("tracing close failed")
 
 
 @pytest.fixture(autouse=True)
@@ -195,6 +204,42 @@ def test_span_noop_when_import_fails(monkeypatch):
 
     with obs.span("should_not_raise", kind="test"):
         pass
+
+
+def test_span_preserves_application_exception():
+    """Tracing must not replace or suppress the turn's real exception."""
+    obs = importlib.import_module("saathi.observability")
+    fake = FakeLogfire()
+    obs._logfire = fake
+    obs._tracing_enabled = True
+
+    with pytest.raises(ValueError, match="real app error"):
+        with obs.span("test_span", kind="test"):
+            raise ValueError("real app error")
+
+
+def test_span_close_failure_does_not_break_successful_work():
+    """Exporter/SDK close errors degrade to no-op behavior."""
+    obs = importlib.import_module("saathi.observability")
+    fake = FakeLogfire()
+    fake.span = lambda name, **attrs: _FailingExitSpan()
+    obs._logfire = fake
+    obs._tracing_enabled = True
+
+    with obs.span("test_span", kind="test"):
+        pass
+
+
+def test_tracing_stack_ports_do_not_conflict():
+    """Collector receives on 4317; Jaeger receives from collector on 4318."""
+    root = Path(__file__).resolve().parents[1]
+    setup = (root / "ops" / "setup-tracing.sh").read_text()
+    jaeger = (root / "ops" / "saathi-jaeger.service").read_text()
+
+    assert "endpoint: 127.0.0.1:4317" in setup
+    assert "endpoint: 127.0.0.1:4318" in setup
+    assert "--collector.otlp.grpc.host-port=127.0.0.1:4318" in jaeger
+    assert "--collector.otlp.grpc.host-port=0.0.0.0:4317" not in jaeger
 
 
 # ── observability module is importable at module level ───────────────────

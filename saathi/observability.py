@@ -22,9 +22,9 @@ Failure contract (same as metrics.py):
 """
 from __future__ import annotations
 
-import logging
 import os
-from contextlib import contextmanager
+import logging
+from contextlib import nullcontext
 from typing import Any
 
 from .config import settings
@@ -105,7 +105,6 @@ def _scrub(attributes: dict[str, Any]) -> dict[str, Any]:
 
 # ── public helpers ──────────────────────────────────────────────────────
 
-@contextmanager
 def span(name: str, **attrs: Any):
     """Create a manual span with scrubbed attributes.
 
@@ -115,15 +114,46 @@ def span(name: str, **attrs: Any):
         # span closes automatically.
     """
     if not _tracing_enabled or _logfire is None:
-        yield
-        return
+        return nullcontext()
     clean = _scrub(attrs)
     try:
-        with _logfire.span(name, **clean):
-            yield
+        cm = _logfire.span(name, **clean)
     except Exception:
-        # Never let tracing take down the product.
-        yield
+        # Never let tracing setup take down the product.
+        return nullcontext()
+    return _SafeSpan(cm)
+
+
+class _SafeSpan:
+    """Context manager wrapper that preserves application exceptions.
+
+    logfire span creation/enter/exit can fail if the exporter or SDK is unhappy.
+    The work inside the span is the product; its exception semantics must remain
+    exactly the same whether tracing is healthy, broken, or disabled.
+    """
+
+    def __init__(self, cm: Any):
+        self._cm = cm
+        self._entered = False
+
+    def __enter__(self):
+        try:
+            self._cm.__enter__()
+            self._entered = True
+        except Exception:
+            self._entered = False
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if not self._entered:
+            return False
+        try:
+            self._cm.__exit__(exc_type, exc, tb)
+        except Exception:
+            if exc_type is not None:
+                return False
+            log.exception("tracing span close failed — continuing")
+        return False
 
 
 def record(name: str, **attrs: Any) -> None:

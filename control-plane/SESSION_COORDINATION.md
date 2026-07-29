@@ -10,6 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
+| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T08:55Z | OBS-2 | `saathi/observability.py`, `tests/test_observability.py`, `ops/setup-tracing.sh`, `ops/saathi-jaeger.service`, `ops/saathi-otelcol.service`, docs/write-back | **ended** — OBS-2 implemented and verified; branch ready for PR |
 | Clawcore | runtime i-01b2c27883acb25ca | 2026-07-29T08:38Z | OBS-1 | saathi/observability.py etc | ended - OBS-1 implemented, PRs #11+#12 merged, deployed, verified |
 
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-28T20:26Z | ID-1 | `saathi/capabilities.py`, `saathi/onboarding.py`, `saathi/identity.py`, `tests/test_capabilities.py`, docs/write-back | **ended** — ID-1 implemented and verified; branch ready for PR |

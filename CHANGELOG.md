@@ -12,6 +12,25 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - tracing follow-up: span failures cannot affect turns
+
+**Focused tests passing:** `uv run pytest -q tests/test_observability.py` — 14
+passed. Full suite: `uv run pytest -q` — 535 passed. OBS-2.
+
+### Fixed
+
+- `observability.span()` now preserves application exceptions exactly. Tracing
+  enter/exit failures degrade to no-op behavior instead of replacing or
+  suppressing the real turn error.
+- The optional tracing stack no longer has a port conflict: the app exports to
+  the OTel Collector on `127.0.0.1:4317`, and the collector exports to Jaeger on
+  `127.0.0.1:4318`.
+- Jaeger OTLP gRPC is bound to `127.0.0.1`, not `0.0.0.0`.
+- Cleaned the architecture write-back so tracing and relayed-content rules are
+  separate sections.
+
+---
+
 ## 2026-07-29 - in-region tracing: spans on the critical path, zero PII in telemetry
 
 **Focused tests passing:** 11 passed (test_observability.py). Full suite: 532 passed. OBS-1.
