@@ -1,9 +1,10 @@
-"""Tests for saathi.observability — in-region tracing module.
+"""Tests for saathi.observability — privacy-hardened tracing module.
 
 Covers the three non-negotiables from the plan:
   1. inspect_arguments=False — no automatic arg capture
   2. Allow-list scrub — PII attributes are dropped
   3. Disabled by default — no side effects when SAATHI_TRACING_ENABLED is unset
+  4. Cloud export only when LOGFIRE_TOKEN exists; local export remains wired
 """
 from __future__ import annotations
 
@@ -25,8 +26,11 @@ class FakeLogfire:
         assert kwargs.get("inspect_arguments") is False, (
             "inspect_arguments must be False — auto arg capture leaks PII"
         )
-        assert kwargs.get("send_to_logfire") is False, (
-            "send_to_logfire must be False — data never leaves ap-south-1"
+        assert kwargs.get("send_to_logfire") == "if-token-present", (
+            "cloud export must depend on LOGFIRE_TOKEN, not unconditional sending"
+        )
+        assert kwargs.get("additional_span_processors"), (
+            "local collector export must remain wired alongside Logfire cloud"
         )
 
     def span(self, name, **attrs):
@@ -57,6 +61,7 @@ class _FailingExitSpan:
 def reset_observability(monkeypatch):
     """Every test starts with a clean module state."""
     monkeypatch.delenv("SAATHI_TRACING_ENABLED", raising=False)
+    monkeypatch.delenv("LOGFIRE_TOKEN", raising=False)
     obs = importlib.import_module("saathi.observability")
     obs._tracing_enabled = False
     obs._logfire = None
@@ -156,7 +161,7 @@ def test_init_disabled_when_no_env():
 
 
 def test_init_with_env_var(monkeypatch):
-    """With SAATHI_TRACING_ENABLED, init wires up logfire with OTLP.
+    """With SAATHI_TRACING_ENABLED, init wires logfire with local OTLP.
 
     This test uses a realistic path: it sets the env var, imports logfire
     (which exists on the box via uv), and verifies configure() is called
@@ -183,9 +188,34 @@ def test_init_with_env_var(monkeypatch):
     assert calls[0].get("inspect_arguments") is False, (
         "inspect_arguments MUST be False — auto arg capture leaks user message text"
     )
-    assert calls[0].get("send_to_logfire") is False, (
-        "send_to_logfire MUST be False — data never reaches pydantic's cloud"
+    assert calls[0].get("send_to_logfire") == "if-token-present", (
+        "Logfire cloud export must require LOGFIRE_TOKEN"
     )
+    assert calls[0].get("additional_span_processors"), (
+        "local OTel Collector export must not be removed"
+    )
+
+
+def test_init_with_logfire_token_still_keeps_privacy_and_local_export(monkeypatch):
+    """The project token may enable cloud export, but not argument capture."""
+    monkeypatch.setenv("SAATHI_TRACING_ENABLED", "1")
+    monkeypatch.setenv("LOGFIRE_TOKEN", "test-token")
+
+    import logfire as real_logfire
+
+    obs = importlib.import_module("saathi.observability")
+    calls = []
+
+    def fake_configure(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(real_logfire, "configure", fake_configure)
+
+    obs.init()
+
+    assert calls[0]["send_to_logfire"] == "if-token-present"
+    assert calls[0]["inspect_arguments"] is False
+    assert calls[0]["additional_span_processors"]
 
 
 # ── span context manager ─────────────────────────────────────────────────

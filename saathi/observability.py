@@ -1,9 +1,8 @@
-"""In-region tracing via logfire SDK → local OTel Collector → Jaeger.
+"""Privacy-hardened tracing via logfire SDK.
 
-Data never leaves ap-south-1: the OTLP exporter points at localhost:4317, not
-at logfire-us.pydantic.dev. logfire is OpenTelemetry under the hood, so the
-same collector and Jaeger serve both the logfire spans and any raw OTel
-instrumentation added later.
+Local export always points at the on-box OTel Collector on localhost:4317.
+Cloud export to Pydantic Logfire happens only when LOGFIRE_TOKEN is present;
+the token owns the destination project (currently `indofolk-ai`).
 
 Privacy rules (the non-negotiable ones — §13 health-adjacent PII):
   * inspect_arguments=False — hard-disable automatic function-argument capture.
@@ -64,35 +63,30 @@ def init() -> None:
     try:
         import logfire as _lf
 
-        _lf.configure(
-            inspect_arguments=False,   # ← the privacy hard-line
-            service_name="saathi",
-            service_version=settings.saathi_env or "0.1.0",
-            send_to_logfire=False,     # never hit pydantic's cloud
-        )
-
-        # Point the OTLP exporter at the local collector.
-        # logfire.configure() spins up its own exporter; replace the endpoint
-        # by re-configuring the underlying OTel tracer provider.
-        from opentelemetry import trace as otel_trace
-        from opentelemetry.sdk.trace import TracerProvider
+        # Keep a local collector export even when Logfire cloud is enabled.
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
             OTLPSpanExporter,
         )
 
-        provider = otel_trace.get_tracer_provider()
-        if isinstance(provider, TracerProvider):
-            # Clear any existing processors and add our own.
-            provider._active_span_processor._span_processors = ()
-            exporter = OTLPSpanExporter(
-                endpoint="http://localhost:4317", insecure=True
-            )
-            provider.add_span_processor(BatchSpanProcessor(exporter))
+        local_exporter = OTLPSpanExporter(
+            endpoint="http://localhost:4317", insecure=True
+        )
+
+        _lf.configure(
+            inspect_arguments=False,   # ← the privacy hard-line
+            service_name="saathi",
+            service_version=settings.saathi_env or "0.1.0",
+            send_to_logfire="if-token-present",
+            additional_span_processors=[BatchSpanProcessor(local_exporter)],
+        )
 
         _logfire = _lf
         _tracing_enabled = True
-        log.info("tracing enabled — OTLP → localhost:4317")
+        if os.environ.get("LOGFIRE_TOKEN"):
+            log.info("tracing enabled — Logfire cloud + local OTLP")
+        else:
+            log.info("tracing enabled — local OTLP only")
     except Exception:
         log.exception("tracing initialisation failed — continuing without spans")
         _tracing_enabled = False

@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### OBS-3 — bind tracing to Pydantic Logfire project   [CLOSED]
+Owner: Codex (source branch `agent/logfire-cloud-bind`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/RUNBOOK.md, saathi/observability.py, tests/test_observability.py, ops/set-secret.sh
+Acceptance: Logfire cloud export is enabled only when `LOGFIRE_TOKEN` is present, keeps `inspect_arguments=False` and the attribute allow-list, preserves local collector export, stores the provided project write token in Secrets Manager value-blind, enables tracing for web/worker, deploys, and verifies without printing secrets.
+Write-back: docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/RUNBOOK.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Runtime secret now has `SAATHI_TRACING_ENABLED=1` and a `LOGFIRE_TOKEN` write token for project `indofolk-ai` (value-blind verified: 55 chars, sha256 prefix recorded by set-secret output only). Code uses `send_to_logfire="if-token-present"`, keeps local collector export, keeps `inspect_arguments=False`, and preserves the scrub allow-list. Focused suite passed: 15. Full suite passed: 536. API key was not stored because app runtime does not need it.
+
 ### OBS-2 — tracing follow-up safety and localhost binding   [CLOSED]
 Owner: Codex (source branch `agent/fix-obs1-tracing-safety`)        Opened: 2026-07-29 · Closed: 2026-07-29
 Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/RUNBOOK.md, saathi/observability.py, ops/setup-tracing.sh, ops/saathi-otelcol.service, ops/saathi-jaeger.service, tests/test_observability.py

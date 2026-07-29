@@ -600,7 +600,7 @@ automation. `DAILY_LIFE_OS.md` owns the lane list and acceptance shape.
 This decision does not weaken the no-transaction boundary. It strengthens it:
 the product value is navigation and comprehension, not autonomous spend.
 
-### D-AB - Tracing is in-region via logfire, with a hard no-PII rule - 2026-07-29
+### D-AB - Tracing uses Logfire with a hard no-PII rule - 2026-07-29
 Tracing uses the logfire Python SDK configured with inspect_arguments=False
 (no automatic function-argument capture) and exported to a local OTel Collector
 at 127.0.0.1:4317. The collector exports to local Jaeger OTLP on
@@ -610,9 +610,12 @@ enforces a fixed allow-list of span attributes: kind, latency, tokens,
 tool_name, hop_count, model_id, error_class, trigger. Message text, transcripts,
 names, medicines and query parameters are scrubbed before they leave the process.
 
-Data never reaches logfire-us.pydantic.dev. The same failure contract as
-metrics.py applies: publishing must not raise, and a collector outage never
-blocks a turn. Queried via SSH tunnel to localhost:16686.
+Operator update 2026-07-29: when `LOGFIRE_TOKEN` is present, the same scrubbed
+spans may also be sent to the operator's Pydantic Logfire project `indofolk-ai`.
+Cloud export is token-gated (`send_to_logfire="if-token-present"`), not
+unconditional. The same failure contract as metrics.py applies: publishing must
+not raise, and a collector or Logfire outage never blocks a turn. Local traces
+remain queryable via SSH tunnel to localhost:16686.
 
 
 ### D-AA · Returning WhatsApp handles do not restart signup · 2026-07-28
