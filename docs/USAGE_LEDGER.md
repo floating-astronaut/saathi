@@ -333,3 +333,150 @@ causality row.
 - cap checks refuse before Sarvam/LLM calls when a user is over budget;
 - erasure keeps accounting rows but removes message/user content links according
   to the privacy policy and DPDP requirements.
+
+---
+
+## 11. Build plan — direct Bedrock-ready ledger (researched 2026-07-29)
+
+### Goal and non-goals
+
+The ledger is the authoritative *admission* control for paid work. It must let
+Saathi route an account directly to Bedrock with a server-held AWS role, without
+ever issuing an AWS key to an elder and without relying on OpenRouter's key
+budget as the safety boundary. It is not an invoice engine, an analytics
+warehouse, or a new proxy service in its first release.
+
+Build it in PostgreSQL beside the existing application state. Do not install
+LiteLLM, Bifrost, OpenMeter, ClickHouse, Kafka, or a second database in this
+lane. Those may become routing/analytics choices later, but adding a control
+plane before Saathi owns correct attribution would enlarge the failure surface.
+
+### Data model v1
+
+Keep `vendor_usage_events` append-only, but add a second table for atomic
+pre-call accounting:
+
+```sql
+create type usage_reservation_state as enum
+  ('held', 'settled', 'released', 'expired');
+
+create table vendor_usage_reservations (
+  id bigserial primary key,
+  idempotency_key text not null unique,
+  user_id bigint references users(id) on delete set null,
+  account_id bigint references accounts(id) on delete set null,
+  vendor text not null, service text not null, operation text not null,
+  currency text not null default 'USD',
+  reserved_minor bigint not null check (reserved_minor >= 0),
+  state usage_reservation_state not null default 'held',
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(), settled_at timestamptz
+);
+create index vendor_usage_reservations_active
+  on vendor_usage_reservations (account_id, created_at)
+  where state = 'held';
+```
+
+Store money as integer minor units per currency, never floats. A row must also
+carry `cost_source` (`vendor_reported`, `catalog_estimate`, `unknown`) and link
+to its reservation. Pricing catalog entries are versioned (`vendor`, `service`,
+`model`, `effective_at`) so old events stay explainable when a price changes.
+No prompt, transcript, phone number, raw URL, API key, or full response enters
+either table.
+
+### The atomic state machine
+
+1. Build an idempotency key from the immutable work identity: inbound WhatsApp
+   message id plus operation for inbound work; scheduled-turn id plus operation
+   for templates. Never use user id plus time.
+2. In one transaction, take a transaction-scoped advisory lock for the account,
+   expire abandoned holds, sum `settled` actuals plus unexpired `held` amounts
+   inside the configured account and global windows, and insert a `held` row
+   only when both caps permit it.
+3. Commit the reservation **before** calling the vendor. If the database is
+   unavailable, refuse paid work; never fail open because an empty ledger is not
+   evidence of zero spend.
+4. Call the vendor. On success, append one usage event with actual units/cost
+   and settle the reservation to actual cost. On a known pre-send failure,
+   append an error event and release it. On an ambiguous timeout, keep the hold
+   until reconciliation/expiry: retry with the same idempotency key rather than
+   risk a double call.
+5. A worker sweeps expired holds and alerts on holds beyond the vendor-specific
+   timeout. It never silently deletes them.
+
+The reservation estimate must be conservative: Bedrock reserves estimated input
+tokens plus requested output maximum; Sarvam STT reserves rounded source audio
+seconds before upload; a template reserves one utility send. Actual usage can
+refund unused reservation amount but may never make a completed call disappear.
+
+### Enforcement hierarchy
+
+Enforce all of these at reservation time:
+
+1. per-account daily/monthly money cap;
+2. per-account per-service unit cap (STT seconds, LLM tokens, templates);
+3. global daily vendor cap and global rolling safety reserve;
+4. Bedrock model/region request and token rate budget, separate from money.
+
+The existing inbound rate limiter remains earlier in the pipeline. It protects
+availability; this ledger protects money. Safety, onboarding, erasure and a
+fixed rate-limit message must retain deterministic non-vendor paths when the
+cap is exhausted. Reminders already scheduled must use their own template
+reservation rather than silently disappearing.
+
+### Exact integration sequence
+
+**Slice A — foundation.** Migration, `saathi.usage` API, config defaults set to
+observe-only, reservation sweeper, and full fake-DB concurrency tests. Deploy
+without enforcement and compare ledger events to existing `llm_calls` and
+WhatsApp outbound records for seven days.
+
+**Slice B — LLM.** Wrap direct Bedrock and OpenRouter paths at the common agent
+boundary. Record Bedrock `Converse`/`ConverseStream` `usage` and latency; AWS
+documents that both responses expose token usage, while streaming supplies it
+in its metadata. Do not remove OpenRouter yet. Shadow-price direct Bedrock from
+the versioned catalog and compare it to vendor/account reports.
+
+**Slice C — speech and templates.** Reserve before Sarvam upload, settle against
+rounded audio seconds, and record template sends only after a WhatsApp message
+id returns. Free-form WhatsApp replies are never charged as templates.
+
+**Slice D — enforce.** Turn on account caps first for internal accounts, then
+small cohort, then all users. Each phase needs a deliberate rollback flag that
+switches to observe-only but never deletes reservations/events. Add global cap
+last, after its alert path is proven.
+
+**Slice E — direct Bedrock migration.** Route a small allow-listed cohort through
+the server's ap-south-1 Bedrock role. Compare actual tokens, latency, throttles,
+and ledger settlement for at least seven days. Only then make Bedrock the
+default; retain OpenRouter as an explicit fallback behind the same reservation
+API, with fallback disabled by default for residency/cost predictability.
+
+### Provider facts that shape the design
+
+Bedrock's `Converse` and `ConverseStream` return token usage, but runtime quotas
+are model/region specific and account-level. AWS deducts input plus requested
+maximum output at request start, then adjusts while generation runs; Saathi must
+therefore reserve before the call, cap requested output, and handle 429 with
+bounded retry/jitter—not treat a vendor throttle as an account budget decision.
+See [Converse usage](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html),
+[runtime quotas](https://docs.aws.amazon.com/bedrock/latest/userguide/quotas-runtime.html),
+and [token burndown](https://docs.aws.amazon.com/bedrock/latest/userguide/quotas-token-burndown.html).
+
+OpenMeter, LiteLLM and Bifrost validate that metering/budgets/gateway governance
+are established patterns, but each is either broader infrastructure or LLM-only.
+Saathi still needs one ledger that sees Sarvam and WhatsApp. Revisit Bifrost only
+after Slice D if direct Bedrock needs multi-provider routing; it can become an
+LLM caller under Saathi's reservation contract, never replace it.
+
+### Release gates
+
+- a forced over-cap test proves no bytes reach Bedrock/Sarvam/WhatsApp;
+- concurrent reservations for one account cannot exceed any cap;
+- a timeout/retry produces at most one vendor call or one retained ambiguous
+  hold, never two settled charges;
+- direct Bedrock and OpenRouter events reconcile to `llm_calls` token totals;
+- a synthetic STT and template event is cleaned up after live verification;
+- a missing price/cost source refuses enforcement for that operation and alerts,
+  rather than treating unknown cost as zero;
+- rollback to observe-only preserves all prior events and holds.
