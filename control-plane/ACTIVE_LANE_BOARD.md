@@ -180,8 +180,8 @@ Notes: measured 2026-07-27 — `sshd` listens on `0.0.0.0:22` and an SSH handsha
   **Under `docs/LANE_LIFECYCLE.md` §5 the lane that opened SSH is still OPEN, not
   closed: it changed infrastructure and never wrote back.**
 
-### CRED-1 — runtime box now holds write credentials for both forges   [OPEN]
-Owner: unassigned        Opened: 2026-07-27 · Reviewed: 2026-07-27 (evening)
+### CRED-1 — runtime box retains forge write credentials by decision   [CLOSED]
+Owner: Codex        Opened: 2026-07-27 · Closed: 2026-07-29
 Reading: docs/PROD_READINESS.md, CONTRIBUTING.md, docs/DECISIONS.md
 Acceptance: a PROD_READINESS row exists for the credential surface; a decision
   is recorded on whether the runtime box keeps forge write access or is reduced
@@ -215,6 +215,11 @@ Notes: `gh` 2.46.0 and `glab` 1.53.0 installed on `i-01b2c27883acb25ca` and
   `saathi runtime ip-172-31-32-37 2026-07-29`, expires 2027-07-29) instead of
   the brittle HTTPS/OAuth helper path. This fixes sync reliability, not the
   underlying forge-write-credentials risk.
+
+  **MET — operator decision D-AC:** retain runtime write access as mirror
+  authority. Saathi app processes do not execute from a forge; the residual risk
+  is future app deploy/source integrity and immediate Cloudflare Pages `site`
+  integrity. Revisit on exposure or contributor-model change.
 
 ### SEC-1 — Meta Business Agent responder guard   [CLOSED]
 Owner: Codex (source branch `agent/meta-subscription-guard`)        Opened: 2026-07-26 · Closed: 2026-07-29

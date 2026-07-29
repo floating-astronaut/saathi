@@ -1643,3 +1643,16 @@ healthy.
 Remains: `subscribed_apps` is supplementary only: it returned an empty list
 after Meta accepted the documented subscribe POST, so it is not used as a
 fail-open exact-set monitor.
+
+## CRED-1 — runtime forge write authority decision — 2026-07-29 (Codex)
+
+Read: control plane, `PROD_READINESS.md` PR-22, `CONTRIBUTING.md`, D-L, and
+runtime GitHub/GitLab authentication state.
+
+Decision: operator chose to retain runtime GitHub/GitLab write credentials and
+dedicated SSH keys as mirror authority (D-AC). Saathi's running app does not
+execute from either forge; the relevant blast radius is a poisoned future deploy
+and GitLab Cloudflare Pages `site` updates, not an immediate app-process change.
+
+Remains: revisit this exception if runtime exposure grows, contributors change,
+or the site gains sensitive flows.
