@@ -630,3 +630,18 @@ The number-recycling protection remains a lifecycle rule, not an excuse to lose
 the user immediately: stale handles should be warned and reverified through a
 written window, with account move/confirm paths, before revocation or deletion
 after the 90-day dead-air period.
+
+### D-AC · Runtime forge write access is retained as mirror authority · 2026-07-29
+
+Operator decision: retain GitHub/GitLab write credentials and the dedicated SSH
+keys on the runtime box. The Saathi application does not execute from either
+forge: a running process changes only through the documented deploy path. The
+forges are source mirrors/backups for the application. GitLab's `site` branch is
+the explicit exception: Cloudflare Pages deploys it on push, so a compromise can
+alter the public site immediately.
+
+This does not make the credential surface harmless. A runtime compromise can
+poison a future application deploy or the public site, so the PR checkpoint,
+two-remote synchronization, deploy verification, and explicit source-branch
+workflow remain required. Revisit the decision if the runtime box becomes more
+exposed, a second contributor appears, or the site branch gains sensitive flows.
