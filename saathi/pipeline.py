@@ -173,23 +173,49 @@ async def transcribe_voice(conn, user_id: int, media_id: str,
     # what the user actually sent.
     await media_store.put_voice(conn, user_id, ogg, wa_message_id=wa_message_id)
     wav = await ogg_to_wav16k(ogg)
+    with wave.open(io.BytesIO(wav), "rb") as audio:
+        seconds = audio.getnframes() / audio.getframerate()
+    rounded_seconds = math.ceil(seconds)
+    estimated_paise = usage.sarvam_stt_cost_paise(rounded_seconds)
+    row = await (await conn.execute("select account_id from users where id = %s",
+                                    (user_id,))).fetchone()
+    account_id = row[0] if row else None
+    reservation = None
+
+    if usage.enforcement_enabled(
+            enabled=settings.saathi_usage_enforcement_enabled,
+            mode=settings.saathi_usage_ledger_mode,
+            account_cap_paise=settings.saathi_usage_account_cap_paise):
+        if account_id is None or not wa_message_id:
+            raise usage.UsageAccountingUnavailable("STT accounting lacks account or idempotency key")
+        reservation = await usage.reserve(
+            conn, idempotency_key=f"stt:{wa_message_id}", user_id=user_id,
+            account_id=account_id, vendor="sarvam", service="stt",
+            operation="speech_to_text", reserved_minor=estimated_paise,
+            currency="INR", cap_minor=settings.saathi_usage_account_cap_paise)
+        if reservation is None:
+            raise usage.UsageCapExceeded("STT account cap exceeded")
+        if reservation.state != "held":
+            raise usage.UsageAccountingUnavailable("STT reservation is not reusable for a new call")
+
     entities = await memory.surface_forms(conn, user_id)
     transcript = await stt_mod.transcribe(wav, entities=entities)
+    if reservation is not None:
+        try:
+            await usage.settle(conn, reservation.id, actual_minor=estimated_paise)
+        except Exception:  # noqa: BLE001 -- paid call already succeeded
+            log.exception("STT usage reservation settlement failed")
     # Saaras bills audio time, not bytes. The WAV supplies exact duration
     # without putting content in the ledger; failures cannot retry a success.
     try:
-        with wave.open(io.BytesIO(wav), "rb") as audio:
-            seconds = audio.getnframes() / audio.getframerate()
-        row = await (await conn.execute("select account_id from users where id = %s",
-                                        (user_id,))).fetchone()
-        rounded_seconds = math.ceil(seconds)
         await usage.record_event(
             conn, vendor="sarvam", service="stt", operation="speech_to_text",
-            status="success", user_id=user_id, account_id=row[0] if row else None,
+            status="success", user_id=user_id, account_id=account_id,
+            reservation_id=reservation.id if reservation else None,
             request_id=f"stt:{wa_message_id}" if wa_message_id else None,
             model=stt_mod.MODEL,
             units={"audio_seconds": seconds, "rounded_seconds": rounded_seconds},
-            cost={"currency": "INR", "estimated_paise": usage.sarvam_stt_cost_paise(rounded_seconds)},
+            cost={"currency": "INR", "estimated_paise": estimated_paise},
             cost_source="catalog_estimate",
             metadata={"language": transcript.language,
                       "pricing_version": usage.SARVAM_STT_PRICE_VERSION}, latency_ms=transcript.ms)
@@ -262,6 +288,11 @@ TURN_BUSY = (
 TURN_RATE_LIMITED = (
     "Aapne abhi kaafi sandesh bheje hain. Kripya ek minute rukkar phir bhej dijiye. 🙏\n\n"
     "You've sent several messages just now. Please wait a minute, then send it again."
+)
+
+USAGE_CAP_LIMITED = (
+    "Aaj ke liye voice-note limit poori ho gayi hai. Kripya chhota text message bhej dijiye. 🙏\n\n"
+    "The voice-note limit for now is reached. Please send a short text message instead."
 )
 
 DOC_TOO_LONG = (
@@ -714,8 +745,15 @@ async def _handle_admitted_message(conn, transport, who, msg: dict, kind: str,
     # typed it or spoke it.
     if kind == "audio":
         media_id = (msg.get("audio") or {}).get("id")
-        ctx.transcript = await transcribe_voice(conn, who.user_id, media_id, channel,
-                                               wa_message_id=wa_mid)
+        try:
+            ctx.transcript = await transcribe_voice(conn, who.user_id, media_id, channel,
+                                                   wa_message_id=wa_mid)
+        except (usage.UsageAccountingUnavailable, usage.UsageCapExceeded):
+            if await rate_limit.claim_notice(
+                    conn, who.user_id, "usage_cap",
+                    cooldown_seconds=settings.saathi_limit_notice_cooldown_s):
+                await transport.send_text(conn, who.user_id, handle, USAGE_CAP_LIMITED)
+            return {"skipped": "usage_cap"}
         ctx.text = ctx.transcript.text
         if ctx.transcript.corrections:
             await _contribute_corrections(conn, who.user_id, ctx.transcript)

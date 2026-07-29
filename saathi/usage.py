@@ -19,6 +19,14 @@ class Reservation:
     idempotency_key: str
 
 
+class UsageCapExceeded(RuntimeError):
+    """A paid call would exceed the configured account cap."""
+
+
+class UsageAccountingUnavailable(RuntimeError):
+    """A paid call cannot be accounted for safely in enforcement mode."""
+
+
 def _json(value: dict | None) -> str:
     return json.dumps(value or {}, separators=(",", ":"), sort_keys=True)
 
@@ -32,6 +40,11 @@ def sarvam_stt_cost_paise(rounded_seconds: int) -> int:
     if rounded_seconds < 0:
         raise ValueError("rounded_seconds must be non-negative")
     return math.ceil(rounded_seconds * 30 * 100 / 3600)
+
+
+def enforcement_enabled(*, enabled: bool, mode: str, account_cap_paise: int) -> bool:
+    """A zero/unapproved cap can never accidentally begin refusing care."""
+    return enabled and mode == "enforce" and account_cap_paise > 0
 
 
 async def reserve(conn, *, idempotency_key: str, user_id: int | None,
@@ -68,8 +81,9 @@ async def reserve(conn, *, idempotency_key: str, user_id: int | None,
                 """select coalesce(sum(case when state = 'held' then reserved_minor
                                                else actual_minor end), 0)
                      from vendor_usage_reservations
-                    where account_id = %s and state in ('held', 'settled')""",
-                (account_id,))).fetchone()
+                    where account_id = %s and currency = %s
+                      and state in ('held', 'settled')""",
+                (account_id, currency))).fetchone()
             if used is None:
                 raise RuntimeError("usage reservation aggregate returned no result")
             if int(used[0]) + reserved_minor > cap_minor:

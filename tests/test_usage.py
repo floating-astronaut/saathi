@@ -97,6 +97,25 @@ def test_sarvam_stt_catalog_uses_integer_paise_and_request_rounding():
     assert usage.sarvam_stt_cost_paise(3600) == 3000
 
 
+def test_enforcement_requires_both_explicit_mode_and_approved_positive_cap():
+    assert not usage.enforcement_enabled(enabled=False, mode="enforce", account_cap_paise=500)
+    assert not usage.enforcement_enabled(enabled=True, mode="observe", account_cap_paise=500)
+    assert not usage.enforcement_enabled(enabled=True, mode="enforce", account_cap_paise=0)
+    assert usage.enforcement_enabled(enabled=True, mode="enforce", account_cap_paise=500)
+
+
+async def test_reservation_cap_is_scoped_to_the_reservation_currency():
+    conn = Conn(used=0)
+    await usage.reserve(conn, idempotency_key="stt:inr", user_id=2,
+                        account_id=8, vendor="sarvam", service="stt",
+                        operation="speech_to_text", reserved_minor=2,
+                        currency="INR", cap_minor=100)
+    aggregate = next((sql, params) for sql, params in conn.sql
+                     if "coalesce(sum" in sql.lower())
+    assert "currency = %s" in aggregate[0].lower()
+    assert aggregate[1] == (8, "INR")
+
+
 @pytest.mark.parametrize("kwargs", [
     {"idempotency_key": "", "account_id": 1, "reserved_minor": 1},
     {"idempotency_key": "x", "account_id": 0, "reserved_minor": 1},
