@@ -436,11 +436,13 @@ tests prove lock ordering, idempotency, cap refusal and state transitions. No
 paid path is wired yet, so the planned seven-day comparison starts only after
 Slice B/C introduce events.
 
-**Slice B — LLM.** Wrap direct Bedrock and OpenRouter paths at the common agent
-boundary. Record Bedrock `Converse`/`ConverseStream` `usage` and latency; AWS
-documents that both responses expose token usage, while streaming supplies it
-in its metadata. Do not remove OpenRouter yet. Shadow-price direct Bedrock from
-the versioned catalog and compare it to vendor/account reports.
+**Slice B — LLM — implemented 2026-07-29.** The common agent boundary records
+one successful content-free event after every Bedrock or OpenRouter request,
+including actual reported input/output tokens, per-request latency, provider
+request id and OpenRouter's reported cost when present. An accounting write
+failure is logged but cannot turn a successful model reply into an outage while
+mode remains observe-only. Streaming, pricing catalog/shadow price and the
+seven-day comparison remain follow-up work; OpenRouter routing is unchanged.
 
 **Slice C — speech and templates.** Reserve before Sarvam upload, settle against
 rounded audio seconds, and record template sends only after a WhatsApp message
