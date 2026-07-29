@@ -12,6 +12,15 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - stronger deterministic scam shield (LIFE-5)
+
+- Added pre-model coverage for courier/customs/police threats, electricity
+  disconnection, fee-based loan/job/pension pressure, guaranteed-return
+  investments, urgent UPI collection, and remote-support app requests.
+- Lower-confidence pressure patterns return a fixed warning and one safe
+  verification step; they do not reach the model. Clear fraud signals retain
+  the stronger scam response and 1930 escalation.
+
 ## 2026-07-29 - stale WhatsApp handles cannot inherit an elder's account (ID-2)
 
 - A WhatsApp handle silent for 60 days now receives a content-free check-in;

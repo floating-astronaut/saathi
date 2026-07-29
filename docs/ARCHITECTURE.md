@@ -30,6 +30,16 @@ to argue its way past an instruction; it cannot argue with a function that has
 already returned. `tests/test_pipeline_order.py` fails if the agent is ever
 reached on an emergency message.
 
+The scam shield has two deterministic outcomes. Clear credential, transfer,
+digital-arrest and lottery indicators return `SCAM`; pressure-shaped courier /
+customs / police, electricity-disconnect, fee-for-loan/job, pension, UPI and
+remote-support-app indicators return `SUSPICIOUS`. Both block the model. The
+latter deliberately says *may be a scam* and gives one safe next step: do not
+pay/click/install/share a screen; independently find the organisation's
+official contact. Both provide 1930 for money already lost. This distinction
+avoids asserting fraud as fact while still refusing to let a risky message
+drive an open-ended model turn.
+
 **Capability is defined by absence.** PRD §12's guarantee — that prompt
 injection cannot cause harm — lives in `agent/tools/specs.py`, in what is *not*
 in the tool list. No tool can move money, read an OTP, or touch a third-party
