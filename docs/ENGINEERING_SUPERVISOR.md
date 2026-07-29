@@ -1787,3 +1787,34 @@ so the `saathi-dev` tunnel connector still runs on the original box. Full
 functional cutover needs the app to reach real Bedrock/S3/Secrets (the `saathi`
 profile now provides that path) and a live webhook round-trip before the original
 box can be retired. No live traffic moved.
+
+## RUNTIME-MIGRATION-2 (Phase 2) — systemd + cloudflared + live cutover — 2026-07-29 (Clawcore)
+
+Read: docs/DOC_SYSTEM.md, docs/RUNBOOK.md, docs/PROD_READINESS.md, docs/ARCHITECTURE.md, docs/ENGINEERING_SUPERVISOR.md (RUNTIME-MIGRATION-1 entry), ops/deploy_onbox.sh, original box systemd unit definitions.
+
+Changed:
+- ops/saathi-web.service (new) — systemd unit, uvicorn on 127.0.0.1:3130
+- ops/saathi-worker.service (new) — systemd unit, python -m saathi.worker
+- ops/cloudflared-saathi.service (new) — cloudflared tunnel unit
+- /etc/systemd/system/saathi-web.service.d/20-aws-profile.conf — AWS_PROFILE=saathi
+- /etc/systemd/system/saathi-worker.service.d/20-aws-profile.conf — AWS_PROFILE=saathi
+- cloudflared v2026.7.3 installed at /usr/local/bin/cloudflared
+- Tunnel token copied from original box; cloudflared connected to 4 Mumbai edges
+- Original box: cloudflared-saathi stopped (kept for rollback)
+
+Verified:
+- All four services active: saathi-web, saathi-worker, cloudflared-saathi, postgresql@16-main
+- GET https://saathi.n8nworld.store/healthz -> {"ok":true,"pg":"16.14...","model":"zai.glm-5"} 200
+- GET https://saathi.n8nworld.store/webhook/whatsapp -> 403 (unsigned, correct)
+- uv run --extra dev pytest -q -> 577 passed
+- Bedrock converse() returns "pong" via AWS_PROFILE=saathi (account 559896294326)
+- Worker: "worker up — scheduled kinds: [checkin, media_purge, nudge, provision_key, reminder, reverify]"
+
+Known issue (non-blocking):
+- metrics.py CloudWatch PutMetricData fails with AccessDenied (IndofolkDevBoxRole in 635860424621 lacks cloudwatch:PutMetricData). This is by design — metrics.py never raises into a turn (same contract as observability.py). The heartbeat alarm was already broken on the original box (it required the old instance role). Recorded as PR-28 below.
+
+Remains:
+- Original box web/worker/postgres still running (cloudflared only was stopped). Full retirement is a separate lane.
+- CloudWatch metrics gap (PR-28)
+- No WhatsApp template sends verified on this box — templates are Meta-side, not box-dependent, so no change is expected.
+- OPS-1 tracing stack (saathi-otelcol/saathi-jaeger) not re-installed here — observability.py exists but SAATHI_TRACING_ENABLED is unset.

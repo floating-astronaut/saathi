@@ -1,0 +1,17 @@
+[Unit]
+Description=Saathi web (FastAPI, WhatsApp webhook)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/saathi
+ExecStart=/home/ubuntu/saathi/.venv/bin/uvicorn saathi.web.app:app --host 127.0.0.1 --port 3130
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
