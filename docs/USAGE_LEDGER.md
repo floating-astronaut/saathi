@@ -1,8 +1,11 @@
 # Usage ledger
 
-Status: **foundation built, observe-only (LEDGER-1, 2026-07-29)**. The database
-tables and atomic accounting API exist, but no paid call site writes or enforces
-them yet; they remain deliberately inert until the integration slices below.
+Status: **vendor hooks live, STT enforcement gate built but disabled by default
+(LEDGER-1/2, 2026-07-29)**. LLM, Sarvam STT and WhatsApp template successes now
+write content-free usage events. Sarvam STT also has a pre-call reservation path
+that can refuse before the vendor call, but it requires the explicit enforcement
+flag, `SAATHI_USAGE_LEDGER_MODE=enforce`, and a positive operator-approved INR
+paise cap.
 
 The basic PR-15 availability guard is implemented separately in
 `saathi.rate_limit`: it bounds inbound-turn frequency before a paid call but
@@ -255,12 +258,12 @@ available. Do not delay the ledger row waiting for billing finality.
 
 | Paid surface | Current file | Ledger hook |
 |---|---|---|
-| Direct Bedrock agent loop | `saathi/agent/loop.py::record` and `llm_calls` | Insert a `vendor_usage_events` row next to the existing `llm_calls` row. Later make `llm_calls` a view or keep it as model-specific detail. |
+| Direct Bedrock agent loop | `saathi/agent/loop.py::record` and `llm_calls` | Implemented observe-only: insert a `vendor_usage_events` row next to the existing `llm_calls` row. Later make `llm_calls` a view or keep it as model-specific detail. |
 | Bedrock streaming | `saathi/agent/stream.py` | Same usage fields arrive in stream metadata; record once at stream end. |
-| Sarvam STT | `saathi/speech/stt.py::transcribe` | Measure audio duration/rounded seconds before call; record success/error after call. |
+| Sarvam STT | `saathi/pipeline.py::transcribe_voice` | Implemented: measure WAV duration and rounded billed seconds before call, optionally reserve an INR hold before Sarvam, settle and record one success event after transcription. |
 | Sarvam TTS | future TTS module | Record characters, model, speaker/voice id in metadata, and whether cache hit avoided a paid call. |
 | Sarvam OCR | future document path | Record pages/job id; obey media gates before the paid call. |
-| WhatsApp templates | `saathi/wa/client.py::_send` / `send_template` | Since `_send` is the single wire path and already records outbound messages, insert template usage there after `wa_message_id` is known. |
+| WhatsApp templates | `saathi/wa/client.py::send_template` | Implemented observe-only: record template usage after `wa_message_id` is known; free-form in-window replies are not usage events. |
 | Paid search | future Vertex/search wrapper | Record only paid provider calls; Open-Meteo/Wikipedia stay out of cost ledger. |
 
 The implementation should expose one small helper, for example
@@ -448,13 +451,23 @@ seven-day comparison remain follow-up work; OpenRouter routing is unchanged.
 successful Sarvam STT call records exact WAV seconds and rounded billable seconds
 after transcription; a successful WhatsApp template records only after Meta
 returns its message id. A post-success ledger failure cannot cause either call
-to retry. Pre-call reservations/settlement remain part of Slice D; free-form
-WhatsApp replies are never template events.
+to retry. Free-form WhatsApp replies are never template events.
 
-**Slice D — enforce.** Turn on account caps first for internal accounts, then
-small cohort, then all users. Each phase needs a deliberate rollback flag that
-switches to observe-only but never deletes reservations/events. Add global cap
-last, after its alert path is proven.
+**Slice D1 — staged STT enforcement — implemented disabled-by-default
+2026-07-29.** Sarvam STT now computes the catalog INR paise estimate from the WAV
+before transcription. If and only if `SAATHI_USAGE_ENFORCEMENT_ENABLED=true`,
+`SAATHI_USAGE_LEDGER_MODE=enforce`, and `SAATHI_USAGE_ACCOUNT_CAP_PAISE` is
+positive, it creates an account-locked INR reservation before Sarvam receives
+bytes. Cap exhaustion or missing accounting returns a fixed voice-limit refusal
+and never reaches STT. Successful enforced calls settle the hold and link the
+usage event to the reservation. The reservation aggregate is currency-scoped, so
+USD LLM events cannot consume an INR STT cap.
+
+**Slice D2 — remaining enforcement.** Add LLM/template pre-call reservations,
+global vendor caps, and the alert path. Turn on account caps first for internal
+accounts, then a small cohort, then all users. Each phase needs a deliberate
+rollback flag that switches to observe-only but never deletes reservations/events.
+Add global cap last, after its alert path is proven.
 
 **Slice E — direct Bedrock migration.** Route a small allow-listed cohort through
 the server's ap-south-1 Bedrock role. Compare actual tokens, latency, throttles,

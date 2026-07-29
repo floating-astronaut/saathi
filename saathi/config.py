@@ -126,6 +126,12 @@ class Settings(BaseSettings):
     # Vendor ledger starts observe-only. Enforcement is enabled only after every
     # paid call site settles/release its reservation and reconciliation is proven.
     saathi_usage_ledger_mode: str = "observe"
+    #: Enforcement is a separate, explicit rollout switch. It stays false even
+    #: if mode is mistyped, so an incomplete call-site migration cannot block care.
+    saathi_usage_enforcement_enabled: bool = False
+    #: Account monetary cap for Saathi's own cross-vendor ledger, in INR paise.
+    #: Zero means no local cap has been approved yet; do not infer one.
+    saathi_usage_account_cap_paise: int = 0
 
     # --- inbound media limits (PR-26) ---------------------------------------
     # Admission is open, so "a valid sender" is a low bar and none of these may
