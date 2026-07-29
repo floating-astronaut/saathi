@@ -1,0 +1,17 @@
+[Unit]
+Description=Saathi worker (reminder scheduler, Postgres SKIP LOCKED)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/saathi
+ExecStart=/home/ubuntu/saathi/.venv/bin/python -m saathi.worker
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
