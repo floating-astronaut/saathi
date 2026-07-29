@@ -1755,3 +1755,35 @@ Remains: PR-15 still has broader paid-surface enforcement work unless the
 operator explicitly narrows the production requirement to STT-only: LLM/template
 pre-call reservations, global vendor caps and their alert path are not enabled
 by this lane.
+
+## RUNTIME-MIGRATION-1 (Phase 1) — app boots on the successor box — 2026-07-29 (ZCode)
+
+Read: doc system, RUNBOOK, PROD_READINESS RUNTIME-MIGRATION-1, app/config/db code
+via exploration (minimum-to-boot analysis), ops/deploy_onbox.sh migration runner.
+
+Changed: nothing in application code. On-box provisioning only, on the successor
+box `ip-172-31-41-224` (ap-south-1): rebuilt the Python venv cleanly on 3.13.14
+via `uv` (the prior venv targeted 3.14 but symlinked to system 3.12 and could not
+import fastapi); installed PostgreSQL 16.14 server; created the `saathi` role +
+database matching the existing `SAATHI_DB_DSN`; applied `db/extensions.sql`
+(pg_trgm, superuser) + `db/schema.sql` (base v1 tables) + all 14 migrations
+(002–015) via the idempotent `schema_migrations` checksum ledger — 26 tables, 14
+rows recorded with checksums. Separately registered a second SSO profile
+(`saathi`, AWSAdministratorAccess in 559896294326) via device-code flow so this
+box can reach Saathi-scoped AWS resources; verified read-only reach to the
+`saathi/dev/runtime` secret (described, not read). MeshPilot resources untouched.
+
+Verified: `GET http://127.0.0.1:3130/healthz` returned
+`{"ok":true,"pg":"16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)","model":"zai.glm-5"}`
+HTTP 200, 2.3 ms — the success signal defined in `ops/deploy_verify.sh`. uvicorn
+startup log clean; no startup event opens pools, so the only I/O on the path is
+the DB healthcheck. The live webhook on `saathi.n8nworld.store` was never
+touched — it continued to serve from the original box throughout.
+
+Remains: Phase 2 (not done). The `saathi-web`/`saathi-worker` systemd units are
+still not defined in the repo or installed on this box; the app was run manually
+for proof and then stopped (3130 is free). `cloudflared` is not installed here,
+so the `saathi-dev` tunnel connector still runs on the original box. Full
+functional cutover needs the app to reach real Bedrock/S3/Secrets (the `saathi`
+profile now provides that path) and a live webhook round-trip before the original
+box can be retired. No live traffic moved.
