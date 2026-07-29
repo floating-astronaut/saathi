@@ -109,6 +109,20 @@ class Settings(BaseSettings):
     #: handle before going silent. Each reply costs money.
     saathi_admission_max_replies: int = 2
 
+    # --- inbound turn admission (PR-15) ------------------------------------
+    #: Bound all work after identity/dedupe, including audio STT and the model.
+    #: Eight lets normal network-bound turns overlap on the 2-vCPU box without
+    #: allowing an arbitrary webhook flood to own its event loop and DB pool.
+    saathi_turn_concurrency: int = 8
+    #: One sender may complete six inbound turns in a rolling minute. It permits
+    #: a normal short exchange/onboarding but stops a single handle holding the
+    #: box's STT/model budget continuously. State is PostgreSQL-backed.
+    saathi_user_turn_limit: int = 6
+    saathi_user_turn_window_s: int = 60
+    #: A refusal is itself a paid WhatsApp send. Say it once, then stay quiet
+    #: until this cooldown expires rather than paying to argue with a flood.
+    saathi_limit_notice_cooldown_s: int = 600
+
     # --- inbound media limits (PR-26) ---------------------------------------
     # Admission is open, so "a valid sender" is a low bar and none of these may
     # assume good faith. Every number below is a bound on what *one* inbound

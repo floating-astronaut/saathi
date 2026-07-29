@@ -23,7 +23,7 @@ import logging
 
 from . import (accounts, commands, conversation, documents, identity, memory,
                media_store, observability, onboarding, privacy, provenance,
-               training, vision)
+               rate_limit, training, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -205,6 +205,10 @@ async def _contribute_corrections(conn, user_id: int, transcript) -> None:
 # the sender's decision, not ours.
 _MEDIA_GATE = backpressure.Gate("media", settings.saathi_media_concurrency)
 _DOC_GATE = backpressure.Gate("document", settings.saathi_doc_concurrency)
+# All inbound work after identity/dedupe passes this gate, including text,
+# audio/STT, image/document work and the agent.  It is a process-local overload
+# guard; RATE-2 below supplies the durable per-user frequency limit.
+_TURN_GATE = backpressure.Gate("turn", settings.saathi_turn_concurrency)
 
 
 # Refusals an elder can act on. Bilingual and specific, in the register the rest
@@ -223,6 +227,17 @@ MEDIA_BUSY = (
     "dijiye, main zaroor padhungi. 🙏\n\n"
     "I'm reading something else just now. Please send this again in a minute and "
     "I'll read it."
+)
+
+TURN_BUSY = (
+    "Main abhi bahut saare sandesh sambhaal rahi hoon. Kripya ek minute baad phir "
+    "bhej dijiye. 🙏\n\n"
+    "I'm handling several messages right now. Please try again in a minute."
+)
+
+TURN_RATE_LIMITED = (
+    "Aapne abhi kaafi sandesh bheje hain. Kripya ek minute rukkar phir bhej dijiye. 🙏\n\n"
+    "You've sent several messages just now. Please wait a minute, then send it again."
 )
 
 DOC_TOO_LONG = (
@@ -549,8 +564,6 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     edit here.
     """
     from . import capabilities  # noqa: F401 - registers the chain on import
-    from .core.context import MessageContext
-    from .core.handlers import dispatch
 
     transport = registry.get(channel)
     handle = msg.get("from")
@@ -571,6 +584,52 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     if await already_seen(conn, wa_mid):
         log.info("duplicate webhook for %s, ignoring", wa_mid)
         return {"skipped": "duplicate"}
+
+    # This is deliberately before audio transcription and before the capability
+    # chain. A rate check after either point would still spend STT/model money.
+    try:
+        turn_slot = _TURN_GATE.hold()
+        turn_slot.__enter__()
+    except backpressure.Busy:
+        if transport.capabilities.has_session_window:
+            await window.touch(conn, who.user_id)
+        if await rate_limit.claim_notice(
+                conn, who.user_id, "busy",
+                cooldown_seconds=settings.saathi_limit_notice_cooldown_s):
+            await transport.send_text(conn, who.user_id, handle, TURN_BUSY)
+        return {"skipped": "busy"}
+
+    try:
+        allowed = await rate_limit.reserve(
+            conn, who.user_id,
+            limit=settings.saathi_user_turn_limit,
+            window_seconds=settings.saathi_user_turn_window_s,
+        )
+        # A same-user request is currently making its reservation. Do not wait
+        # behind it and do not contend on the notice row; quiet refusal is the
+        # only response that is both bounded and free of a new queue.
+        if allowed is None:
+            return {"skipped": "rate_limited"}
+        if not allowed:
+            if transport.capabilities.has_session_window:
+                await window.touch(conn, who.user_id)
+            if await rate_limit.claim_notice(
+                    conn, who.user_id, "rate_limit",
+                    cooldown_seconds=settings.saathi_limit_notice_cooldown_s):
+                await transport.send_text(conn, who.user_id, handle, TURN_RATE_LIMITED)
+            return {"skipped": "rate_limited"}
+
+        return await _handle_admitted_message(conn, transport, who, msg, kind, handle,
+                                               wa_mid, channel)
+    finally:
+        turn_slot.__exit__(None, None, None)
+
+
+async def _handle_admitted_message(conn, transport, who, msg: dict, kind: str,
+                                    handle: str, wa_mid: str | None, channel: str) -> dict:
+    """Run a turn that has already passed dedupe, global and user admission."""
+    from .core.context import MessageContext
+    from .core.handlers import dispatch
 
     if transport.capabilities.has_session_window:
         await window.touch(conn, who.user_id)
