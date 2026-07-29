@@ -1656,3 +1656,28 @@ and GitLab Cloudflare Pages `site` updates, not an immediate app-process change.
 
 Remains: revisit this exception if runtime exposure grows, contributors change,
 or the site gains sensitive flows.
+
+## ID-2 — stale WhatsApp handle 90-day lifecycle — 2026-07-29 (Codex)
+
+Read: `DOC_SYSTEM.md`, sync/control-plane docs, PRD/build plan, architecture,
+D-AA, glossary, landmines, identity/pipeline/scheduled-turn implementation and
+its tests.
+
+Changed: migration 014 adds the `reverify` handle state and backfills 60-day
+lifecycle turns. The worker sends a content-free day-60 `daily_checkin` then
+revokes only after 90 days of continuous dead air. A returning stale handle is
+stopped before logs, history, transcription, tools, memory or model work; it
+can continue explicitly or issue a 15-minute move code. `MOVE <code>` accepts
+only a blank new handle, makes it primary and revokes the old one.
+
+Verified: focused lifecycle tests passed (29); full `uv run pytest -q` passed
+with 549 tests before merge and during deploy. PR #22 merged as `60f20f0`.
+`ops/deploy.sh --local` applied migration 014 and reported web/worker/tunnel/
+PostgreSQL active, localhost and public health 200, unsigned webhook 403, and
+the `reverify` worker kind registered. Read-only DB evidence: migration 014 is
+recorded, 8 pending lifecycle checks were backfilled, and 0 live handles are
+currently in `reverify`.
+
+Remains: the day-60 outreach deliberately uses the existing generic template;
+if product wants explanatory proactive copy, it must first obtain a dedicated
+Meta-approved utility template without exposing prior ownership.
