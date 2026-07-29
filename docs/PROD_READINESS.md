@@ -923,10 +923,16 @@ A valid signed empty WhatsApp envelope still returned 200; an unsigned request
 returned 403, proving the application signature gate remained behind the edge
 rule.
 
-LEDGER-1 has now supplied the observe-only accounting primitives (migration
-015, atomic idempotent holds and append-only events), but no paid wrapper is
-wired or capped yet. PR-15 remains open until vendor hooks/enforcement and the
-cross-process global decision are complete or explicitly retired.
+LEDGER-1/2 have now supplied the local ledger and initial vendor hooks. Successful
+LLM, Sarvam STT and WhatsApp template calls write content-free usage events.
+Sarvam STT also has the first pre-call monetary gate: when the explicit rollout
+flag, `SAATHI_USAGE_LEDGER_MODE=enforce`, and a positive
+`SAATHI_USAGE_ACCOUNT_CAP_PAISE` are all set, the pipeline reserves an INR hold
+before Sarvam receives audio bytes and refuses with fixed copy if the account cap
+is exhausted or accounting is unavailable. The gate is disabled by default, and
+LLM/template/global vendor caps are still observe-only follow-up work. PR-15
+remains open until those remaining paid surfaces are reserved before call or the
+operator explicitly narrows the production requirement to STT-only enforcement.
 
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during

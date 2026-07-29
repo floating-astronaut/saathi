@@ -12,6 +12,19 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - staged Sarvam STT ledger enforcement (LEDGER-2)
+
+- Added explicit rollout controls for local usage enforcement:
+  `SAATHI_USAGE_ENFORCEMENT_ENABLED`, `SAATHI_USAGE_LEDGER_MODE=enforce`, and a
+  positive `SAATHI_USAGE_ACCOUNT_CAP_PAISE` are all required before a call can
+  be refused.
+- Sarvam STT now computes the catalog INR paise estimate before transcription,
+  reserves against the account cap before sending audio to Sarvam when
+  enforcement is enabled, settles the hold after success, and links the usage
+  event to the reservation.
+- Reservation cap aggregates are scoped by currency, so USD model accounting
+  cannot consume INR speech budget.
+
 ## 2026-07-29 - observe-only STT and template usage accounting (LEDGER-2)
 
 - Successful Sarvam transcriptions record exact WAV duration and rounded billed
