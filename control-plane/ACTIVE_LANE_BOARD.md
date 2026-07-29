@@ -28,6 +28,13 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LEDGER-2 — observe-only LLM usage accounting   [IN PROGRESS]
+Owner: Codex (source branch `agent/llm-usage-accounting`)        Opened: 2026-07-29
+Reading: docs/USAGE_LEDGER.md §11, docs/AI_ROUTING.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md PR-15, saathi/agent/loop.py, saathi/openrouter.py, saathi/capabilities.py, saathi/usage.py
+Acceptance: each direct Bedrock/OpenRouter LLM request emits exactly one content-free usage event with actual reported tokens and latency; an event failure does not turn a successful reply into an outage in observe-only mode; no cap/routing/residency behavior changes; focused/full tests pass.
+Write-back: docs/USAGE_LEDGER.md, docs/AI_ROUTING.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: Slice B. Record at the common model boundary; reserve/enforcement remains disabled until Slice D.
+
 ### LEDGER-1 — vendor usage ledger foundation   [CLOSED]
 Owner: Codex (source branch `agent/vendor-ledger-foundation`)        Opened: 2026-07-29 · Closed: 2026-07-29
 Reading: docs/USAGE_LEDGER.md §11, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15), db/migrations/, saathi/config.py, saathi/worker/__main__.py

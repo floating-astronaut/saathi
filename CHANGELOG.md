@@ -12,6 +12,13 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - observe-only LLM usage accounting (LEDGER-2)
+
+- Successful Bedrock and OpenRouter requests now append Saathi-owned usage
+  events with actual input/output tokens, per-request latency and provider IDs.
+- Routing, residency controls and user-visible replies are unchanged; a ledger
+  write error is logged without failing a successful reply while observe-only.
+
 ## 2026-07-29 - vendor usage ledger foundation (LEDGER-1)
 
 - Added migration 015 and the observe-only `saathi.usage` accounting API:

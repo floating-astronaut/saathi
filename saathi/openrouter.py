@@ -379,6 +379,8 @@ def _bedrockish_response(payload: dict) -> dict:
             "inputTokens": usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0,
             "outputTokens": usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0,
         },
+        "request_id": payload.get("id"),
+        "reported_cost": usage.get("cost"),
         "output": {"message": {"role": "assistant", "content": content}},
     }
 
