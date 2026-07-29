@@ -163,6 +163,11 @@ an app we did not put there. That is a small addition to PR-3's alerting and it
 would also catch the reverse failure — our own app silently unsubscribed, which
 looks exactly like a dead product.
 
+**Guard implemented 2026-07-29; live timer verification pending.** The monitor
+uses the app-level WhatsApp `messages` subscription plus the Business Agent
+settings endpoint. The WABA list endpoint is supplementary only because its
+empty response was not reliable after a successful idempotent subscribe POST.
+
 ### PR-37 · `create_reminder` still cannot take a relative offset
 The model now has a clock, so "5 minute baad" is at least *computable*: it can
 add five minutes and pass the result as `time_24h` with `recurrence: once` and

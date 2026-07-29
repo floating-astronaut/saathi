@@ -216,18 +216,18 @@ Notes: `gh` 2.46.0 and `glab` 1.53.0 installed on `i-01b2c27883acb25ca` and
   the brittle HTTPS/OAuth helper path. This fixes sync reliability, not the
   underlying forge-write-credentials risk.
 
-### SEC-1 — Meta Business Agent is subscribed to our WABA   [OPEN]
-Owner: unassigned        Opened: 2026-07-26 (migrated from supervisor Queued)
+### SEC-1 — Meta Business Agent responder guard   [IN PROGRESS]
+Owner: Codex (source branch `agent/meta-subscription-guard`)        Opened: 2026-07-26 · Claimed: 2026-07-29
 Reading: docs/LANDMINES.md, docs/PROD_READINESS.md (PR-6), docs/DECISIONS.md (D-E)
 Acceptance: app `1143680903703001` is unsubscribed from WABA `1023945910495878`,
   **or** a dated decision records that it stays with `rollout.enabled = false`
   plus a check that alerts if the flag flips.
 Write-back: docs/DECISIONS.md, docs/PROD_READINESS.md, docs/LANDMINES.md
-Notes: operator decision — not taken unilaterally, since the subscription was not
-  created by the lane that found it. Enabling it makes Meta's model the primary
-  responder, so inbound messages never reach the deterministic priority-0 safety
-  classifier (R7). **Appeared in two separate supervisor `Queued` blocks and was
-  never closed — this board exists because of failures like this one.**
+Notes: D-E rejects Meta Business Agent. Live 2026-07-29: configured Saathi app
+  webhook subscription is present; Business Agent settings endpoint is empty.
+  The WABA `subscribed_apps` read returned empty even after the documented
+  idempotent subscribe POST, so it is not trusted as the sole monitor. Guard
+  requires the own app subscription and rejects any non-empty Agent settings.
 
 ### SEC-2 — security review   [CLOSED]
 Owner: Codex        Opened: 2026-07-27 · Closed: 2026-07-27
