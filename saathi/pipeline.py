@@ -182,13 +182,17 @@ async def transcribe_voice(conn, user_id: int, media_id: str,
             seconds = audio.getnframes() / audio.getframerate()
         row = await (await conn.execute("select account_id from users where id = %s",
                                         (user_id,))).fetchone()
+        rounded_seconds = math.ceil(seconds)
         await usage.record_event(
             conn, vendor="sarvam", service="stt", operation="speech_to_text",
             status="success", user_id=user_id, account_id=row[0] if row else None,
             request_id=f"stt:{wa_message_id}" if wa_message_id else None,
             model=stt_mod.MODEL,
-            units={"audio_seconds": seconds, "rounded_seconds": math.ceil(seconds)},
-            metadata={"language": transcript.language}, latency_ms=transcript.ms)
+            units={"audio_seconds": seconds, "rounded_seconds": rounded_seconds},
+            cost={"currency": "INR", "estimated_paise": usage.sarvam_stt_cost_paise(rounded_seconds)},
+            cost_source="catalog_estimate",
+            metadata={"language": transcript.language,
+                      "pricing_version": usage.SARVAM_STT_PRICE_VERSION}, latency_ms=transcript.ms)
     except Exception:  # noqa: BLE001 -- observe-only after a paid success
         log.exception("observe-only STT usage event failed")
     return transcript

@@ -90,6 +90,13 @@ async def test_unknown_cost_source_is_refused():
                                  operation="converse", status="success", cost_source="made_up")
 
 
+def test_sarvam_stt_catalog_uses_integer_paise_and_request_rounding():
+    assert usage.sarvam_stt_cost_paise(0) == 0
+    assert usage.sarvam_stt_cost_paise(1) == 1
+    assert usage.sarvam_stt_cost_paise(60) == 50
+    assert usage.sarvam_stt_cost_paise(3600) == 3000
+
+
 @pytest.mark.parametrize("kwargs", [
     {"idempotency_key": "", "account_id": 1, "reserved_minor": 1},
     {"idempotency_key": "x", "account_id": 0, "reserved_minor": 1},
