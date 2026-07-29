@@ -333,9 +333,11 @@ believing alerting works.**
 ### Units
 
 - saathi-otelcol - OpenTelemetry Collector, listens on 127.0.0.1:4317 (gRPC).
-  Receives spans from the web and worker processes.
+  Receives spans from the web and worker processes and exports them to Jaeger
+  on 127.0.0.1:4318.
 - saathi-jaeger - Jaeger all-in-one. Badger storage at /opt/saathi-jaeger/data,
-  7-day TTL, 4 GiB disk cap. Query UI on 127.0.0.1:16686.
+  7-day TTL, 4 GiB disk cap. OTLP gRPC on 127.0.0.1:4318; query UI on
+  127.0.0.1:16686.
 
 ### Querying
 
@@ -362,4 +364,3 @@ Tracing is disabled by default. To enable:
 - No spans in Jaeger: journalctl -u saathi-otelcol -f and journalctl -u saathi-jaeger -f
 - Disk usage: du -sh /opt/saathi-jaeger/data (capped at 4 GiB, 7-day TTL)
 - Collector unreachable: app logs "tracing initialisation failed" and continues
-
