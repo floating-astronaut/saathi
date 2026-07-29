@@ -7,9 +7,20 @@
 > shortlist, a link they tap. No payment credentials, no OTPs, no account access,
 > no agent-initiated spend.
 
-Private repo. Live at **`saathi.n8nworld.store`** (webhook) and
-**`n8nworld.store`** (public site). Runtime is a single box in **AWS ap-south-1
-(Mumbai)** — see [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+Private repo. Two surfaces, deliberately separate:
+
+- **`saathi.n8nworld.store`** — the **WhatsApp webhook host**. Meta posts here;
+  it terminates on the FastAPI app (`saathi-web`), reached through a Cloudflare
+  tunnel. This is the application surface.
+- **`n8nworld.store`** — the **public marketing site** (Next.js static export)
+  on Cloudflare Pages, built from the `site` branch. It has nothing to do with
+  the application; do not point the webhook host at it (a static Pages deploy
+  cannot receive a POST or run Python — see `docs/LANDMINES.md`).
+
+The application runtime is a single box in **AWS ap-south-1 (Mumbai)** — see
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md). The runtime is mid-migration from the
+original box (`i-01b2c27883acb25ca`) to a successor box; the webhook hostname
+itself does not change, only the box the tunnel connector runs on.
 
 **In production since 2026-07-27.** Users reach it on **+91 8071 581 944**,
 where it answers as **Indofolk AI** — the Meta-approved display name on WABA
@@ -141,6 +152,15 @@ Everything runs on one box in ap-south-1. **No inbound port is open to the
 application** — user traffic arrives only through the Cloudflare tunnel, and
 `:3130` binds `127.0.0.1`. The box itself has exactly one inbound rule: TCP 22
 from the operator's Mac (`207.219.25.137/32`), for operator SSH.
+
+> **Runtime migration in progress.** The application is moving from the original
+> box (`i-01b2c27883acb25ca`, EIP `15.252.75.191`) to a successor box
+> (`ip-172-31-41-224`, ap-south-1). The webhook hostname and the `saathi-dev`
+> tunnel are unchanged — only the tunnel connector (and therefore the box
+> serving `saathi.n8nworld.store`) moves. Until the new box runs
+> `saathi-web`/`saathi-worker`/Postgres and the connector is repointed, the
+> webhook is still served from the original box. See `docs/PROD_READINESS.md`
+> for the open items; the original box must stay up until cutover is verified.
 
 ### Adding a capability
 

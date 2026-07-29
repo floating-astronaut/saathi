@@ -18,6 +18,33 @@ Severity: **P0** blocks first external user · **P1** blocks paid launch ·
 
 ---
 
+## In-progress migration
+
+### RUNTIME-MIGRATION-1 · Runtime box migration (2026-07-29)
+The application runtime is moving from `i-01b2c27883acb25ca` (EIP
+`15.252.75.191`, ap-south-1) to a successor box `ip-172-31-41-224` (ap-south-1,
+egress `15.206.170.88`). **Not yet live on the new box.** Open items before this
+row can move to Resolved:
+
+- `saathi-web` (uvicorn `:3130`) and `saathi-worker` not running on the new box.
+  Their systemd units (`saathi-web.service`, `saathi-worker.service`) are not
+  defined in the repo — `ops/deploy_onbox.sh` restarts them but nothing
+  installs them. They were hand-installed on the original box.
+- Postgres not provisioned on the new box; schema/migrations not applied there.
+- The `saathi-dev` tunnel connector (`d4e9e4ad`) still runs on the original box.
+  DNS for `saathi.n8nworld.store` is unchanged (points at the tunnel); only the
+  connector needs to move.
+- Secrets (`saathi/dev/runtime`) live in account `559896294326`, which the new
+  box's AWS CLI/SSO does **not** reach (mcc org only). Provisioning path TBD.
+- `cloudflared` binary not installed on the new box.
+
+**Original box must stay up** until cutover is verified end-to-end (`/healthz`
+through the new connector, a live webhook round-trip). Severity **P1**: current
+dev serving is unaffected, but the migration cannot be declared done on intent —
+prove it with live evidence before retiring the original box.
+
+---
+
 ## P0 — must be resolved before a stranger's parent uses this
 
 ### PR-1 · Dev AWS account
