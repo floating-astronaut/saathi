@@ -28,19 +28,19 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
-### RATE-1 — bound inbound turn concurrency   [IN PROGRESS]
-Owner: Codex (source branch `agent/rate-limit-admission`)        Opened: 2026-07-29
+### RATE-1 — bound inbound turn concurrency   [CLOSED]
+Owner: Codex (source branch `agent/rate-limit-admission`)        Opened: 2026-07-29 · Closed: 2026-07-29
 Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15, PR-26), docs/USAGE_LEDGER.md, saathi/pipeline.py, saathi/core/backpressure.py, saathi/web/app.py
 Acceptance: no more than the configured number of inbound turns may execute in one web process at once; an over-cap valid sender receives at most one quiet retry-later notice during the configured cooldown; no turn is queued, and safety/onboarding/media/model work remains inside the bound.
 Write-back: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
-Notes: Coupled with RATE-2 only at the pipeline admission boundary. Global overload must not consume a sender's per-user quota.
+Notes: MET. Default cap is 8 process-local turns; overload refuses rather than queues, sends one quiet bilingual notice per 10-minute reason cooldown, and does not consume a user's quota. Deployed at `ac0a493`; migration 013 and health/service checks verified live.
 
-### RATE-2 — persistent per-user inbound sliding window   [IN PROGRESS]
-Owner: Codex (source branch `agent/rate-limit-admission`)        Opened: 2026-07-29
+### RATE-2 — persistent per-user inbound sliding window   [CLOSED]
+Owner: Codex (source branch `agent/rate-limit-admission`)        Opened: 2026-07-29 · Closed: 2026-07-29
 Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15), docs/USAGE_LEDGER.md, db/schema.sql, db/migrations/, saathi/pipeline.py
 Acceptance: a Postgres-backed atomic reservation before transcription or dispatch limits one user across text, voice, images and documents; concurrent requests cannot over-admit; one rate-limit notice is sent per cooldown and later requests stay silent; duplicates do not consume quota; focused and full suites pass.
 Write-back: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, docs/USAGE_LEDGER.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
-Notes: Initial abuse/availability guard is deliberately separate from the future cross-vendor monetary ledger. Defaults will be config-backed and documented.
+Notes: MET. Postgres admission reservations apply before STT/dispatch across all modalities: 6 per user per rolling 60 seconds, serialized with a non-blocking advisory lock. Duplicates consume no quota; lock contention/full windows go quiet after one notice. Cross-vendor monetary caps remain the separate `USAGE_LEDGER.md` lane.
 
 ### OBS-3 — bind tracing to Pydantic Logfire project   [CLOSED]
 Owner: Codex (source branch `agent/logfire-cloud-bind`)        Opened: 2026-07-29 · Closed: 2026-07-29
