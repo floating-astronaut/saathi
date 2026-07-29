@@ -19,6 +19,7 @@ from .agent.tools.handlers import Handlers
 from .core.context import MessageContext
 from .core.handlers import register, simple
 from .safety.classifier import classify
+from . import observability
 
 log = logging.getLogger("saathi.capabilities")
 
@@ -30,7 +31,8 @@ def _safety_matches(ctx: MessageContext) -> bool:
 
 
 async def _safety_handle(ctx: MessageContext) -> dict:
-    v = classify(ctx.text)
+    with observability.span("safety.classify", kind="safety"):
+        v = classify(ctx.text)
     await ctx.conn.execute(
         """insert into safety_events (user_id, message_id, trigger, matched, action)
            values (%s,%s,%s,%s,'blocked_llm')""",
@@ -229,7 +231,8 @@ async def _agent(ctx: MessageContext) -> dict:
         "saathi.agent.tools.specs", fromlist=["TOOLS"]).TOOLS}
     account_id = await accounts.ensure_for_user(ctx.conn, ctx.user_id)
     ai_api_key = await openrouter.resolve(ctx.conn, account_id)
-    turn = await agent_loop.run(
+    with observability.span("agent.loop.run", kind="agent_loop"):
+        turn = await agent_loop.run(
         prov.fence(ctx.text, p), facts, Handlers(ctx.conn, ctx.user_id, ctx.tz).handle,
         history=prior, user_name=ctx.display_name,
         allowed_tools=prov.allowed_tools(names, p), tz=ctx.tz,

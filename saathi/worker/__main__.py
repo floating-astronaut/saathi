@@ -11,11 +11,13 @@ from datetime import datetime, timezone
 
 from psycopg_pool import AsyncConnectionPool
 
-from .. import metrics
+from .. import metrics, observability
 from .. import net_policy
 from ..config import settings
 from . import turns  # noqa: F401 - registers the scheduled kinds
 from .. import scheduling
+
+observability.init()
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s — %(message)s")

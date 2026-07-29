@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "WhatsApp-native, voice-first assistant for older adults in India"
 requires-python = ">=3.13"
 dependencies = [
+    "logfire",
+    "opentelemetry-exporter-otlp",
+    "opentelemetry-sdk",
     "fastapi",
     "uvicorn[standard]",
     "pydantic",
