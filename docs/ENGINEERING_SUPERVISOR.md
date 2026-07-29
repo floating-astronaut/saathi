@@ -1589,3 +1589,37 @@ Verified:
 
 Remains:
 - Codex/Claude sessions must restart before the MCP server appears as a live tool in their tool lists. Shell fallback works now with `codegraph explore`.
+
+## RATE-1 / RATE-2 — inbound rate and concurrency admission — 2026-07-29 (Codex)
+
+Read: `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`control-plane/ACTIVE_LANE_BOARD.md`, `control-plane/SESSION_COORDINATION.md`,
+`docs/THE_METHOD.md`, `docs/ROLES.md`, `docs/LANE_LIFECYCLE.md`,
+`docs/ARCHITECTURE.md`, `docs/PROD_READINESS.md` PR-15/PR-26,
+`docs/USAGE_LEDGER.md`, `docs/AI_ROUTING.md`, `docs/LANDMINES.md`, the inbound
+pipeline, DB migrations, configuration, and test seams.
+
+Changed:
+- `saathi.rate_limit` plus migration 013: content-free, Postgres-backed inbound
+  reservations and per-reason notice timestamps.
+- `pipeline.handle_message`: after identity/dedupe and before STT/media/safety
+  dispatch/model work, take the process-local turn gate (8) and reserve the
+  user's rolling window (6 turns/60 seconds). The per-user advisory lock is
+  non-blocking, so contention refuses quietly rather than creating a queue.
+- Config, regression coverage, architecture/PR-15/usage-ledger docs and
+  changelog record the values and the remaining monetary/edge-limit scope.
+
+Verified:
+- Focused: `uv run pytest -q tests/test_rate_limit.py tests/test_pipeline_order.py tests/test_media_limits.py` — 43 passed.
+- Full: `uv run pytest -q` — 542 passed, both before merge and during deploy.
+- PR #17 squash-merged as `ac0a493` and synchronized to GitHub and GitLab.
+- `ops/deploy.sh --local`: migration `013_inbound_rate_limits.sql` applied;
+  web, worker, Cloudflare tunnel and PostgreSQL all active; localhost and public
+  `/healthz` 200; unsigned webhook probe 403; zero errors since restart.
+- Read-only DB check: migration ledger records 013 and both
+  `inbound_turn_admissions` / `inbound_limit_notices` tables exist.
+
+Remains:
+- PR-15 is not fully closed: Cloudflare/per-IP limiting, multi-process global
+  coordination, and cross-vendor monetary caps remain explicitly open in
+  `PROD_READINESS.md` / `USAGE_LEDGER.md`.
