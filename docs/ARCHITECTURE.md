@@ -240,6 +240,15 @@ refusal is itself a paid outbound message. The global gate does not consume a
 user's quota. These are availability/fairness controls, not the future
 cross-vendor monetary ledger in `USAGE_LEDGER.md`.
 
+**Meta is not allowed to become a responder.** The hourly
+`saathi-meta-guard.timer` requires the configured Saathi app to retain its
+`whatsapp_business_account/messages` webhook subscription and fails if Meta's
+Business Agent settings appear for the configured phone number. A failed check
+uses the normal `OnFailure` SNS path. The WABA `subscribed_apps` read is logged
+as supplementary evidence only: on 2026-07-29 it returned an empty list even
+after Meta accepted the documented subscribe POST, so treating that endpoint's
+empty response as a healthy exact-set assertion would fail open.
+
 One consequence worth stating: **WhatsApp's wire types are a longer list than
 the `msg_kind` enum**, and `pipeline` coerces before writing. It did not, which
 made `document` an aborted transaction and the whole media capability
