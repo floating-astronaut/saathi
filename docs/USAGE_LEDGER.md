@@ -3,6 +3,11 @@
 Status: **designed, not built**. This is the Saathi-owned source of truth for
 paid vendor usage across model, speech, document, messaging and search calls.
 
+The basic PR-15 availability guard is implemented separately in
+`saathi.rate_limit`: it bounds inbound-turn frequency before a paid call but
+does not know units or money. It is not a substitute for this ledger's
+cross-vendor pre-call monetary caps.
+
 Owns: cost attribution, per-user/vendor units, auditability, and the data needed
 for PR-15 rate limits. Related: `AI_ROUTING.md` (OpenRouter/Bedrock routing),
 `PROD_READINESS.md` PR-15 (rate limiting beyond admission), `DECISIONS.md` D-S.

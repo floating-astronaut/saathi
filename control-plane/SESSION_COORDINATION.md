@@ -10,6 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
+| Codex | dev `ip-172-31-32-37` | 2026-07-29T10:35Z | RATE-1/RATE-2 | `saathi/pipeline.py`, `saathi/rate_limit.py`, `saathi/config.py`, `db/migrations/`, rate-limit tests, PR-15 docs/write-back | **active** — bounded global turn admission plus persistent per-user sliding window |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T10:22Z | CodeGraph agent tooling | `~/.codegraph`, `~/.codex/config.toml`, `~/.claude.json`, repo agent docs, `.codegraph/.gitignore` | **ended** — CodeGraph v1.5.0 installed, wired for Codex and Claude Code, source checkout indexed and queried |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T10:05Z | OBS-3 | `saathi/observability.py`, `tests/test_observability.py`, tracing docs, Secrets Manager/runtime env | **ended** — Logfire project binding implemented and verified; branch ready for PR |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T09:48Z | CRED-1 follow-up | SSH config plus `CONTRIBUTING.md`, `docs/RUNBOOK.md`, `docs/LANDMINES.md`, CRED-1 notes | **ended** — GitLab SSH key configured; GitLab mirror synced over SSH; docs branch ready |

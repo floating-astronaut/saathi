@@ -12,6 +12,26 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - inbound rate and concurrency admission (RATE-1/RATE-2)
+
+### Added
+
+- A process-local inbound-turn gate (default: 8) now bounds all work after
+  identity/deduplication and before transcription, media handling, safety
+  dispatch, or an agent turn. It refuses rather than queues.
+- A Postgres-backed atomic reservation allows each user six inbound turns per
+  rolling minute across text, voice, image, and document messages. The
+  non-blocking advisory lock prevents concurrent same-user requests from
+  over-admitting; duplicates consume no slot.
+- Rate-limit and overload replies are bilingual, sent once per reason per ten
+  minutes, then silent so an attack does not turn refusals into outbound cost.
+
+### Still open
+
+- This is an availability/fairness guard, not the cross-vendor cost ledger:
+  edge/IP limits, multi-process global coordination, and monetary vendor caps
+  remain in PR-15 / `docs/USAGE_LEDGER.md`.
+
 ## 2026-07-29 - CodeGraph installed for agent code navigation
 
 ### Added
