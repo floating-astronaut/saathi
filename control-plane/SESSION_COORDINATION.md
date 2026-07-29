@@ -10,7 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
-| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T12:15Z | ID-2 | `saathi/identity.py`, `saathi/pipeline.py`, `saathi/worker/turns.py`, migration/tests and lifecycle docs | **active** — stale/recycled WhatsApp-handle lifecycle |
+| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T12:15Z | ID-2 | `saathi/identity.py`, `saathi/pipeline.py`, `saathi/worker/turns.py`, migration/tests and lifecycle docs | **ended** — PR #22 deployed; migration 014, 549 tests and live health verified |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T11:20Z | SEC-1 | `saathi/meta_guard.py`, `ops/saathi-meta-guard.*`, alert installer, Meta/docs/tests | **ended** — PR #19 deployed; first live guard passed and hourly timer enabled |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T10:35Z | RATE-1/RATE-2 | `saathi/pipeline.py`, `saathi/rate_limit.py`, `saathi/config.py`, `db/migrations/`, rate-limit tests, PR-15 docs/write-back | **ended** — merged as PR #17 / `ac0a493`, deployed locally; migration 013, 542 tests, health, services and tunnel verified |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T10:22Z | CodeGraph agent tooling | `~/.codegraph`, `~/.codex/config.toml`, `~/.claude.json`, repo agent docs, `.codegraph/.gitignore` | **ended** — CodeGraph v1.5.0 installed, wired for Codex and Claude Code, source checkout indexed and queried |
