@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from .. import scheduling
 from ..channels import registry
@@ -156,6 +156,47 @@ async def nudge(conn, *, turn_id, user_id, payload, scheduled_for):
     await _settle(conn, turn_id, mid)
 
 
+# --- stale handle lifecycle --------------------------------------------------
+
+async def reverify(conn, *, turn_id, user_id, payload, scheduled_for):
+    """Warn at day 60; revoke only after a full 90 days without inbound proof."""
+    from .. import identity
+    uc_id, stage = payload.get("user_channel_id"), payload.get("stage", "warn")
+    row = await (await conn.execute(
+        """select last_seen_at, status::text from user_channels
+             where id=%s and user_id=%s and revoked_at is null""", (uc_id, user_id))).fetchone()
+    if not row:
+        await conn.execute("update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+        return
+    last_seen, status = row
+    now = datetime.now(timezone.utc)
+    age = now - last_seen
+    if stage == "warn":
+        if age < identity.DORMANT_AFTER or status != "active":
+            await identity.schedule_reverify(conn, user_id, uc_id, last_seen)
+            await conn.execute("update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+            return
+        # The approved generic check-in template is deliberately content-free;
+        # it reopens the WhatsApp window without leaking who used this handle.
+        mid = await _handle(conn, user_id, CHECKIN_TEMPLATE, ["Hello"])
+        await _settle(conn, turn_id, mid)
+        await scheduling.enqueue(
+            conn, user_id, "reverify", last_seen + identity.REVOKE_AFTER,
+            payload={"user_channel_id": uc_id, "stage": "revoke"},
+            dedupe_key=f"reverify:revoke:{uc_id}:{int(last_seen.timestamp())}")
+        return
+    if age < identity.REVOKE_AFTER:
+        await scheduling.enqueue(
+            conn, user_id, "reverify", last_seen + identity.REVOKE_AFTER,
+            payload={"user_channel_id": uc_id, "stage": "revoke"},
+            dedupe_key=f"reverify:revoke:{uc_id}:{int(last_seen.timestamp())}")
+        await conn.execute("update scheduled_turns set state='skipped' where id=%s", (turn_id,))
+        return
+    await conn.execute("update user_channels set revoked_at=now(), is_primary=false where id=%s", (uc_id,))
+    await conn.execute("update scheduled_turns set state='acked', acked_at=now() where id=%s", (turn_id,))
+    log.warning("revoked dormant handle %s for user %s after 90 days", uc_id, user_id)
+
+
 # --- daily check-in ----------------------------------------------------------
 
 async def checkin(conn, *, turn_id, user_id, payload, scheduled_for):
@@ -230,3 +271,4 @@ scheduling.register("media_purge", media_purge)
 scheduling.register("reminder", reminder)
 scheduling.register("nudge", nudge)
 scheduling.register("checkin", checkin)
+scheduling.register("reverify", reverify)
