@@ -59,6 +59,7 @@ class Turn:
 
 
 ToolHandler = Callable[[str, dict], Awaitable[dict]]
+UsageRecorder = Callable[[dict, str, int, int], Awaitable[None]]
 
 
 async def run(
@@ -71,6 +72,7 @@ async def run(
     tz: str | None = None,
     lang: str | None = None,
     ai_api_key: str | None = None,
+    usage_recorder: UsageRecorder | None = None,
 ) -> Turn:
     """Run one user turn to completion, executing tools as the model calls them.
 
@@ -111,6 +113,7 @@ async def run(
 
     for hop in range(MAX_HOPS):
         turn.hops = hop + 1
+        call_started = time.monotonic()
         with observability.span("model.call", kind="model_call",
                                  hop_count=hop + 1,
                                  model_id=settings.saathi_model_id):
@@ -126,6 +129,12 @@ async def run(
                     toolConfig=tool_config,
                     inferenceConfig={"maxTokens": 700, "temperature": 0.2},
                 )
+        if usage_recorder:
+            try:
+                await usage_recorder(resp, "openrouter" if ai_api_key else "bedrock",
+                                     int((time.monotonic() - call_started) * 1000), hop + 1)
+            except Exception:  # noqa: BLE001 -- accounting is observe-only in Slice B
+                log.exception("observe-only usage event failed; continuing model turn")
         usage = resp.get("usage", {})
         turn.input_tokens += usage.get("inputTokens", 0)
         turn.output_tokens += usage.get("outputTokens", 0)
