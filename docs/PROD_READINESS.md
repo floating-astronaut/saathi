@@ -400,6 +400,11 @@ true.
 read-only (a token with `read_api` / `read_repository` and no `repo` scope).
 Tracked as `CRED-1` on `control-plane/ACTIVE_LANE_BOARD.md`.
 
+**Decision 2026-07-29:** retain the credentials as mirror authority (D-AC).
+The application is not deployed automatically from either forge; GitLab's
+Cloudflare Pages `site` branch is the deliberate automatic-deploy exception.
+The risk remains source/site integrity rather than immediate app-process control.
+
 ### PR-23 · Forwarded text could trigger deterministic state changes — RESOLVED 2026-07-27
 `provenance.py` correctly treats forwarded, quoted, image, and document text as
 relayed content: it fences the text for the agent and withholds mutating tools.
