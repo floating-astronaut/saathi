@@ -52,6 +52,14 @@ checkout, then verify against the owning docs and current files before editing.
 | Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` (remote) |
 | Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
 
+> **Runtime migrating (2026-07-29):** moving from `i-01b2c27883acb25ca` to a
+> successor box `ip-172-31-41-224` (ap-south-1). Webhook hostname and
+> `saathi-dev` tunnel unchanged; only the connector moves. Until the new box
+> runs the services and cutover is verified, the original box still serves
+> `saathi.n8nworld.store`. The new box has AWS CLI + SSO for the **mcc org**
+> (`mcc`, `mcc-dev`) — not the Saathi account `559896294326`. See
+> `docs/RUNBOOK.md` and `docs/PROD_READINESS.md`.
+
 The runtime box's `/home/ubuntu/saathi` tree is a deployed artifact with
 fossilized git. Anything you edit there is product state at risk of being
 overwritten by the next deploy. Fine for debugging; never for real work. Real

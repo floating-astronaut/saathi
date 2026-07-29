@@ -1,3 +1,24 @@
+## 2026-07-29 — runtime migration docs; webhook host briefly mispointed at Pages
+
+Symptom: `saathi.n8nworld.store` (the WhatsApp webhook host) returned 404/405 for
+`/healthz` and `POST /webhook` — i.e. a static site, not the FastAPI app.
+
+Cause: during Cloudflare inspection, `saathi.n8nworld.store` was repointed from
+the `saathi-dev` tunnel to the `saathi-site` Pages project. Pages serves a static
+Next.js export and cannot receive a webhook or run Python. The webhook host and
+the marketing site (`n8nworld.store`) are separate surfaces; only the latter
+belongs on Pages.
+
+Fix: reverted the CNAME `saathi.n8nworld.store → saathi-site.pages.dev` back to
+the `saathi-dev` tunnel (`d4e9e4ad…cfargotunnel.com`), removed the hostname from
+the Pages custom domains, and verified `/healthz` returns the live app payload
+again. The marketing site on `n8nworld.store` was never affected.
+
+Docs: recorded the in-progress runtime migration (original box
+`i-01b2c27883acb25ca` → successor `ip-172-31-41-224`, ap-south-1) across README,
+RUNBOOK, AGENTS/CLAUDE/KIMI, and PROD_READINESS. The webhook hostname and tunnel
+are unchanged; only the connector moves. No application code changed.
+
 ## 2026-07-27 (AI-1 correction) — key names include workspace when configured
 
 OpenRouter API key creation defaults to the Default workspace when `workspace_id` is omitted. Runtime config was missing `OPENROUTER_WORKSPACE_ID`, so the first live key batch landed in Default. Key names now include `:ws:<workspace-prefix>` when a workspace is configured, allowing a corrected remint even though revoked `ai_keys.name` values remain unique locally.
