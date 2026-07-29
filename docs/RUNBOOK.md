@@ -286,6 +286,13 @@ AI. All zones: DNS Write, Zone Read/Settings, Cache Purge, SSL, Workers Routes.
 Write, which neither the canonical nor the master token has. It owns the config
 rule disabling Browser Integrity Check for this hostname.
 
+The webhook edge rate-limit rule is ruleset entrypoint `0358c5c9c73a41438a65b598dfe740a9`,
+rule `35f2f07d09bd4fd384dfd6d741d44ffa`: `POST /webhook/whatsapp` on
+`saathi.n8nworld.store`, 30 requests/10 seconds/source IP, block with JSON 429.
+On Free plan, 10 seconds is the shortest supported period and mitigation timeout.
+After changing it, verify both a valid signed WhatsApp envelope (200) and an
+unsigned probe (403); a 403-only probe does not prove a rate rule works.
+
 **If the EIP ever changes, the box token stops working** — it is IP-locked.
 
 ## Alerting

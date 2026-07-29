@@ -12,6 +12,14 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - vendor usage ledger foundation (LEDGER-1)
+
+- Added migration 015 and the observe-only `saathi.usage` accounting API:
+  idempotent account-locked reservations, append-only vendor events, settlement,
+  release and auditable expiry. No paid call behavior has changed yet.
+- Added `SAATHI_USAGE_LEDGER_MODE=observe` as the safe default. Focused ledger
+  tests and the full suite passed before the PR checkpoint.
+
 ## 2026-07-29 - stronger deterministic scam shield (LIFE-5)
 
 - Added pre-model coverage for courier/customs/police threats, electricity
