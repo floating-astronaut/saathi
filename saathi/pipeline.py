@@ -19,11 +19,14 @@ Ordering here is the product, not an implementation detail:
 """
 from __future__ import annotations
 
+import io
 import logging
+import math
+import wave
 
 from . import (accounts, commands, conversation, documents, identity, memory,
                media_store, observability, onboarding, privacy, provenance,
-               rate_limit, training, vision)
+               rate_limit, training, usage, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -171,7 +174,24 @@ async def transcribe_voice(conn, user_id: int, media_id: str,
     await media_store.put_voice(conn, user_id, ogg, wa_message_id=wa_message_id)
     wav = await ogg_to_wav16k(ogg)
     entities = await memory.surface_forms(conn, user_id)
-    return await stt_mod.transcribe(wav, entities=entities)
+    transcript = await stt_mod.transcribe(wav, entities=entities)
+    # Saaras bills audio time, not bytes. The WAV supplies exact duration
+    # without putting content in the ledger; failures cannot retry a success.
+    try:
+        with wave.open(io.BytesIO(wav), "rb") as audio:
+            seconds = audio.getnframes() / audio.getframerate()
+        row = await (await conn.execute("select account_id from users where id = %s",
+                                        (user_id,))).fetchone()
+        await usage.record_event(
+            conn, vendor="sarvam", service="stt", operation="speech_to_text",
+            status="success", user_id=user_id, account_id=row[0] if row else None,
+            request_id=f"stt:{wa_message_id}" if wa_message_id else None,
+            model=stt_mod.MODEL,
+            units={"audio_seconds": seconds, "rounded_seconds": math.ceil(seconds)},
+            metadata={"language": transcript.language}, latency_ms=transcript.ms)
+    except Exception:  # noqa: BLE001 -- observe-only after a paid success
+        log.exception("observe-only STT usage event failed")
+    return transcript
 
 
 async def _contribute_corrections(conn, user_id: int, transcript) -> None:

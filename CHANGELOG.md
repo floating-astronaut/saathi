@@ -12,6 +12,12 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - observe-only STT and template usage accounting (LEDGER-2)
+
+- Successful Sarvam transcriptions record exact WAV duration and rounded billed
+  seconds; successful WhatsApp templates record after Meta returns a message ID.
+- Accounting failures never retry or disrupt an already-successful vendor call.
+
 ## 2026-07-29 - observe-only LLM usage accounting (LEDGER-2)
 
 - Successful Bedrock and OpenRouter requests now append Saathi-owned usage
