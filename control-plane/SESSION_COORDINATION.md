@@ -10,7 +10,7 @@
 
 | Agent | Box | Started | Lane | Surface (files/dirs) | Status |
 |-------|-----|---------|------|----------------------|--------|
-| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T16:30Z | LEDGER-2 | `saathi/agent/loop.py`, `saathi/openrouter.py`, `saathi/capabilities.py`, usage tests and routing/ledger docs | **active** — Slice B actual-token accounting; observe-only, no cap/routing changes |
+| Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T16:30Z | LEDGER-2 | `saathi/agent/loop.py`, `saathi/openrouter.py`, `saathi/capabilities.py`, `saathi/pipeline.py`, `saathi/usage.py`, usage tests and routing/ledger docs | **ended** — PR #32 deployed at `aacd5af`; LLM/STT/template events live, STT pre-call enforcement gate built but disabled by default |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T13:10Z | LEDGER-1 | `saathi/usage.py`, `saathi/config.py`, `saathi/worker/__main__.py`, migration/tests, usage-ledger and PR-15 docs | **ended** — PR #27 deployed; migration 015 and 569 tests verified; observe-only by design |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T12:45Z | LIFE-5 | `saathi/safety/classifier.py`, safety tests, safety/product/architecture docs | **ended** — PR #24 deployed; 560 tests and public health/webhook probes passed |
 | Codex | runtime `i-01b2c27883acb25ca` | 2026-07-29T12:15Z | ID-2 | `saathi/identity.py`, `saathi/pipeline.py`, `saathi/worker/turns.py`, migration/tests and lifecycle docs | **ended** — PR #22 deployed; migration 014, 549 tests and live health verified |

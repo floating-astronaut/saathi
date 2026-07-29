@@ -1725,3 +1725,33 @@ Remains: Slice B wires direct Bedrock/OpenRouter call paths and begins the
 seven-day comparison; Slice C adds speech/templates; Slice D introduces caps.
 PR-15 is still open until monetary enforcement and the cross-process global
 coordination decision are finished or explicitly retired.
+
+## LEDGER-2 — vendor usage hooks and staged STT enforcement — 2026-07-29 (Codex)
+
+Read: doc system, sync/control-plane docs, Method/roles, `USAGE_LEDGER.md` §11,
+`AI_ROUTING.md`, architecture, PR-15, current pipeline/usage/config code via
+CodeGraph, and existing usage/pipeline/rate-limit tests.
+
+Changed: successful Bedrock/OpenRouter model calls, Sarvam STT calls and
+WhatsApp template sends now write Saathi-owned content-free usage events.
+Sarvam STT computes the catalog INR paise estimate from WAV duration before the
+vendor call and, when `SAATHI_USAGE_ENFORCEMENT_ENABLED=true`,
+`SAATHI_USAGE_LEDGER_MODE=enforce`, and `SAATHI_USAGE_ACCOUNT_CAP_PAISE>0`, takes
+an account-locked INR reservation before sending audio to Sarvam. Cap exhaustion
+or missing accounting returns fixed voice-limit copy and never reaches STT.
+Successful enforced calls settle the reservation and link the event. Reservation
+cap aggregates are currency-scoped so USD LLM usage cannot consume INR STT
+budget. Runtime defaults remain observe-only.
+
+Verified: focused suite `uv run pytest -q tests/test_usage.py
+tests/test_pipeline_order.py tests/test_rate_limit.py` passed 29; full
+`uv run pytest -q` passed 577 before PR. PR #32 merged as `aacd5af`; local deploy
+ran migrations, full suite passed 577 again, and verified active web, worker,
+Cloudflare tunnel and PostgreSQL. Independent post-deploy checks returned
+localhost health OK and all four services active; deploy also verified public
+health 200 and unsigned webhook 403.
+
+Remains: PR-15 still has broader paid-surface enforcement work unless the
+operator explicitly narrows the production requirement to STT-only: LLM/template
+pre-call reservations, global vendor caps and their alert path are not enabled
+by this lane.
