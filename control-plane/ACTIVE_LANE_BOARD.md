@@ -120,12 +120,12 @@ Acceptance: user can ask for short WhatsApp-ready drafts in their selected scrip
 Write-back: docs/DAILY_LIFE_OS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
 Notes: Likely prompt/tool surface only; preserve one-question rule.
 
-### LIFE-5 — stronger scam shield   [IN PROGRESS]
-Owner: Codex (source branch `agent/stronger-scam-shield`)        Opened: 2026-07-28 · Claimed: 2026-07-29
+### LIFE-5 — stronger scam shield   [CLOSED]
+Owner: Codex (source branch `agent/stronger-scam-shield`)        Opened: 2026-07-28 · Claimed/Closed: 2026-07-29
 Reading: docs/DAILY_LIFE_OS.md, docs/foundations/SAFETY_AND_CLINICAL.md, docs/ARCHITECTURE.md, saathi/safety/classifier.py, tests/test_safety.py
 Acceptance: deterministic patterns cover courier/customs/police, electricity-disconnect threats, loan/investment/lottery, fake job/pension, urgent UPI/payment pressure and remote-support app requests; lower-risk suspicious content gets warning plus safe next step.
 Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
-Notes: Safety priority 0 remains non-negotiable.
+Notes: MET. Priority-0 `SCAM` and lower-confidence `SUSPICIOUS` patterns cover every listed pressure family; both block the model and give a safe verification path. PR #24 (`a724921`) deployed; 560 tests and live health/webhook probes passed.
 
 ### LIFE-6 — local errand and app handoffs   [OPEN]
 Owner: unassigned        Opened: 2026-07-28
