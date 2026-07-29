@@ -327,3 +327,39 @@ believing alerting works.**
 - Postgres is a single instance on the box. Backups are 6-hourly and **verified
   by restoring into a scratch database**, but recovery point is up to 6 hours
   and there is no PITR or failover (PR-7). Managed Postgres before paid users.
+
+## In-region tracing (OBS-1)
+
+### Units
+
+- saathi-otelcol - OpenTelemetry Collector, listens on 127.0.0.1:4317 (gRPC).
+  Receives spans from the web and worker processes.
+- saathi-jaeger - Jaeger all-in-one. Badger storage at /opt/saathi-jaeger/data,
+  7-day TTL, 4 GiB disk cap. Query UI on 127.0.0.1:16686.
+
+### Querying
+
+From the Mac, open a tunnel then visit http://localhost:16686:
+  ssh -L 16686:localhost:16686 saathi-ai
+
+Select service "saathi" in the Jaeger UI. Spans appear as:
+- pipeline.handle_message (root span per inbound WhatsApp message)
+- safety.classify (deterministic pre-LLM check)
+- agent.loop.run (the model turn)
+- model.call (each Bedrock/OpenRouter call within a turn)
+- tool_call (each tool the agent invokes)
+
+### Enabling
+
+Tracing is disabled by default. To enable:
+  sudo sed -i "/Environment=/a Environment=SAATHI_TRACING_ENABLED=1" /etc/systemd/system/saathi-web.service
+  sudo sed -i "/Environment=/a Environment=SAATHI_TRACING_ENABLED=1" /etc/systemd/system/saathi-worker.service
+  sudo systemctl daemon-reload
+  sudo systemctl restart saathi-web saathi-worker
+
+### Troubleshooting
+
+- No spans in Jaeger: journalctl -u saathi-otelcol -f and journalctl -u saathi-jaeger -f
+- Disk usage: du -sh /opt/saathi-jaeger/data (capped at 4 GiB, 7-day TTL)
+- Collector unreachable: app logs "tracing initialisation failed" and continues
+
