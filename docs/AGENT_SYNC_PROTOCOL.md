@@ -96,6 +96,22 @@ Before coding, read:
 - the repo's `control-plane/ACTIVE_LANE_BOARD.md` when present
 - the relevant spoke docs for the task
 
+## 7.5 CodeGraph usage
+
+When a source checkout has `.codegraph/` at the repo root, agents should use
+CodeGraph before grep/find/read for code-flow, symbol-location, and blast-radius
+questions:
+
+```
+codegraph status
+codegraph explore "<file, symbol, or flow question>"
+```
+
+Generated graph data is an aid, not an authority. If it is missing or stale, run
+`codegraph init` or `codegraph index` in the source checkout and then verify any
+answer against the owning docs and current files. Do not rely on `.codegraph/`
+inside `/home/ubuntu/saathi` as product state; that tree is a deploy artifact.
+
 
 ## 8. Source and PR workflow
 

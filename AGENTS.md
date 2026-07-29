@@ -33,6 +33,22 @@ positive case too.
 
 "I read it last session" does not count.
 
+## CodeGraph first, when indexed
+
+CodeGraph is installed for Codex and Claude Code on the box. In a source checkout
+with `.codegraph/` at the repo root, use it before crawling with grep/find/read
+when the task is to understand code flow, locate symbols, or estimate blast
+radius:
+
+```
+codegraph status
+codegraph explore "pipeline.handle_message to agent loop"
+```
+
+The graph is a generated local aid, not product law. If `.codegraph/` is missing
+or stale, run `codegraph init` / `codegraph index` in the source checkout, then
+verify against the owning docs and current files before editing.
+
 ## Know which box you are on — they are not interchangeable
 
 | Box | Region | Can |
