@@ -536,3 +536,11 @@ Result: control plane added by **merge, not scaffold** — `bin/vibe-scaffold`
 
 
 OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.
+
+### OBS-1 — in-region tracing (logfire SDK → local collector → Jaeger)   [CLOSED]
+Owner: Clawcore (runtime box, source branch agent/in-region-tracing)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/THE_METHOD.md, docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/PROD_READINESS.md, docs/RUNBOOK.md, CONTRIBUTING.md, saathi/metrics.py, saathi/config.py, saathi/pipeline.py, saathi/agent/loop.py, saathi/web/app.py, saathi/worker/__main__.py
+Acceptance: logfire SDK configured with inspect_arguments=False, OTLP exporter to localhost:4317, saathi/observability.py enforces a fixed allow-list of span attributes, tracing spans cover pipeline.handle_message → safety.classify → speech → agent.loop.run → each model call and tool handler, best-effort init, otelcol+jaeger systemd units exist and listen on 127.0.0.1 only, uv run pytest -q passes with no regression.
+Write-back: docs/ARCHITECTURE.md (new boundary + no-PII-in-spans rule), docs/DECISIONS.md (D-AB), docs/RUNBOOK.md (two new units + how to query), CHANGELOG.md (symptom first), docs/PROD_READINESS.md (new infra row), docs/ENGINEERING_SUPERVISOR.md (evidence appended), control-plane/SESSION_COORDINATION.md
+Notes: MET. PRs #11 (code) + #12 (docs) merged (squash). Deployed 8b2fe16 via ops/deploy.sh --local. 532 tests passed, zero regressions. All spans wired. Tracing disabled by default (SAATHI_TRACING_ENABLED unset). Setup script and systemd units exist but not yet run — infra install is a separate ops/setup-tracing.sh step at enable time.
+
