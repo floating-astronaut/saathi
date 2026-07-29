@@ -1681,3 +1681,21 @@ currently in `reverify`.
 Remains: the day-60 outreach deliberately uses the existing generic template;
 if product wants explanatory proactive copy, it must first obtain a dedicated
 Meta-approved utility template without exposing prior ownership.
+
+## LIFE-5 — stronger deterministic scam shield — 2026-07-29 (Codex)
+
+Read: doc system/control plane, `DAILY_LIFE_OS.md`, safety/clinical grounding,
+architecture, classifier and safety tests.
+
+Changed: priority-0 classifier now recognizes courier/customs/police pressure,
+electricity disconnection, loan/investment, job/pension, UPI collection and
+remote-support requests. Clear fraud remains `SCAM`; lower-confidence pressure
+is `SUSPICIOUS`. Both bypass the model; the latter gives one safe official-contact
+verification step and 1930 escalation.
+
+Verified: focused safety/capability suite 60 passed; full suite 560 passed before
+merge and during `ops/deploy.sh --local`. PR #24 merged as `a724921`; web, worker,
+tunnel and PostgreSQL active, public health 200, unsigned webhook 403, zero restart errors.
+
+Remains: tune patterns only with explicit false-positive examples; broad payment
+words alone intentionally do not trigger the shield.
