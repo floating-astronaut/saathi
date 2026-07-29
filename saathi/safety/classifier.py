@@ -30,6 +30,7 @@ class Trigger(str, Enum):
     HYPOGLYCEMIA = "hypoglycemia"
     MEDICAL_ADVICE = "medical_advice"
     SCAM = "scam"
+    SUSPICIOUS = "suspicious"
 
 
 @dataclass(frozen=True)
@@ -106,12 +107,37 @@ _SCAM = [
     r"paisa transfer kar", r"send money urgently",
 ]
 
+# These are pressure-shaped fraud pretexts rather than proof that every sender
+# is malicious.  They still stop the model: a warm deterministic warning and
+# one safe verification step is safer than letting a plausible scam persuade a
+# user through an open-ended conversation.
+_SUSPICIOUS = [
+    # Courier, customs and police/case threats.
+    r"(?:courier|parcel|delivery).{0,35}(?:customs|duty|hold|fee|fine|police)",
+    r"(?:customs|custom).{0,35}(?:parcel|duty|fee|fine|release)",
+    r"(?:police|thana|crime branch).{0,35}(?:case|fine|payment|urgent)",
+    # Electricity disconnection pressure.
+    r"(?:bijli|electricity|power).{0,35}(?:kat|band|disconnect|cut|bill due)",
+    r"(?:bill due|outstanding bill).{0,25}(?:bijli|electricity|power)",
+    # Loan/investment/lottery-style guaranteed-money bait.
+    r"(?:loan|credit).{0,35}(?:release|approve|processing fee|advance fee)",
+    r"(?:guaranteed|double).{0,25}(?:return|profit|money|paisa)",
+    r"(?:investment|invest).{0,35}(?:guaranteed|quick profit|double|return)",
+    # Fake job and pension "verification" / fee demands.
+    r"(?:job|naukri|recruitment).{0,35}(?:registration fee|processing fee|offer letter|deposit)",
+    r"(?:pension|pensioner).{0,35}(?:update|verify|band|stop|kyc)",
+    # UPI collection pressure and remote-control software.
+    r"(?:upi|gpay|phonepe|paytm).{0,35}(?:collect|request|approve|urgent|pay now)",
+    r"(?:anydesk|teamviewer|quick support|quicksupport|remote access|screen share)",
+]
+
 _COMPILED: dict[Trigger, list[re.Pattern[str]]] = {
     Trigger.MEDICAL_EMERGENCY: [re.compile(p, re.I) for p in _EMERGENCY],
     Trigger.SELF_HARM: [re.compile(p, re.I) for p in _SELF_HARM],
     Trigger.HYPOGLYCEMIA: [re.compile(p, re.I) for p in _HYPOGLYCEMIA],
     Trigger.MEDICAL_ADVICE: [re.compile(p, re.I) for p in _MEDICAL_ADVICE],
     Trigger.SCAM: [re.compile(p, re.I) for p in _SCAM],
+    Trigger.SUSPICIOUS: [re.compile(p, re.I) for p in _SUSPICIOUS],
 }
 
 # Order matters: a message can look like several things at once, and we always
@@ -121,6 +147,7 @@ _PRIORITY = [
     Trigger.SELF_HARM,
     Trigger.HYPOGLYCEMIA,        # before MEDICAL_ADVICE: "sugar low" is not a dosage question
     Trigger.SCAM,
+    Trigger.SUSPICIOUS,
     Trigger.MEDICAL_ADVICE,
 ]
 
@@ -168,6 +195,14 @@ _REPLIES = {
         "details, even if the caller says they are from the bank or the police. "
         "No real agency arrests anyone over a video call. If money has already "
         "gone, call 1930 immediately."
+    ),
+    Trigger.SUSPICIOUS: (
+        "सावधान — यह दबाव डालने वाला संदेश धोखा हो सकता है। कोई पैसा मत भेजिए, "
+        "लिंक मत खोलिए और कोई ऐप इंस्टॉल या स्क्रीन शेयर मत कीजिए। उस संस्था का "
+        "आधिकारिक नंबर/ऐप खुद ढूँढकर वहीं से जाँच कीजिए।\n\n"
+        "Careful — this pressure message may be a scam. Do not pay, open its link, "
+        "install an app, or share your screen. Find the organisation's official "
+        "number or app yourself and verify there. If money has gone, call 1930 now."
     ),
 }
 
