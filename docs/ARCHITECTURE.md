@@ -10,7 +10,8 @@ WhatsApp ──webhook──▶ cloudflared ──▶ saathi-web (FastAPI, 127.0
                                           ├─ audio? ─▶ fetch media ─▶ ffmpeg ─▶ Saaras
                                           │            └─▶ entity correction (local)
                                           ├─ agent loop ─▶ zai.glm-5 (Bedrock ap-south-1)
-                                          └─ Postgres 18
+                                          ├─ Postgres 18
+                                          └─ tracing ─▶ OTel Collector ─▶ Jaeger
                                                ▲
                        saathi-worker ──────────┘  reminder scheduler,
                                                   poll 30s, SKIP LOCKED
@@ -53,7 +54,16 @@ through to normal conversation. A separate identity-lifecycle lane owns the full
 90-day stale-handle policy: warn during dormancy, let the user confirm or move
 the account, then revoke/delete only after the written window expires.
 
-**Forwarded content is data, never command.** Text the user did not author —
+**Forwarded content is data, never command.**
+
+**Tracing is in-region and PII-free.** Spans go through the logfire SDK to a
+local OTel Collector (127.0.0.1:4317) then to a local Jaeger instance with
+badger storage (7-day TTL, 4 GiB cap). Only a fixed allow-list of attributes
+reaches spans: kind, latency, tokens, tool name, hop count, model id, error
+class, trigger enum. Message text, transcripts, names, medicines and query
+parameters are scrubbed (saathi/observability.py). Tracing is best-effort: a
+collector outage never blocks a turn. Jaeger UI via SSH tunnel to
+localhost:16686; no new inbound port. Text the user did not author —
 forwarded, quoted, or lifted out of an image or PDF — is `RELAYED`, and is
 enforced in **two** places, because withholding tools only ever covered the
 agent:

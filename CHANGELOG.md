@@ -12,6 +12,31 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - in-region tracing: spans on the critical path, zero PII in telemetry
+
+**Focused tests passing:** 11 passed (test_observability.py). Full suite: 532 passed. OBS-1.
+
+### Added
+
+- saathi/observability.py - privacy-hardened tracing via logfire SDK (OTLP
+  exporter to local OTel Collector at 127.0.0.1:4317, Jaeger all-in-one on-box).
+  Best-effort init behind SAATHI_TRACING_ENABLED.
+- Spans on the critical path: pipeline.handle_message, safety.classify,
+  agent.loop.run, every model.call (Bedrock/OpenRouter), and every tool_call.
+- ops/saathi-otelcol.service, ops/saathi-jaeger.service, ops/setup-tracing.sh.
+- Dependencies: logfire, opentelemetry-exporter-otlp, opentelemetry-sdk.
+
+### Privacy rules
+
+- inspect_arguments=False - hard-disable automatic function-argument capture.
+- Fixed attribute allow-list: kind, latency_ms, input_tokens, output_tokens,
+  tool_name, hop_count, model_id, error_class, trigger. Never message text,
+  transcript, names, medicines, phone numbers, or query parameters.
+- All data stays in ap-south-1; no traffic to logfire-us.pydantic.dev.
+
+
+
+
 ## 2026-07-28 — returning WhatsApp users do not restart signup
 
 **Focused tests passing:** `uv run pytest -q tests/test_capabilities.py tests/test_language_change.py tests/test_onboarding.py` — 32 passed. Full suite: `uv run pytest -q` — 521 passed. ID-1.

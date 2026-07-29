@@ -1448,3 +1448,43 @@ handset; LIFE-3 still owns bill-specific extraction.
 **Verified:** focused suite `uv run pytest -q tests/test_capabilities.py tests/test_language_change.py tests/test_onboarding.py` — 32 passed; full suite `uv run pytest -q` — 521 passed.
 
 **Remains:** ID-2 owns the full stale-handle lifecycle: warning nudges, confirm/move account, and revocation/deletion only after the written 90-day dead-air period.
+
+## OBS-1 - in-region tracing - 2026-07-29 (Clawcore)
+
+Read: docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/PROD_READINESS.md,
+docs/RUNBOOK.md, CONTRIBUTING.md, saathi/metrics.py, saathi/config.py,
+saathi/pipeline.py, saathi/agent/loop.py, saathi/web/app.py,
+saathi/worker/__main__.py, saathi/capabilities.py.
+
+Changed:
+- saathi/observability.py (new) - privacy-hardened tracing module
+- saathi/web/app.py - observability.init() on startup
+- saathi/worker/__main__.py - observability.init() on startup
+- saathi/pipeline.py - root span around handle_message
+- saathi/capabilities.py - spans on safety.classify and agent.loop.run
+- saathi/agent/loop.py - spans on model.call and tool_call; turn completion record
+- pyproject.toml - added logfire, opentelemetry-exporter-otlp, opentelemetry-sdk
+- ops/saathi-otelcol.service (new) - OTel Collector unit
+- ops/saathi-jaeger.service (new) - Jaeger all-in-one unit
+- ops/setup-tracing.sh (new) - idempotent installer
+- tests/test_observability.py (new) - 11 tests
+- docs/ARCHITECTURE.md - tracing layer in diagram, no-PII-in-spans boundary
+- docs/DECISIONS.md - D-AB (tracing is in-region)
+- docs/RUNBOOK.md - tracing section (units, querying, enable, troubleshooting)
+- docs/PROD_READINESS.md - PR-27 (resource addition)
+- CHANGELOG.md - 2026-07-29 entry
+
+Verified:
+- uv run pytest -q - 532 passed (521 existing + 11 new, zero regressions)
+- ops/deploy.sh --local - deployed 12c51a5 to /home/ubuntu/saathi
+- healthz: 200, all four services active, 0 errors since restart
+- PR #11 merged (squash), branch deleted
+
+Remains:
+- Tracing is disabled by default (SAATHI_TRACING_ENABLED unset).
+  To enable, add the env var to saathi-web and saathi-worker systemd units
+  and restart. The collector and Jaeger units can be started independently
+  via ops/setup-tracing.sh.
+- Jaeger and OTel Collector binaries are not yet installed on the box
+  (setup-tracing.sh exists but was not run - the deploy script runs the
+  app, not infra installers).
