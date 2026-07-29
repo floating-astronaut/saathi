@@ -1488,3 +1488,30 @@ Remains:
 - Jaeger and OTel Collector binaries are not yet installed on the box
   (setup-tracing.sh exists but was not run - the deploy script runs the
   app, not infra installers).
+
+## OBS-2 - tracing safety and localhost binding follow-up - 2026-07-29 (Codex)
+
+Read: `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`control-plane/ACTIVE_LANE_BOARD.md`, `docs/ARCHITECTURE.md`,
+`docs/RUNBOOK.md`, `docs/DECISIONS.md`, `saathi/observability.py`,
+`ops/setup-tracing.sh`, `ops/saathi-otelcol.service`,
+`ops/saathi-jaeger.service`, and `tests/test_observability.py`.
+
+Changed:
+- `saathi/observability.py` - span wrapper now preserves application exceptions
+  and treats tracing enter/exit failures as no-op behavior.
+- `ops/setup-tracing.sh` and `ops/saathi-jaeger.service` - collector receives on
+  `127.0.0.1:4317`; Jaeger OTLP listens on `127.0.0.1:4318`; no OTLP bind to
+  `0.0.0.0`.
+- `tests/test_observability.py` - regression tests for app exception semantics,
+  tracing close failure, and non-conflicting localhost ports.
+- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/RUNBOOK.md`,
+  `CHANGELOG.md`, and control-plane docs - OBS-2 write-back.
+
+Verified:
+- `uv run pytest -q tests/test_observability.py` - 14 passed.
+- `uv run pytest -q` - 535 passed.
+
+Remains:
+- The optional collector/Jaeger binaries are still not installed until
+  `ops/setup-tracing.sh` is intentionally run.

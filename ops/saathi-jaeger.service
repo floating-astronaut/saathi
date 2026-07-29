@@ -13,7 +13,7 @@ Environment=BADGER_SPAN_STORE_TTL=168h
 Environment=BADGER_DIRECTORY_KEY=/opt/saathi-jaeger/key
 ExecStart=/opt/saathi-jaeger/jaeger-all-in-one \
     --collector.otlp.enabled \
-    --collector.otlp.grpc.host-port=0.0.0.0:4317 \
+    --collector.otlp.grpc.host-port=127.0.0.1:4318 \
     --query.host-port=127.0.0.1:16686 \
     --collector.host-port=127.0.0.1:14267 \
     --admin.http.host-port=127.0.0.1:14269

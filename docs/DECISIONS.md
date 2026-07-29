@@ -603,11 +603,12 @@ the product value is navigation and comprehension, not autonomous spend.
 ### D-AB - Tracing is in-region via logfire, with a hard no-PII rule - 2026-07-29
 Tracing uses the logfire Python SDK configured with inspect_arguments=False
 (no automatic function-argument capture) and exported to a local OTel Collector
-at 127.0.0.1:4317. Jaeger runs on the same box with badger storage (7-day TTL,
-4 GiB cap). saathi/observability.py enforces a fixed allow-list of span
-attributes: kind, latency, tokens, tool_name, hop_count, model_id, error_class,
-trigger. Message text, transcripts, names, medicines and query parameters are
-scrubbed before they leave the process.
+at 127.0.0.1:4317. The collector exports to local Jaeger OTLP on
+127.0.0.1:4318, so the two services do not bind the same port. Jaeger runs on
+the same box with badger storage (7-day TTL, 4 GiB cap). saathi/observability.py
+enforces a fixed allow-list of span attributes: kind, latency, tokens,
+tool_name, hop_count, model_id, error_class, trigger. Message text, transcripts,
+names, medicines and query parameters are scrubbed before they leave the process.
 
 Data never reaches logfire-us.pydantic.dev. The same failure contract as
 metrics.py applies: publishing must not raise, and a collector outage never

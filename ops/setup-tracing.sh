@@ -56,7 +56,7 @@ processors:
 
 exporters:
   otlp/jaeger:
-    endpoint: localhost:4317
+    endpoint: 127.0.0.1:4318
     tls:
       insecure: true
 
