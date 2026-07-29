@@ -28,12 +28,12 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
-### LEDGER-2 — observe-only LLM usage accounting   [IN PROGRESS]
-Owner: Codex (source branch `agent/llm-usage-accounting`)        Opened: 2026-07-29
+### LEDGER-2 — vendor usage hooks and staged STT enforcement   [CLOSED]
+Owner: Codex (source branches `agent/llm-usage-accounting`, `agent/ledger-stt-enforcement`)        Opened: 2026-07-29 · Closed: 2026-07-29
 Reading: docs/USAGE_LEDGER.md §11, docs/AI_ROUTING.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md PR-15, saathi/agent/loop.py, saathi/openrouter.py, saathi/capabilities.py, saathi/usage.py
-Acceptance: each direct Bedrock/OpenRouter LLM request emits exactly one content-free usage event with actual reported tokens and latency; an event failure does not turn a successful reply into an outage in observe-only mode; no cap/routing/residency behavior changes; focused/full tests pass.
+Acceptance: each direct Bedrock/OpenRouter LLM request emits exactly one content-free usage event with actual reported tokens and latency; successful Sarvam STT and WhatsApp template calls emit content-free usage events; Sarvam STT can reserve before vendor spend and refuse before Sarvam when the explicit enforcement flag, enforce mode and a positive approved INR cap are all set; default runtime behavior remains observe-only; focused/full tests pass.
 Write-back: docs/USAGE_LEDGER.md, docs/AI_ROUTING.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
-Notes: Slice B. Record at the common model boundary; reserve/enforcement remains disabled until Slice D.
+Notes: MET. PR #29 deployed LLM usage events; PR #30 added STT/template observe-only events; PR #31 added Sarvam pricing; PR #32 (`aacd5af`) added disabled-by-default STT pre-call reservations and cap refusal. Deploy verified 577 tests, active web/worker/tunnel/PostgreSQL, localhost/public health 200 and unsigned webhook 403. Remaining PR-15 work is LLM/template/global vendor cap enforcement unless the operator narrows the requirement to STT-only.
 
 ### LEDGER-1 — vendor usage ledger foundation   [CLOSED]
 Owner: Codex (source branch `agent/vendor-ledger-foundation`)        Opened: 2026-07-29 · Closed: 2026-07-29
