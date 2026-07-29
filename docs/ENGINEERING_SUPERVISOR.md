@@ -1623,3 +1623,23 @@ Remains:
 - PR-15 is not fully closed: Cloudflare/per-IP limiting, multi-process global
   coordination, and cross-vendor monetary caps remain explicitly open in
   `PROD_READINESS.md` / `USAGE_LEDGER.md`.
+
+## SEC-1 — Meta Business Agent responder guard — 2026-07-29 (Codex)
+
+Read: doc system/sync/control plane, `LANDMINES.md`, `PROD_READINESS.md` PR-6,
+D-E, alerting/runbook surfaces, Meta captured docs, and the live Graph state.
+
+Changed: added `saathi.meta_guard`, its hourly systemd timer/service, and
+alert-installer support. The guard requires Saathi's configured app to retain
+the `whatsapp_business_account/messages` subscription and rejects any non-empty
+Business Agent settings response. It uses the existing `OnFailure` SNS path.
+
+Verified: PR #19 merged as `c19a0e4`; full suite 544 passed before merge and
+during deploy. `ops/alerting/install.sh` enabled the timer. Its first live run
+returned HTTP 200 from both Meta checks and logged `Meta responder guard passed`;
+the next hourly run is scheduled. Web, worker, tunnel and `/healthz` remained
+healthy.
+
+Remains: `subscribed_apps` is supplementary only: it returned an empty list
+after Meta accepted the documented subscribe POST, so it is not used as a
+fail-open exact-set monitor.
