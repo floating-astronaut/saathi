@@ -835,7 +835,7 @@ intervals. See `PATTERNS_TO_BORROW.md` on the harness shape.
 Secrets Manager holds them and the box fetches them, which is right. But nothing
 rotates, and the WhatsApp token never expires by design.
 
-### PR-15 · No rate limiting beyond admission
+### PR-15 · Inbound rate limiting beyond admission is only partly complete
 Admission control stops unknown handles cheaply, but an *onboarded* user can
 send unlimited voice notes, each costing STT minutes and a model turn. §14 caps
 free-tier STT minutes; nothing enforces it.
@@ -887,11 +887,29 @@ self-hosted LLM gateway.
   flood is entirely unbounded: no download cost, but unlimited safety checks and
   model turns.
 
-Together these mean a single user or a single webhook batch can saturate the
-box's model budget, STT quota, and CPU for everyone else. The fix is a
+Together these mean a single user or many concurrent webhook requests can
+saturate the box's model budget, STT quota, and CPU for everyone else. (One
+webhook payload is processed sequentially; the prior wording that one 50-message
+batch created 50 tasks was incorrect.) The fix is a
 per-user sliding window (Postgres-backed, covering all modalities) plus a
 global concurrency semaphore on the agent loop, with a quiet refusal path so
 the box does not pay to argue.
+
+**Availability guard implemented 2026-07-29 (RATE-1/RATE-2).** `pipeline`
+now takes a process-local global turn gate (default 8) after identity/dedupe and
+before any transcription, media work, safety dispatch or agent call. It then
+uses a Postgres-backed, transactionally serialized reservation table to allow a
+user six inbound turns in a rolling 60 seconds across text, voice, images and
+documents. Lock contention and full windows refuse rather than queue. A sender
+gets at most one bilingual retry-later notice per reason per 10 minutes; later
+requests are silent. Duplicated WhatsApp webhooks are rejected before either
+control and consume no slot.
+
+This resolves the immediate single-process overload and per-user frequency
+gap. It does **not** yet add a Cloudflare/per-IP edge limit, a cross-process
+distributed global semaphore, or monetary/vendor spend caps. The latter remains
+the `USAGE_LEDGER.md` lane; do not call PR-15 fully closed until those scope
+decisions are implemented or explicitly retired.
 
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during

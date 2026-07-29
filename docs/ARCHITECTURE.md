@@ -226,6 +226,20 @@ large, too long, busy, or unreadable, bilingual and naming what would work
 instead. The person on the other end may have photographed their prescription by
 accident, and silence is indistinguishable from the product being broken.
 
+**Inbound turns are admitted before paid work.** After identity resolution and
+webhook deduplication, `pipeline.handle_message` first takes the process-local
+`turn` gate (default 8), then atomically reserves one of the sender's six
+rolling one-minute slots in Postgres. The reservation is recorded before audio
+transcription, so a voice-note burst cannot spend Sarvam minutes before the
+limit notices it. A transaction-scoped *non-blocking* advisory lock prevents two
+same-user webhooks both observing an open slot; lock contention is refused
+quietly rather than queued. The short-lived admission rows hold only `user_id`
+and time, never message content. One bilingual retry-later notice is allowed
+per reason every ten minutes; later over-limit traffic is silent, because a
+refusal is itself a paid outbound message. The global gate does not consume a
+user's quota. These are availability/fairness controls, not the future
+cross-vendor monetary ledger in `USAGE_LEDGER.md`.
+
 One consequence worth stating: **WhatsApp's wire types are a longer list than
 the `msg_kind` enum**, and `pipeline` coerces before writing. It did not, which
 made `document` an aborted transaction and the whole media capability
