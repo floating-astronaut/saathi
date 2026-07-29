@@ -600,6 +600,24 @@ automation. `DAILY_LIFE_OS.md` owns the lane list and acceptance shape.
 This decision does not weaken the no-transaction boundary. It strengthens it:
 the product value is navigation and comprehension, not autonomous spend.
 
+### D-AB - Tracing uses Logfire with a hard no-PII rule - 2026-07-29
+Tracing uses the logfire Python SDK configured with inspect_arguments=False
+(no automatic function-argument capture) and exported to a local OTel Collector
+at 127.0.0.1:4317. The collector exports to local Jaeger OTLP on
+127.0.0.1:4318, so the two services do not bind the same port. Jaeger runs on
+the same box with badger storage (7-day TTL, 4 GiB cap). saathi/observability.py
+enforces a fixed allow-list of span attributes: kind, latency, tokens,
+tool_name, hop_count, model_id, error_class, trigger. Message text, transcripts,
+names, medicines and query parameters are scrubbed before they leave the process.
+
+Operator update 2026-07-29: when `LOGFIRE_TOKEN` is present, the same scrubbed
+spans may also be sent to the operator's Pydantic Logfire project `indofolk-ai`.
+Cloud export is token-gated (`send_to_logfire="if-token-present"`), not
+unconditional. The same failure contract as metrics.py applies: publishing must
+not raise, and a collector or Logfire outage never blocks a turn. Local traces
+remain queryable via SSH tunnel to localhost:16686.
+
+
 ### D-AA · Returning WhatsApp handles do not restart signup · 2026-07-28
 A WhatsApp number is still only a revocable handle, not the account, but an
 active handle that has already completed onboarding must not be treated as a new
@@ -612,3 +630,28 @@ The number-recycling protection remains a lifecycle rule, not an excuse to lose
 the user immediately: stale handles should be warned and reverified through a
 written window, with account move/confirm paths, before revocation or deletion
 after the 90-day dead-air period.
+
+**Implemented lifecycle, 2026-07-29 (ID-2).** `60 days` without inbound is the
+warning/re-verification threshold and `90 days` of continuous dead air is the
+revocation threshold. The day-60 worker uses only the generic, content-free
+`daily_checkin` template, because WhatsApp permits no free-form proactive text
+outside the session and the notification must not leak prior ownership. A
+returning stale handle is `reverify` and is stopped before any stored-data or
+model path. It can explicitly continue, or receive a short-lived move code for
+a new, blank handle. At day 90 the old handle is revoked; the user identity is
+not deleted merely because its delivery address went quiet.
+
+### D-AC · Runtime forge write access is retained as mirror authority · 2026-07-29
+
+Operator decision: retain GitHub/GitLab write credentials and the dedicated SSH
+keys on the runtime box. The Saathi application does not execute from either
+forge: a running process changes only through the documented deploy path. The
+forges are source mirrors/backups for the application. GitLab's `site` branch is
+the explicit exception: Cloudflare Pages deploys it on push, so a compromise can
+alter the public site immediately.
+
+This does not make the credential surface harmless. A runtime compromise can
+poison a future application deploy or the public site, so the PR checkpoint,
+two-remote synchronization, deploy verification, and explicit source-branch
+workflow remain required. Revisit the decision if the runtime box becomes more
+exposed, a second contributor appears, or the site branch gains sensitive flows.

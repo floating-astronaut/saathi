@@ -196,7 +196,23 @@ that skips them. Point it at a scratch database, not the live one.
 > than replaces, the next one would have overwritten them without a conflict, an
 > error, or a diff. Recovered in `2a11443`. Edit the checkout, never `~/saathi`.
 
-## Pushing to GitLab — "HTTP Basic: Access denied" with a valid token
+## Pushing to GitLab — use SSH, not the glab HTTPS helper
+
+Runtime/source checkouts should use the SSH alias configured on this box:
+
+```bash
+git remote set-url gitlab git@gitlab-saathi:nuraveda-lab/saathi.git
+ssh -T gitlab-saathi
+git push gitlab main
+git ls-remote gitlab main
+```
+
+The local SSH key is `/home/ubuntu/.ssh/saathi_gitlab_ed25519`; the matching
+public key is registered in GitLab as `saathi runtime ip-172-31-32-37
+2026-07-29` and expires on 2027-07-29. The private key must never be printed,
+copied into the repo, or placed in a remote URL.
+
+### Old HTTPS symptom: "HTTP Basic: Access denied" with a valid token
 
 `git push gitlab main` can fail with `HTTP Basic: Access denied` while
 `glab auth status` reports a healthy login and `glab api user` succeeds. The
@@ -216,8 +232,8 @@ git -c credential.https://gitlab.com.helper= \
 ```
 
 The empty first value is required: git *appends* helpers, so without it the
-broken one still runs first. Making this permanent means the same two lines in
-`git config --global`, which is worth doing and has not been done.
+broken one still runs first. Prefer the SSH remote above instead; the workaround
+is kept only for recovery on a box that does not yet have the SSH key.
 
 ## Secrets
 
@@ -269,6 +285,13 @@ AI. All zones: DNS Write, Zone Read/Settings, Cache Purge, SSL, Workers Routes.
 `saathi-zone-config` (`a03fb813b7c7d91fea7975742a4929de`) holds Config Settings
 Write, which neither the canonical nor the master token has. It owns the config
 rule disabling Browser Integrity Check for this hostname.
+
+The webhook edge rate-limit rule is ruleset entrypoint `0358c5c9c73a41438a65b598dfe740a9`,
+rule `35f2f07d09bd4fd384dfd6d741d44ffa`: `POST /webhook/whatsapp` on
+`saathi.n8nworld.store`, 30 requests/10 seconds/source IP, block with JSON 429.
+On Free plan, 10 seconds is the shortest supported period and mitigation timeout.
+After changing it, verify both a valid signed WhatsApp envelope (200) and an
+unsigned probe (403); a 403-only probe does not prove a rate rule works.
 
 **If the EIP ever changes, the box token stops working** — it is IP-locked.
 
@@ -327,3 +350,48 @@ believing alerting works.**
 - Postgres is a single instance on the box. Backups are 6-hourly and **verified
   by restoring into a scratch database**, but recovery point is up to 6 hours
   and there is no PITR or failover (PR-7). Managed Postgres before paid users.
+
+## In-region tracing (OBS-1)
+
+### Units
+
+- saathi-otelcol - OpenTelemetry Collector, listens on 127.0.0.1:4317 (gRPC).
+  Receives spans from the web and worker processes and exports them to Jaeger
+  on 127.0.0.1:4318.
+- saathi-jaeger - Jaeger all-in-one. Badger storage at /opt/saathi-jaeger/data,
+  7-day TTL, 4 GiB disk cap. OTLP gRPC on 127.0.0.1:4318; query UI on
+  127.0.0.1:16686.
+
+### Querying
+
+From the Mac, open a tunnel then visit http://localhost:16686:
+  ssh -L 16686:localhost:16686 saathi-ai
+
+Select service "saathi" in the Jaeger UI. Spans appear as:
+- pipeline.handle_message (root span per inbound WhatsApp message)
+- safety.classify (deterministic pre-LLM check)
+- agent.loop.run (the model turn)
+- model.call (each Bedrock/OpenRouter call within a turn)
+- tool_call (each tool the agent invokes)
+
+### Enabling
+
+Tracing is disabled unless `SAATHI_TRACING_ENABLED=1` is present in the runtime
+environment. Logfire cloud export is additionally gated on `LOGFIRE_TOKEN`.
+Set both through Secrets Manager, not by editing `.env` or systemd units:
+
+```bash
+ops/set-secret.sh SAATHI_TRACING_ENABLED LOGFIRE_TOKEN
+ops/deploy.sh --local
+```
+
+`LOGFIRE_TOKEN` is the Pydantic Logfire project write token. As of 2026-07-29 it
+points at project `indofolk-ai`. The broader Pydantic API key is not needed by
+the app runtime; do not store it unless a CLI/API management operation requires
+it.
+
+### Troubleshooting
+
+- No spans in Jaeger: journalctl -u saathi-otelcol -f and journalctl -u saathi-jaeger -f
+- Disk usage: du -sh /opt/saathi-jaeger/data (capped at 4 GiB, 7-day TTL)
+- Collector unreachable: app logs "tracing initialisation failed" and continues

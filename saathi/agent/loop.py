@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 import boto3
 
 from .. import openrouter
+from .. import observability
 from ..config import settings
 from .prompt import Prefix, build_prefix, estimate_tokens
 from .tools.specs import TOOL_CONFIG, TOOLS, assert_no_forbidden_tools
@@ -58,6 +59,7 @@ class Turn:
 
 
 ToolHandler = Callable[[str, dict], Awaitable[dict]]
+UsageRecorder = Callable[[dict, str, int, int], Awaitable[None]]
 
 
 async def run(
@@ -70,6 +72,7 @@ async def run(
     tz: str | None = None,
     lang: str | None = None,
     ai_api_key: str | None = None,
+    usage_recorder: UsageRecorder | None = None,
 ) -> Turn:
     """Run one user turn to completion, executing tools as the model calls them.
 
@@ -110,18 +113,28 @@ async def run(
 
     for hop in range(MAX_HOPS):
         turn.hops = hop + 1
-        if ai_api_key:
-            resp = await openrouter.converse(
-                ai_api_key, system=prefix.system, messages=messages,
-                tool_config=tool_config, max_tokens=700, temperature=0.2)
-        else:
-            resp = client().converse(
-                modelId=settings.saathi_model_id,
-                system=[{"text": prefix.system}],
-                messages=messages,
-                toolConfig=tool_config,
-                inferenceConfig={"maxTokens": 700, "temperature": 0.2},
-            )
+        call_started = time.monotonic()
+        with observability.span("model.call", kind="model_call",
+                                 hop_count=hop + 1,
+                                 model_id=settings.saathi_model_id):
+            if ai_api_key:
+                resp = await openrouter.converse(
+                    ai_api_key, system=prefix.system, messages=messages,
+                    tool_config=tool_config, max_tokens=700, temperature=0.2)
+            else:
+                resp = client().converse(
+                    modelId=settings.saathi_model_id,
+                    system=[{"text": prefix.system}],
+                    messages=messages,
+                    toolConfig=tool_config,
+                    inferenceConfig={"maxTokens": 700, "temperature": 0.2},
+                )
+        if usage_recorder:
+            try:
+                await usage_recorder(resp, "openrouter" if ai_api_key else "bedrock",
+                                     int((time.monotonic() - call_started) * 1000), hop + 1)
+            except Exception:  # noqa: BLE001 -- accounting is observe-only in Slice B
+                log.exception("observe-only usage event failed; continuing model turn")
         usage = resp.get("usage", {})
         turn.input_tokens += usage.get("inputTokens", 0)
         turn.output_tokens += usage.get("outputTokens", 0)
@@ -141,12 +154,14 @@ async def run(
         for use in uses:
             name, args = use["name"], use.get("input", {})
             turn.tool_calls.append((name, args))
-            try:
-                payload = await handle_tool(name, args)
-                status = "success"
-            except Exception as exc:  # noqa: BLE001 - the model gets to see and recover
-                log.exception("tool %s failed", name)
-                payload, status = {"error": str(exc)[:200]}, "error"
+            with observability.span("tool_call", kind="tool_call",
+                                     tool_name=name, hop_count=hop + 1):
+                try:
+                    payload = await handle_tool(name, args)
+                    status = "success"
+                except Exception as exc:  # noqa: BLE001
+                    log.exception("tool %s failed", name)
+                    payload, status = {"error": str(exc)[:200]}, "error"
             results.append({"toolResult": {
                 "toolUseId": use["toolUseId"],
                 "content": [{"json": payload}],
@@ -157,6 +172,13 @@ async def run(
         log.warning("hit MAX_HOPS=%s without settling", MAX_HOPS)
 
     turn.latency_ms = int((time.monotonic() - started) * 1000)
+    observability.record("agent.turn.complete",
+                         kind="agent_loop",
+                         input_tokens=turn.input_tokens,
+                         output_tokens=turn.output_tokens,
+                         latency_ms=turn.latency_ms,
+                         hop_count=turn.hops,
+                         model_id=settings.saathi_model_id)
     return turn
 
 

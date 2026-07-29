@@ -163,6 +163,11 @@ an app we did not put there. That is a small addition to PR-3's alerting and it
 would also catch the reverse failure — our own app silently unsubscribed, which
 looks exactly like a dead product.
 
+**Guard implemented and live-verified 2026-07-29.** The monitor
+uses the app-level WhatsApp `messages` subscription plus the Business Agent
+settings endpoint. The WABA list endpoint is supplementary only because its
+empty response was not reliable after a successful idempotent subscribe POST.
+
 ### PR-37 · `create_reminder` still cannot take a relative offset
 The model now has a clock, so "5 minute baad" is at least *computable*: it can
 add five minutes and pass the result as `time_24h` with `recurrence: once` and
@@ -394,6 +399,11 @@ true.
 **Fix:** decide whether the runtime box keeps write access or is reduced to
 read-only (a token with `read_api` / `read_repository` and no `repo` scope).
 Tracked as `CRED-1` on `control-plane/ACTIVE_LANE_BOARD.md`.
+
+**Decision 2026-07-29:** retain the credentials as mirror authority (D-AC).
+The application is not deployed automatically from either forge; GitLab's
+Cloudflare Pages `site` branch is the deliberate automatic-deploy exception.
+The risk remains source/site integrity rather than immediate app-process control.
 
 ### PR-23 · Forwarded text could trigger deterministic state changes — RESOLVED 2026-07-27
 `provenance.py` correctly treats forwarded, quoted, image, and document text as
@@ -835,7 +845,7 @@ intervals. See `PATTERNS_TO_BORROW.md` on the harness shape.
 Secrets Manager holds them and the box fetches them, which is right. But nothing
 rotates, and the WhatsApp token never expires by design.
 
-### PR-15 · No rate limiting beyond admission
+### PR-15 · Inbound rate limiting beyond admission is only partly complete
 Admission control stops unknown handles cheaply, but an *onboarded* user can
 send unlimited voice notes, each costing STT minutes and a model turn. §14 caps
 free-tier STT minutes; nothing enforces it.
@@ -887,11 +897,42 @@ self-hosted LLM gateway.
   flood is entirely unbounded: no download cost, but unlimited safety checks and
   model turns.
 
-Together these mean a single user or a single webhook batch can saturate the
-box's model budget, STT quota, and CPU for everyone else. The fix is a
+Together these mean a single user or many concurrent webhook requests can
+saturate the box's model budget, STT quota, and CPU for everyone else. (One
+webhook payload is processed sequentially; the prior wording that one 50-message
+batch created 50 tasks was incorrect.) The fix is a
 per-user sliding window (Postgres-backed, covering all modalities) plus a
 global concurrency semaphore on the agent loop, with a quiet refusal path so
 the box does not pay to argue.
+
+**Availability guard implemented 2026-07-29 (RATE-1/RATE-2).** `pipeline`
+now takes a process-local global turn gate (default 8) after identity/dedupe and
+before any transcription, media work, safety dispatch or agent call. It then
+uses a Postgres-backed, transactionally serialized reservation table to allow a
+user six inbound turns in a rolling 60 seconds across text, voice, images and
+documents. Lock contention and full windows refuse rather than queue. A sender
+gets at most one bilingual retry-later notice per reason per 10 minutes; later
+requests are silent. Duplicated WhatsApp webhooks are rejected before either
+control and consume no slot.
+
+This resolves the immediate single-process overload and per-user frequency
+gap. **Cloudflare edge backstop added 2026-07-29:** zone `n8nworld.store` now
+blocks requests to `POST /webhook/whatsapp` above 30 per 10 seconds per source
+IP with a JSON 429 response (Free-plan minimum period/mitigation: 10 seconds).
+A valid signed empty WhatsApp envelope still returned 200; an unsigned request
+returned 403, proving the application signature gate remained behind the edge
+rule.
+
+LEDGER-1/2 have now supplied the local ledger and initial vendor hooks. Successful
+LLM, Sarvam STT and WhatsApp template calls write content-free usage events.
+Sarvam STT also has the first pre-call monetary gate: when the explicit rollout
+flag, `SAATHI_USAGE_LEDGER_MODE=enforce`, and a positive
+`SAATHI_USAGE_ACCOUNT_CAP_PAISE` are all set, the pipeline reserves an INR hold
+before Sarvam receives audio bytes and refuses with fixed copy if the account cap
+is exhausted or accounting is unavailable. The gate is disabled by default, and
+LLM/template/global vendor caps are still observe-only follow-up work. PR-15
+remains open until those remaining paid surfaces are reserved before call or the
+operator explicitly narrows the production requirement to STT-only enforcement.
 
 ### PR-17 · Training corpus produces nothing until 5 users overlap
 By design (k-anonymity), but it means the learning loop is unmeasurable during
@@ -1030,3 +1071,15 @@ absence is deliberate rather than forgotten.
 
 
 OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.
+
+### PR-27 - OTel Collector + Jaeger add ~230-370 MB RAM to a 2-vCPU box
+
+Tracing was added on 2026-07-29 (OBS-1). The new services - saathi-otelcol
+(~80-120 MB idle) and saathi-jaeger (~150-250 MB idle) - run alongside the
+existing web, worker, Postgres and Cloudflare tunnel. At our current volume
+(~10-50 turns/day) the memory overhead is tolerable, but any future addition
+(such as TTS or an additional model) must re-check total available RAM.
+
+The disk cap is 4 GiB via Jaeger badger configuration with a 7-day span TTL.
+Spans can be disabled by unsetting SAATHI_TRACING_ENABLED and restarting the
+web and worker units; the collector and Jaeger can then be stopped independently.

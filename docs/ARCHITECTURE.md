@@ -10,7 +10,8 @@ WhatsApp ──webhook──▶ cloudflared ──▶ saathi-web (FastAPI, 127.0
                                           ├─ audio? ─▶ fetch media ─▶ ffmpeg ─▶ Saaras
                                           │            └─▶ entity correction (local)
                                           ├─ agent loop ─▶ zai.glm-5 (Bedrock ap-south-1)
-                                          └─ Postgres 18
+                                          ├─ Postgres 18
+                                          └─ tracing ─▶ OTel Collector ─▶ Jaeger
                                                ▲
                        saathi-worker ──────────┘  reminder scheduler,
                                                   poll 30s, SKIP LOCKED
@@ -28,6 +29,16 @@ model is constructed. A forwarded scam message is untrusted input that will try
 to argue its way past an instruction; it cannot argue with a function that has
 already returned. `tests/test_pipeline_order.py` fails if the agent is ever
 reached on an emergency message.
+
+The scam shield has two deterministic outcomes. Clear credential, transfer,
+digital-arrest and lottery indicators return `SCAM`; pressure-shaped courier /
+customs / police, electricity-disconnect, fee-for-loan/job, pension, UPI and
+remote-support-app indicators return `SUSPICIOUS`. Both block the model. The
+latter deliberately says *may be a scam* and gives one safe next step: do not
+pay/click/install/share a screen; independently find the organisation's
+official contact. Both provide 1930 for money already lost. This distinction
+avoids asserting fraud as fact while still refusing to let a risky message
+drive an open-ended model turn.
 
 **Capability is defined by absence.** PRD §12's guarantee — that prompt
 injection cannot cause harm — lives in `agent/tools/specs.py`, in what is *not*
@@ -53,6 +64,27 @@ through to normal conversation. A separate identity-lifecycle lane owns the full
 90-day stale-handle policy: warn during dormancy, let the user confirm or move
 the account, then revoke/delete only after the written window expires.
 
+**Stale WhatsApp-handle lifecycle (ID-2).** A handle is evidence of control of
+a delivery address, never the account or a durable proof of the human. On its
+last positive inbound message we book a 60-day lifecycle check. At 60 days of
+silence the worker sends the existing content-free `daily_checkin` template;
+the template does not name the person or disclose that an account exists. At
+90 days of *continuous* silence it revokes the handle and removes its primary
+claim. The user record and its data are retained so the real person can move
+the account through a verified channel; the recycled handle cannot read them.
+
+If a handle returns after 60 days, identity resolution changes it to
+`reverify` before any session touch, transcription, message log, conversation,
+capability, memory lookup or model work. The only allowed responses are the
+fixed confirmation/move controls. Confirming restores `active` and schedules a
+fresh 60-day check. Moving issues a 15-minute, six-digit code to the gated old
+chat; a **brand-new** WhatsApp handle must send `MOVE <code>`, then becomes the
+primary active handle while the old one is revoked. A bare number is never a
+code, and a code entered from an established account is refused. This confirms
+continued control of the old chat, not legal identity; the privacy control is
+the no-data gate plus the dead-air revocation, not a claim that phone numbers
+cannot be recycled.
+
 **Forwarded content is data, never command.** Text the user did not author —
 forwarded, quoted, or lifted out of an image or PDF — is `RELAYED`, and is
 enforced in **two** places, because withholding tools only ever covered the
@@ -71,6 +103,19 @@ Buttons (20/21) stay trusted — provenance describes text, and a tap is a
 first-party control the user physically pressed. Onboarding (10) is deliberately
 exempt: gating it would drop an un-onboarded user through to the agent and break
 "onboarding never calls the model", which is what makes an open door safe.
+
+**Tracing is privacy-hardened and token-gated.** Spans go through the logfire
+SDK to the local OTel Collector receiver on `127.0.0.1:4317`, then from the
+collector to local Jaeger OTLP on `127.0.0.1:4318`. If `LOGFIRE_TOKEN` is
+present, the same scrubbed spans also go to the operator's Pydantic Logfire
+project (`indofolk-ai` as of 2026-07-29). Jaeger stores locally with badger
+storage (7-day TTL, 4 GiB cap), and its UI is available only via SSH tunnel to
+`127.0.0.1:16686`. Only a fixed allow-list of attributes reaches spans: kind,
+latency, tokens, tool name, hop count, model id, error class, trigger enum.
+Message text, transcripts, names, medicines and query parameters are scrubbed
+(`saathi/observability.py`). Tracing is best-effort: collector, exporter,
+Logfire, or Jaeger failures never block a turn and no new inbound port is
+opened.
 
 **The 24-hour window is a hard gate, not a convention.** `wa/window.py` refuses
 free-form sends outside the window. Every outbound path funnels through
@@ -211,6 +256,42 @@ call:
 large, too long, busy, or unreadable, bilingual and naming what would work
 instead. The person on the other end may have photographed their prescription by
 accident, and silence is indistinguishable from the product being broken.
+
+**Inbound turns are admitted before paid work.** After identity resolution and
+webhook deduplication, `pipeline.handle_message` first takes the process-local
+`turn` gate (default 8), then atomically reserves one of the sender's six
+rolling one-minute slots in Postgres. The reservation is recorded before audio
+transcription, so a voice-note burst cannot spend Sarvam minutes before the
+limit notices it. A transaction-scoped *non-blocking* advisory lock prevents two
+same-user webhooks both observing an open slot; lock contention is refused
+quietly rather than queued. The short-lived admission rows hold only `user_id`
+and time, never message content. One bilingual retry-later notice is allowed
+per reason every ten minutes; later over-limit traffic is silent, because a
+refusal is itself a paid outbound message. The global gate does not consume a
+user's quota. These are availability/fairness controls, not the future
+cross-vendor monetary ledger in `USAGE_LEDGER.md`.
+
+**Vendor accounting is content-free and staged.** Migration 015 creates
+append-only `vendor_usage_events` and auditable `vendor_usage_reservations`.
+Successful LLM, Sarvam STT and WhatsApp template calls now emit usage events
+without prompts, transcripts, phone numbers, raw media or API responses.
+`saathi.usage.reserve` takes a transaction-scoped account advisory lock, expires
+stale holds, applies an optional same-currency cap and commits an idempotent hold
+before a paid vendor call; settlement/release never delete the hold. The default
+is still observe-only. Sarvam STT is the first staged enforcement path: it can
+reserve INR paise before bytes reach Sarvam and refuse with fixed copy if the
+account cap is exhausted, but only when the explicit enforcement flag, `enforce`
+mode and a positive approved cap are all set. Other paid surfaces remain
+observe-only until their pre-call reservation paths are built.
+
+**Meta is not allowed to become a responder.** The hourly
+`saathi-meta-guard.timer` requires the configured Saathi app to retain its
+`whatsapp_business_account/messages` webhook subscription and fails if Meta's
+Business Agent settings appear for the configured phone number. A failed check
+uses the normal `OnFailure` SNS path. The WABA `subscribed_apps` read is logged
+as supplementary evidence only: on 2026-07-29 it returned an empty list even
+after Meta accepted the documented subscribe POST, so treating that endpoint's
+empty response as a healthy exact-set assertion would fail open.
 
 One consequence worth stating: **WhatsApp's wire types are a longer list than
 the `msg_kind` enum**, and `pipeline` coerces before writing. It did not, which

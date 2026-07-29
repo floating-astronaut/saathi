@@ -11,11 +11,13 @@ from datetime import datetime, timezone
 
 from psycopg_pool import AsyncConnectionPool
 
-from .. import metrics
+from .. import metrics, observability, usage
 from .. import net_policy
 from ..config import settings
 from . import turns  # noqa: F401 - registers the scheduled kinds
 from .. import scheduling
+
+observability.init()
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -36,6 +38,13 @@ async def main() -> None:
                 n = await scheduling.run_once(pool)
                 if n:
                     log.info("dispatched %s scheduled turn(s)", n)
+                # Holds are intentionally retained as expired audit records,
+                # never deleted. This has no vendor-call effect until later
+                # ledger slices start creating reservations.
+                async with pool.connection() as conn:
+                    expired = await usage.expire_holds(conn)
+                if expired:
+                    log.warning("expired %s abandoned vendor usage hold(s)", expired)
                 # Heartbeat *after* a successful tick, so it means "the worker
                 # did its job", not merely "the process is alive". A worker
                 # looping on a dead database would still be alive.

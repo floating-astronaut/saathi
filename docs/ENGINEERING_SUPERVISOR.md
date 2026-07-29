@@ -1448,3 +1448,310 @@ handset; LIFE-3 still owns bill-specific extraction.
 **Verified:** focused suite `uv run pytest -q tests/test_capabilities.py tests/test_language_change.py tests/test_onboarding.py` — 32 passed; full suite `uv run pytest -q` — 521 passed.
 
 **Remains:** ID-2 owns the full stale-handle lifecycle: warning nudges, confirm/move account, and revocation/deletion only after the written 90-day dead-air period.
+
+## OBS-1 - in-region tracing - 2026-07-29 (Clawcore)
+
+Read: docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/PROD_READINESS.md,
+docs/RUNBOOK.md, CONTRIBUTING.md, saathi/metrics.py, saathi/config.py,
+saathi/pipeline.py, saathi/agent/loop.py, saathi/web/app.py,
+saathi/worker/__main__.py, saathi/capabilities.py.
+
+Changed:
+- saathi/observability.py (new) - privacy-hardened tracing module
+- saathi/web/app.py - observability.init() on startup
+- saathi/worker/__main__.py - observability.init() on startup
+- saathi/pipeline.py - root span around handle_message
+- saathi/capabilities.py - spans on safety.classify and agent.loop.run
+- saathi/agent/loop.py - spans on model.call and tool_call; turn completion record
+- pyproject.toml - added logfire, opentelemetry-exporter-otlp, opentelemetry-sdk
+- ops/saathi-otelcol.service (new) - OTel Collector unit
+- ops/saathi-jaeger.service (new) - Jaeger all-in-one unit
+- ops/setup-tracing.sh (new) - idempotent installer
+- tests/test_observability.py (new) - 11 tests
+- docs/ARCHITECTURE.md - tracing layer in diagram, no-PII-in-spans boundary
+- docs/DECISIONS.md - D-AB (tracing is in-region)
+- docs/RUNBOOK.md - tracing section (units, querying, enable, troubleshooting)
+- docs/PROD_READINESS.md - PR-27 (resource addition)
+- CHANGELOG.md - 2026-07-29 entry
+
+Verified:
+- uv run pytest -q - 532 passed (521 existing + 11 new, zero regressions)
+- ops/deploy.sh --local - deployed 12c51a5 to /home/ubuntu/saathi
+- healthz: 200, all four services active, 0 errors since restart
+- PR #11 merged (squash), branch deleted
+
+Remains:
+- Tracing is disabled by default (SAATHI_TRACING_ENABLED unset).
+  To enable, add the env var to saathi-web and saathi-worker systemd units
+  and restart. The collector and Jaeger units can be started independently
+  via ops/setup-tracing.sh.
+- Jaeger and OTel Collector binaries are not yet installed on the box
+  (setup-tracing.sh exists but was not run - the deploy script runs the
+  app, not infra installers).
+
+## OBS-2 - tracing safety and localhost binding follow-up - 2026-07-29 (Codex)
+
+Read: `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`control-plane/ACTIVE_LANE_BOARD.md`, `docs/ARCHITECTURE.md`,
+`docs/RUNBOOK.md`, `docs/DECISIONS.md`, `saathi/observability.py`,
+`ops/setup-tracing.sh`, `ops/saathi-otelcol.service`,
+`ops/saathi-jaeger.service`, and `tests/test_observability.py`.
+
+Changed:
+- `saathi/observability.py` - span wrapper now preserves application exceptions
+  and treats tracing enter/exit failures as no-op behavior.
+- `ops/setup-tracing.sh` and `ops/saathi-jaeger.service` - collector receives on
+  `127.0.0.1:4317`; Jaeger OTLP listens on `127.0.0.1:4318`; no OTLP bind to
+  `0.0.0.0`.
+- `tests/test_observability.py` - regression tests for app exception semantics,
+  tracing close failure, and non-conflicting localhost ports.
+- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/RUNBOOK.md`,
+  `CHANGELOG.md`, and control-plane docs - OBS-2 write-back.
+
+Verified:
+- `uv run pytest -q tests/test_observability.py` - 14 passed.
+- `uv run pytest -q` - 535 passed.
+
+Remains:
+- The optional collector/Jaeger binaries are still not installed until
+  `ops/setup-tracing.sh` is intentionally run.
+
+## 2026-07-29 — GitLab mirroring moved from HTTPS helper to SSH
+
+Operator asked to stop the repeated GitLab sync failures caused by the glab
+HTTPS/OAuth credential helper. Created a dedicated ed25519 SSH key on the
+runtime/source box:
+
+- private key path: `/home/ubuntu/.ssh/saathi_gitlab_ed25519`
+- GitLab public key title: `saathi runtime ip-172-31-32-37 2026-07-29`
+- public fingerprint: `SHA256:MxJY407pxa6juUHqg2o2rQ+fnJl39pcV8rcDhm/3zzU`
+- expiry: 2027-07-29
+
+Changed local SSH config to add host alias `gitlab-saathi`, switched the source
+checkout's `gitlab` remote to `git@gitlab-saathi:nuraveda-lab/saathi.git`, and
+verified `ssh -T gitlab-saathi` authenticates as `@floating-astronaut`.
+
+Verified: `git push gitlab main` over SSH succeeded, bringing GitLab from
+`d9bee45` to `3dced24`; `git ls-remote origin main` and `git ls-remote gitlab
+main` both returned `3dced240381ef45b952f447cdd1cc5fe40ccc28b`.
+
+Docs updated: `CONTRIBUTING.md`, `docs/RUNBOOK.md`, `docs/LANDMINES.md`, and
+the CRED-1 lane notes. CRED-1 remains open because this improves reliability
+but does not decide whether the runtime box should keep forge write access.
+
+## OBS-3 - Logfire cloud binding for indofolk-ai - 2026-07-29 (Codex)
+
+Read: `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`control-plane/ACTIVE_LANE_BOARD.md`, `docs/ARCHITECTURE.md`,
+`docs/DECISIONS.md`, `docs/RUNBOOK.md`, `saathi/observability.py`,
+`tests/test_observability.py`, and `ops/set-secret.sh`.
+
+Changed:
+- `saathi/observability.py` - Logfire cloud export is now
+  `send_to_logfire="if-token-present"` and the local OTel Collector exporter is
+  passed as an additional span processor instead of replacing Logfire's
+  processors.
+- `tests/test_observability.py` - coverage now pins token-gated cloud export,
+  local collector preservation, `inspect_arguments=False`, scrub behavior, and
+  disabled-by-default behavior.
+- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/RUNBOOK.md`,
+  `CHANGELOG.md`, lane board and session coordination - OBS-3 write-back.
+
+Secrets:
+- Stored `SAATHI_TRACING_ENABLED=1` and `LOGFIRE_TOKEN` in Secrets Manager
+  `saathi/dev/runtime` through `ops/set-secret.sh`, value-blind. The write token
+  points to Pydantic Logfire project `indofolk-ai`. The broader Pydantic API key
+  was not stored because app runtime does not need it.
+
+Verified:
+- `uv run pytest -q tests/test_observability.py` - 15 passed.
+- `uv run pytest -q` - 536 passed.
+
+## CodeGraph agent tooling - 2026-07-29 (Codex)
+
+Read: `AGENTS.md`, `CLAUDE.md`, `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`, `control-plane/ACTIVE_LANE_BOARD.md`, `control-plane/SESSION_COORDINATION.md`, CodeGraph README, installer script, package metadata, Codex/Claude target writers, shared config writer, and telemetry docs.
+
+Changed:
+- Installed CodeGraph v1.5.0 standalone bundle under `/home/ubuntu/.codegraph` with launcher at `/home/ubuntu/.local/bin/codegraph`.
+- Wired CodeGraph MCP into Codex (`/home/ubuntu/.codex/config.toml`) and Claude Code (`/home/ubuntu/.claude.json`, `/home/ubuntu/.claude/settings.json`, `/home/ubuntu/.claude/CLAUDE.md`) using explicit `codex,claude` targets.
+- Initialized CodeGraph for `/tmp/saathi-main-sync`; committed only `.codegraph/.gitignore`, not the generated SQLite index.
+- Updated `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_SYNC_PROTOCOL.md`, `CHANGELOG.md`, and session coordination so agents use CodeGraph first when `.codegraph/` exists.
+
+Verified:
+- `codegraph version` - 1.5.0.
+- `codegraph telemetry off` - telemetry disabled persistently and buffered,
+  unsent data deleted.
+- `codegraph telemetry status` - disabled by saved config when no override is
+  present.
+- `codegraph init` - 102 files indexed; 1,686 nodes; 3,633 edges.
+- `codegraph status` - index up to date.
+- `codegraph explore` returned line-numbered source and blast-radius output for WhatsApp pipeline and observability paths.
+
+Remains:
+- Codex/Claude sessions must restart before the MCP server appears as a live tool in their tool lists. Shell fallback works now with `codegraph explore`.
+
+## RATE-1 / RATE-2 — inbound rate and concurrency admission — 2026-07-29 (Codex)
+
+Read: `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`control-plane/ACTIVE_LANE_BOARD.md`, `control-plane/SESSION_COORDINATION.md`,
+`docs/THE_METHOD.md`, `docs/ROLES.md`, `docs/LANE_LIFECYCLE.md`,
+`docs/ARCHITECTURE.md`, `docs/PROD_READINESS.md` PR-15/PR-26,
+`docs/USAGE_LEDGER.md`, `docs/AI_ROUTING.md`, `docs/LANDMINES.md`, the inbound
+pipeline, DB migrations, configuration, and test seams.
+
+Changed:
+- `saathi.rate_limit` plus migration 013: content-free, Postgres-backed inbound
+  reservations and per-reason notice timestamps.
+- `pipeline.handle_message`: after identity/dedupe and before STT/media/safety
+  dispatch/model work, take the process-local turn gate (8) and reserve the
+  user's rolling window (6 turns/60 seconds). The per-user advisory lock is
+  non-blocking, so contention refuses quietly rather than creating a queue.
+- Config, regression coverage, architecture/PR-15/usage-ledger docs and
+  changelog record the values and the remaining monetary/edge-limit scope.
+
+Verified:
+- Focused: `uv run pytest -q tests/test_rate_limit.py tests/test_pipeline_order.py tests/test_media_limits.py` — 43 passed.
+- Full: `uv run pytest -q` — 542 passed, both before merge and during deploy.
+- PR #17 squash-merged as `ac0a493` and synchronized to GitHub and GitLab.
+- `ops/deploy.sh --local`: migration `013_inbound_rate_limits.sql` applied;
+  web, worker, Cloudflare tunnel and PostgreSQL all active; localhost and public
+  `/healthz` 200; unsigned webhook probe 403; zero errors since restart.
+- Read-only DB check: migration ledger records 013 and both
+  `inbound_turn_admissions` / `inbound_limit_notices` tables exist.
+
+Remains:
+- PR-15 is not fully closed: Cloudflare/per-IP limiting, multi-process global
+  coordination, and cross-vendor monetary caps remain explicitly open in
+  `PROD_READINESS.md` / `USAGE_LEDGER.md`.
+
+## SEC-1 — Meta Business Agent responder guard — 2026-07-29 (Codex)
+
+Read: doc system/sync/control plane, `LANDMINES.md`, `PROD_READINESS.md` PR-6,
+D-E, alerting/runbook surfaces, Meta captured docs, and the live Graph state.
+
+Changed: added `saathi.meta_guard`, its hourly systemd timer/service, and
+alert-installer support. The guard requires Saathi's configured app to retain
+the `whatsapp_business_account/messages` subscription and rejects any non-empty
+Business Agent settings response. It uses the existing `OnFailure` SNS path.
+
+Verified: PR #19 merged as `c19a0e4`; full suite 544 passed before merge and
+during deploy. `ops/alerting/install.sh` enabled the timer. Its first live run
+returned HTTP 200 from both Meta checks and logged `Meta responder guard passed`;
+the next hourly run is scheduled. Web, worker, tunnel and `/healthz` remained
+healthy.
+
+Remains: `subscribed_apps` is supplementary only: it returned an empty list
+after Meta accepted the documented subscribe POST, so it is not used as a
+fail-open exact-set monitor.
+
+## CRED-1 — runtime forge write authority decision — 2026-07-29 (Codex)
+
+Read: control plane, `PROD_READINESS.md` PR-22, `CONTRIBUTING.md`, D-L, and
+runtime GitHub/GitLab authentication state.
+
+Decision: operator chose to retain runtime GitHub/GitLab write credentials and
+dedicated SSH keys as mirror authority (D-AC). Saathi's running app does not
+execute from either forge; the relevant blast radius is a poisoned future deploy
+and GitLab Cloudflare Pages `site` updates, not an immediate app-process change.
+
+Remains: revisit this exception if runtime exposure grows, contributors change,
+or the site gains sensitive flows.
+
+## ID-2 — stale WhatsApp handle 90-day lifecycle — 2026-07-29 (Codex)
+
+Read: `DOC_SYSTEM.md`, sync/control-plane docs, PRD/build plan, architecture,
+D-AA, glossary, landmines, identity/pipeline/scheduled-turn implementation and
+its tests.
+
+Changed: migration 014 adds the `reverify` handle state and backfills 60-day
+lifecycle turns. The worker sends a content-free day-60 `daily_checkin` then
+revokes only after 90 days of continuous dead air. A returning stale handle is
+stopped before logs, history, transcription, tools, memory or model work; it
+can continue explicitly or issue a 15-minute move code. `MOVE <code>` accepts
+only a blank new handle, makes it primary and revokes the old one.
+
+Verified: focused lifecycle tests passed (29); full `uv run pytest -q` passed
+with 549 tests before merge and during deploy. PR #22 merged as `60f20f0`.
+`ops/deploy.sh --local` applied migration 014 and reported web/worker/tunnel/
+PostgreSQL active, localhost and public health 200, unsigned webhook 403, and
+the `reverify` worker kind registered. Read-only DB evidence: migration 014 is
+recorded, 8 pending lifecycle checks were backfilled, and 0 live handles are
+currently in `reverify`.
+
+Remains: the day-60 outreach deliberately uses the existing generic template;
+if product wants explanatory proactive copy, it must first obtain a dedicated
+Meta-approved utility template without exposing prior ownership.
+
+## LIFE-5 — stronger deterministic scam shield — 2026-07-29 (Codex)
+
+Read: doc system/control plane, `DAILY_LIFE_OS.md`, safety/clinical grounding,
+architecture, classifier and safety tests.
+
+Changed: priority-0 classifier now recognizes courier/customs/police pressure,
+electricity disconnection, loan/investment, job/pension, UPI collection and
+remote-support requests. Clear fraud remains `SCAM`; lower-confidence pressure
+is `SUSPICIOUS`. Both bypass the model; the latter gives one safe official-contact
+verification step and 1930 escalation.
+
+Verified: focused safety/capability suite 60 passed; full suite 560 passed before
+merge and during `ops/deploy.sh --local`. PR #24 merged as `a724921`; web, worker,
+tunnel and PostgreSQL active, public health 200, unsigned webhook 403, zero restart errors.
+
+Remains: tune patterns only with explicit false-positive examples; broad payment
+words alone intentionally do not trigger the shield.
+
+## LEDGER-1 — vendor usage ledger foundation — 2026-07-29 (Codex)
+
+Read: doc system/sync/control plane, PRD/build plan, `USAGE_LEDGER.md` §11,
+architecture, PR-15, runbook, current rate limiter/worker/config/migration
+conventions, and CodeGraph call paths.
+
+Changed: migration 015 creates content-free append-only vendor usage events and
+auditable reservation rows. `saathi.usage` supplies idempotent, account advisory
+lock-protected holds, cap refusal, settlement, release, event insertion and
+expiry; the worker sweeps only stale holds into `expired`, never deletes them.
+The config default is observe-only and no paid model, speech or template call is
+hooked in this slice. PR-15 and the runbook now also record the existing
+Cloudflare webhook edge rule and its positive/negative verification.
+
+Verified: focused `tests/test_usage.py` passed 9; full suite passed 569 before
+merge and again during `ops/deploy.sh --local`. PR #27 merged as `b71a849`;
+migration 015 applied; web, worker, Cloudflare tunnel and PostgreSQL were
+active; localhost and public health returned 200; unsigned webhook returned
+403; no worker warnings since restart. Read-only PostgreSQL check confirmed
+both ledger tables and the reservation-state type exist.
+
+Remains: Slice B wires direct Bedrock/OpenRouter call paths and begins the
+seven-day comparison; Slice C adds speech/templates; Slice D introduces caps.
+PR-15 is still open until monetary enforcement and the cross-process global
+coordination decision are finished or explicitly retired.
+
+## LEDGER-2 — vendor usage hooks and staged STT enforcement — 2026-07-29 (Codex)
+
+Read: doc system, sync/control-plane docs, Method/roles, `USAGE_LEDGER.md` §11,
+`AI_ROUTING.md`, architecture, PR-15, current pipeline/usage/config code via
+CodeGraph, and existing usage/pipeline/rate-limit tests.
+
+Changed: successful Bedrock/OpenRouter model calls, Sarvam STT calls and
+WhatsApp template sends now write Saathi-owned content-free usage events.
+Sarvam STT computes the catalog INR paise estimate from WAV duration before the
+vendor call and, when `SAATHI_USAGE_ENFORCEMENT_ENABLED=true`,
+`SAATHI_USAGE_LEDGER_MODE=enforce`, and `SAATHI_USAGE_ACCOUNT_CAP_PAISE>0`, takes
+an account-locked INR reservation before sending audio to Sarvam. Cap exhaustion
+or missing accounting returns fixed voice-limit copy and never reaches STT.
+Successful enforced calls settle the reservation and link the event. Reservation
+cap aggregates are currency-scoped so USD LLM usage cannot consume INR STT
+budget. Runtime defaults remain observe-only.
+
+Verified: focused suite `uv run pytest -q tests/test_usage.py
+tests/test_pipeline_order.py tests/test_rate_limit.py` passed 29; full
+`uv run pytest -q` passed 577 before PR. PR #32 merged as `aacd5af`; local deploy
+ran migrations, full suite passed 577 again, and verified active web, worker,
+Cloudflare tunnel and PostgreSQL. Independent post-deploy checks returned
+localhost health OK and all four services active; deploy also verified public
+health 200 and unsigned webhook 403.
+
+Remains: PR-15 still has broader paid-surface enforcement work unless the
+operator explicitly narrows the production requirement to STT-only: LLM/template
+pre-call reservations, global vendor caps and their alert path are not enabled
+by this lane.

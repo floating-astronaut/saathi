@@ -12,6 +12,164 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - staged Sarvam STT ledger enforcement (LEDGER-2)
+
+- Added explicit rollout controls for local usage enforcement:
+  `SAATHI_USAGE_ENFORCEMENT_ENABLED`, `SAATHI_USAGE_LEDGER_MODE=enforce`, and a
+  positive `SAATHI_USAGE_ACCOUNT_CAP_PAISE` are all required before a call can
+  be refused.
+- Sarvam STT now computes the catalog INR paise estimate before transcription,
+  reserves against the account cap before sending audio to Sarvam when
+  enforcement is enabled, settles the hold after success, and links the usage
+  event to the reservation.
+- Reservation cap aggregates are scoped by currency, so USD model accounting
+  cannot consume INR speech budget.
+
+## 2026-07-29 - observe-only STT and template usage accounting (LEDGER-2)
+
+- Successful Sarvam transcriptions record exact WAV duration and rounded billed
+  seconds; successful WhatsApp templates record after Meta returns a message ID.
+- Accounting failures never retry or disrupt an already-successful vendor call.
+
+## 2026-07-29 - observe-only LLM usage accounting (LEDGER-2)
+
+- Successful Bedrock and OpenRouter requests now append Saathi-owned usage
+  events with actual input/output tokens, per-request latency and provider IDs.
+- Routing, residency controls and user-visible replies are unchanged; a ledger
+  write error is logged without failing a successful reply while observe-only.
+
+## 2026-07-29 - vendor usage ledger foundation (LEDGER-1)
+
+- Added migration 015 and the observe-only `saathi.usage` accounting API:
+  idempotent account-locked reservations, append-only vendor events, settlement,
+  release and auditable expiry. No paid call behavior has changed yet.
+- Added `SAATHI_USAGE_LEDGER_MODE=observe` as the safe default. Focused ledger
+  tests and the full suite passed before the PR checkpoint.
+
+## 2026-07-29 - stronger deterministic scam shield (LIFE-5)
+
+- Added pre-model coverage for courier/customs/police threats, electricity
+  disconnection, fee-based loan/job/pension pressure, guaranteed-return
+  investments, urgent UPI collection, and remote-support app requests.
+- Lower-confidence pressure patterns return a fixed warning and one safe
+  verification step; they do not reach the model. Clear fraud signals retain
+  the stronger scam response and 1930 escalation.
+
+## 2026-07-29 - stale WhatsApp handles cannot inherit an elder's account (ID-2)
+
+- A WhatsApp handle silent for 60 days now receives a content-free check-in;
+  after 90 days of uninterrupted silence the handle is revoked, not the user.
+- A returning stale handle is blocked before conversation/history, message
+  logging, transcription, tools, memory or the model. It must explicitly
+  continue or request a 15-minute move code for a new number.
+- `MOVE <six-digit-code>` works only from a blank new handle; it transfers the
+  account, makes the new handle primary, and revokes the old one. Bare digits
+  and established accounts cannot consume a move code.
+
+## 2026-07-29 - Meta responder guard (SEC-1)
+
+- Added an hourly systemd guard that fails loudly if Saathi's own WhatsApp
+  webhook subscription disappears or Meta Business Agent settings appear.
+- The check enters the existing `OnFailure` SNS alert path; it never logs a
+  bearer token or callback URL.
+
+## 2026-07-29 - inbound rate and concurrency admission (RATE-1/RATE-2)
+
+### Added
+
+- A process-local inbound-turn gate (default: 8) now bounds all work after
+  identity/deduplication and before transcription, media handling, safety
+  dispatch, or an agent turn. It refuses rather than queues.
+- A Postgres-backed atomic reservation allows each user six inbound turns per
+  rolling minute across text, voice, image, and document messages. The
+  non-blocking advisory lock prevents concurrent same-user requests from
+  over-admitting; duplicates consume no slot.
+- Rate-limit and overload replies are bilingual, sent once per reason per ten
+  minutes, then silent so an attack does not turn refusals into outbound cost.
+
+### Still open
+
+- This is an availability/fairness guard, not the cross-vendor cost ledger:
+  edge/IP limits, multi-process global coordination, and monetary vendor caps
+  remain in PR-15 / `docs/USAGE_LEDGER.md`.
+
+## 2026-07-29 - CodeGraph installed for agent code navigation
+
+### Added
+
+- CodeGraph v1.5.0 is installed on the box and wired into Codex and Claude Code
+  as a local MCP server.
+- The Saathi source checkout now has a local `.codegraph/` index marker; the
+  generated database remains untracked and can be regenerated with
+  `codegraph init` or `codegraph index`.
+
+### Verified
+
+- `codegraph status` reports 102 Python files, 1,686 nodes, 3,633 edges, and an
+  up-to-date index in `/tmp/saathi-main-sync`.
+- `codegraph explore` returned line-numbered source and blast-radius output for
+  the WhatsApp pipeline and observability paths.
+
+## 2026-07-29 - tracing can export to Logfire project when token is present
+
+**Focused tests passing:** `uv run pytest -q tests/test_observability.py` — 15
+passed. Full suite: `uv run pytest -q` — 536 passed. OBS-3.
+
+### Changed
+
+- `observability.init()` now configures Logfire cloud export as
+  `send_to_logfire="if-token-present"`, so the project write token decides
+  whether spans are sent to Pydantic Logfire.
+- The local OTel Collector export remains wired alongside cloud export.
+- Privacy constraints are unchanged: `inspect_arguments=False`, fixed
+  attribute allow-list, no message text/transcript/name/medicine/query params.
+
+---
+
+## 2026-07-29 - tracing follow-up: span failures cannot affect turns
+
+**Focused tests passing:** `uv run pytest -q tests/test_observability.py` — 14
+passed. Full suite: `uv run pytest -q` — 535 passed. OBS-2.
+
+### Fixed
+
+- `observability.span()` now preserves application exceptions exactly. Tracing
+  enter/exit failures degrade to no-op behavior instead of replacing or
+  suppressing the real turn error.
+- The optional tracing stack no longer has a port conflict: the app exports to
+  the OTel Collector on `127.0.0.1:4317`, and the collector exports to Jaeger on
+  `127.0.0.1:4318`.
+- Jaeger OTLP gRPC is bound to `127.0.0.1`, not `0.0.0.0`.
+- Cleaned the architecture write-back so tracing and relayed-content rules are
+  separate sections.
+
+---
+
+## 2026-07-29 - in-region tracing: spans on the critical path, zero PII in telemetry
+
+**Focused tests passing:** 11 passed (test_observability.py). Full suite: 532 passed. OBS-1.
+
+### Added
+
+- saathi/observability.py - privacy-hardened tracing via logfire SDK (OTLP
+  exporter to local OTel Collector at 127.0.0.1:4317, Jaeger all-in-one on-box).
+  Best-effort init behind SAATHI_TRACING_ENABLED.
+- Spans on the critical path: pipeline.handle_message, safety.classify,
+  agent.loop.run, every model.call (Bedrock/OpenRouter), and every tool_call.
+- ops/saathi-otelcol.service, ops/saathi-jaeger.service, ops/setup-tracing.sh.
+- Dependencies: logfire, opentelemetry-exporter-otlp, opentelemetry-sdk.
+
+### Privacy rules
+
+- inspect_arguments=False - hard-disable automatic function-argument capture.
+- Fixed attribute allow-list: kind, latency_ms, input_tokens, output_tokens,
+  tool_name, hop_count, model_id, error_class, trigger. Never message text,
+  transcript, names, medicines, phone numbers, or query parameters.
+- All data stays in ap-south-1; no traffic to logfire-us.pydantic.dev.
+
+
+
+
 ## 2026-07-28 — returning WhatsApp users do not restart signup
 
 **Focused tests passing:** `uv run pytest -q tests/test_capabilities.py tests/test_language_change.py tests/test_onboarding.py` — 32 passed. Full suite: `uv run pytest -q` — 521 passed. ID-1.

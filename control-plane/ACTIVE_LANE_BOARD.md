@@ -28,6 +28,48 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LEDGER-2 — vendor usage hooks and staged STT enforcement   [CLOSED]
+Owner: Codex (source branches `agent/llm-usage-accounting`, `agent/ledger-stt-enforcement`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/USAGE_LEDGER.md §11, docs/AI_ROUTING.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md PR-15, saathi/agent/loop.py, saathi/openrouter.py, saathi/capabilities.py, saathi/usage.py
+Acceptance: each direct Bedrock/OpenRouter LLM request emits exactly one content-free usage event with actual reported tokens and latency; successful Sarvam STT and WhatsApp template calls emit content-free usage events; Sarvam STT can reserve before vendor spend and refuse before Sarvam when the explicit enforcement flag, enforce mode and a positive approved INR cap are all set; default runtime behavior remains observe-only; focused/full tests pass.
+Write-back: docs/USAGE_LEDGER.md, docs/AI_ROUTING.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. PR #29 deployed LLM usage events; PR #30 added STT/template observe-only events; PR #31 added Sarvam pricing; PR #32 (`aacd5af`) added disabled-by-default STT pre-call reservations and cap refusal. Deploy verified 577 tests, active web/worker/tunnel/PostgreSQL, localhost/public health 200 and unsigned webhook 403. Remaining PR-15 work is LLM/template/global vendor cap enforcement unless the operator narrows the requirement to STT-only.
+
+### LEDGER-1 — vendor usage ledger foundation   [CLOSED]
+Owner: Codex (source branch `agent/vendor-ledger-foundation`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/USAGE_LEDGER.md §11, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15), db/migrations/, saathi/config.py, saathi/worker/__main__.py
+Acceptance: append-only vendor usage events plus idempotent atomic reservation, settlement, release and expiry APIs; observe-only default; fake-connection concurrency tests; no paid-call behavior changes.
+Write-back: docs/USAGE_LEDGER.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md, docs/RUNBOOK.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. PR #27 (`b71a849`) deployed migration 015; 569 tests and live schema/services/health checks passed. Observe-only by design: per-vendor hooks and enforcement remain later slices.
+
+### RATE-1 — bound inbound turn concurrency   [CLOSED]
+Owner: Codex (source branch `agent/rate-limit-admission`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15, PR-26), docs/USAGE_LEDGER.md, saathi/pipeline.py, saathi/core/backpressure.py, saathi/web/app.py
+Acceptance: no more than the configured number of inbound turns may execute in one web process at once; an over-cap valid sender receives at most one quiet retry-later notice during the configured cooldown; no turn is queued, and safety/onboarding/media/model work remains inside the bound.
+Write-back: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Default cap is 8 process-local turns; overload refuses rather than queues, sends one quiet bilingual notice per 10-minute reason cooldown, and does not consume a user's quota. Deployed at `ac0a493`; migration 013 and health/service checks verified live.
+
+### RATE-2 — persistent per-user inbound sliding window   [CLOSED]
+Owner: Codex (source branch `agent/rate-limit-admission`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md (PR-15), docs/USAGE_LEDGER.md, db/schema.sql, db/migrations/, saathi/pipeline.py
+Acceptance: a Postgres-backed atomic reservation before transcription or dispatch limits one user across text, voice, images and documents; concurrent requests cannot over-admit; one rate-limit notice is sent per cooldown and later requests stay silent; duplicates do not consume quota; focused and full suites pass.
+Write-back: docs/ARCHITECTURE.md, docs/PROD_READINESS.md, docs/USAGE_LEDGER.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Postgres admission reservations apply before STT/dispatch across all modalities: 6 per user per rolling 60 seconds, serialized with a non-blocking advisory lock. Duplicates consume no quota; lock contention/full windows go quiet after one notice. Cross-vendor monetary caps remain the separate `USAGE_LEDGER.md` lane.
+
+### OBS-3 — bind tracing to Pydantic Logfire project   [CLOSED]
+Owner: Codex (source branch `agent/logfire-cloud-bind`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/RUNBOOK.md, saathi/observability.py, tests/test_observability.py, ops/set-secret.sh
+Acceptance: Logfire cloud export is enabled only when `LOGFIRE_TOKEN` is present, keeps `inspect_arguments=False` and the attribute allow-list, preserves local collector export, stores the provided project write token in Secrets Manager value-blind, enables tracing for web/worker, deploys, and verifies without printing secrets.
+Write-back: docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/RUNBOOK.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. Runtime secret now has `SAATHI_TRACING_ENABLED=1` and a `LOGFIRE_TOKEN` write token for project `indofolk-ai` (value-blind verified: 55 chars, sha256 prefix recorded by set-secret output only). Code uses `send_to_logfire="if-token-present"`, keeps local collector export, keeps `inspect_arguments=False`, and preserves the scrub allow-list. Focused suite passed: 15. Full suite passed: 536. API key was not stored because app runtime does not need it.
+
+### OBS-2 — tracing follow-up safety and localhost binding   [CLOSED]
+Owner: Codex (source branch `agent/fix-obs1-tracing-safety`)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/RUNBOOK.md, saathi/observability.py, ops/setup-tracing.sh, ops/saathi-otelcol.service, ops/saathi-jaeger.service, tests/test_observability.py
+Acceptance: tracing spans preserve application exceptions, tracing enter/exit failures degrade to no-op behavior, OTel Collector and Jaeger do not bind the same OTLP port, Jaeger binds localhost only, and focused/full tests pass.
+Write-back: docs/RUNBOOK.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/SESSION_COORDINATION.md
+Notes: MET. `observability.span()` now preserves application exceptions and swallows tracing enter/exit failures only. Collector receives on `127.0.0.1:4317`; Jaeger OTLP listens on `127.0.0.1:4318`, with no `0.0.0.0` OTLP bind. Focused suite passed: 14. Full suite passed: 535.
+
 ### ID-1 — returning WhatsApp handle must not restart onboarding   [CLOSED]
 Owner: Codex (source branch `agent/returning-whatsapp-handle-onboarding`)        Opened: 2026-07-28 · Closed: 2026-07-28
 Reading: docs/DOC_SYSTEM.md, docs/AGENT_SYNC_PROTOCOL.md, docs/ARCHITECTURE.md, docs/foundations/GLOSSARY.md, saathi/identity.py, saathi/onboarding.py, saathi/capabilities.py, saathi/pipeline.py, tests/test_capabilities.py, tests/test_onboarding.py
@@ -64,12 +106,12 @@ Acceptance: forwarded text/image/PDF/SMS-like content is treated as third-party 
 Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
 Notes: MET. Relayed fence/prompt now asks for explanation, amount/date/place/person/action extraction, scam pressure flag and one safe next step. Mutating tools remain withheld. `uv run pytest -q` passed: 518.
 
-### ID-2 — stale WhatsApp handle 90-day lifecycle   [OPEN]
-Owner: unassigned        Opened: 2026-07-28
+### ID-2 — stale WhatsApp handle 90-day lifecycle   [CLOSED]
+Owner: Codex (source branch `agent/stale-whatsapp-handle-lifecycle`)        Opened: 2026-07-28 · Claimed/Closed: 2026-07-29
 Reading: docs/ARCHITECTURE.md, docs/foundations/GLOSSARY.md, docs/DECISIONS.md (D-AA), saathi/identity.py, saathi/worker/turns.py, db/migrations/, tests/test_identity.py
 Acceptance: a handle with no inbound message for the written stale window is nudged before risk, can confirm continued ownership or move the account to a new number, and is revoked/deleted only after 90 days of dead air according to the recorded lifecycle policy.
 Write-back: docs/ARCHITECTURE.md, docs/DECISIONS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
-Notes: Product rule from operator: number is not the account, but an active chat must not be lost; recycling protection starts only after sustained dead air and warnings.
+Notes: MET. Day-60 content-free check-in/re-verification gate, explicit continuation or 15-minute move code, and day-90 revocation landed in PR #22 (`60f20f0`), migration 014 applied, 549 tests and live service/tunnel checks passed.
 
 ### LIFE-2 — lightweight daily task manager   [OPEN]
 Owner: unassigned        Opened: 2026-07-28
@@ -92,12 +134,12 @@ Acceptance: user can ask for short WhatsApp-ready drafts in their selected scrip
 Write-back: docs/DAILY_LIFE_OS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
 Notes: Likely prompt/tool surface only; preserve one-question rule.
 
-### LIFE-5 — stronger scam shield   [OPEN]
-Owner: unassigned        Opened: 2026-07-28
+### LIFE-5 — stronger scam shield   [CLOSED]
+Owner: Codex (source branch `agent/stronger-scam-shield`)        Opened: 2026-07-28 · Claimed/Closed: 2026-07-29
 Reading: docs/DAILY_LIFE_OS.md, docs/foundations/SAFETY_AND_CLINICAL.md, docs/ARCHITECTURE.md, saathi/safety/classifier.py, tests/test_safety.py
 Acceptance: deterministic patterns cover courier/customs/police, electricity-disconnect threats, loan/investment/lottery, fake job/pension, urgent UPI/payment pressure and remote-support app requests; lower-risk suspicious content gets warning plus safe next step.
 Write-back: docs/DAILY_LIFE_OS.md, docs/ARCHITECTURE.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
-Notes: Safety priority 0 remains non-negotiable.
+Notes: MET. Priority-0 `SCAM` and lower-confidence `SUSPICIOUS` patterns cover every listed pressure family; both block the model and give a safe verification path. PR #24 (`a724921`) deployed; 560 tests and live health/webhook probes passed.
 
 ### LIFE-6 — local errand and app handoffs   [OPEN]
 Owner: unassigned        Opened: 2026-07-28
@@ -152,8 +194,8 @@ Notes: measured 2026-07-27 — `sshd` listens on `0.0.0.0:22` and an SSH handsha
   **Under `docs/LANE_LIFECYCLE.md` §5 the lane that opened SSH is still OPEN, not
   closed: it changed infrastructure and never wrote back.**
 
-### CRED-1 — runtime box now holds write credentials for both forges   [OPEN]
-Owner: unassigned        Opened: 2026-07-27 · Reviewed: 2026-07-27 (evening)
+### CRED-1 — runtime box retains forge write credentials by decision   [CLOSED]
+Owner: Codex        Opened: 2026-07-27 · Closed: 2026-07-29
 Reading: docs/PROD_READINESS.md, CONTRIBUTING.md, docs/DECISIONS.md
 Acceptance: a PROD_READINESS row exists for the credential surface; a decision
   is recorded on whether the runtime box keeps forge write access or is reduced
@@ -182,18 +224,28 @@ Notes: `gh` 2.46.0 and `glab` 1.53.0 installed on `i-01b2c27883acb25ca` and
   keeps write access or drops to read-only — is still unmet. Deciding it by
   continuing to use it is how the question stops being asked.
 
-### SEC-1 — Meta Business Agent is subscribed to our WABA   [OPEN]
-Owner: unassigned        Opened: 2026-07-26 (migrated from supervisor Queued)
+  2026-07-29 reliability update: GitLab mirroring now uses a dedicated SSH key
+  (`gitlab-saathi`, `/home/ubuntu/.ssh/saathi_gitlab_ed25519`, public key title
+  `saathi runtime ip-172-31-32-37 2026-07-29`, expires 2027-07-29) instead of
+  the brittle HTTPS/OAuth helper path. This fixes sync reliability, not the
+  underlying forge-write-credentials risk.
+
+  **MET — operator decision D-AC:** retain runtime write access as mirror
+  authority. Saathi app processes do not execute from a forge; the residual risk
+  is future app deploy/source integrity and immediate Cloudflare Pages `site`
+  integrity. Revisit on exposure or contributor-model change.
+
+### SEC-1 — Meta Business Agent responder guard   [CLOSED]
+Owner: Codex (source branch `agent/meta-subscription-guard`)        Opened: 2026-07-26 · Closed: 2026-07-29
 Reading: docs/LANDMINES.md, docs/PROD_READINESS.md (PR-6), docs/DECISIONS.md (D-E)
 Acceptance: app `1143680903703001` is unsubscribed from WABA `1023945910495878`,
   **or** a dated decision records that it stays with `rollout.enabled = false`
   plus a check that alerts if the flag flips.
 Write-back: docs/DECISIONS.md, docs/PROD_READINESS.md, docs/LANDMINES.md
-Notes: operator decision — not taken unilaterally, since the subscription was not
-  created by the lane that found it. Enabling it makes Meta's model the primary
-  responder, so inbound messages never reach the deterministic priority-0 safety
-  classifier (R7). **Appeared in two separate supervisor `Queued` blocks and was
-  never closed — this board exists because of failures like this one.**
+Notes: MET. D-E rejects Meta Business Agent. The hourly timer verifies Saathi's
+  own `whatsapp_business_account/messages` subscription and rejects non-empty
+  Agent settings; first live run passed at 2026-07-29T11:20Z. The WABA list
+  endpoint remains supplementary because it returned empty after subscribe POST.
 
 ### SEC-2 — security review   [CLOSED]
 Owner: Codex        Opened: 2026-07-27 · Closed: 2026-07-27
@@ -536,3 +588,10 @@ Result: control plane added by **merge, not scaffold** — `bin/vibe-scaffold`
 
 
 OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.
+
+### OBS-1 — in-region tracing (logfire SDK → local collector → Jaeger)   [CLOSED]
+Owner: Clawcore (runtime box, source branch agent/in-region-tracing)        Opened: 2026-07-29 · Closed: 2026-07-29
+Reading: docs/THE_METHOD.md, docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/PROD_READINESS.md, docs/RUNBOOK.md, CONTRIBUTING.md, saathi/metrics.py, saathi/config.py, saathi/pipeline.py, saathi/agent/loop.py, saathi/web/app.py, saathi/worker/__main__.py
+Acceptance: logfire SDK configured with inspect_arguments=False, OTLP exporter to localhost:4317, saathi/observability.py enforces a fixed allow-list of span attributes, tracing spans cover pipeline.handle_message → safety.classify → speech → agent.loop.run → each model call and tool handler, best-effort init, otelcol+jaeger systemd units exist and listen on 127.0.0.1 only, uv run pytest -q passes with no regression.
+Write-back: docs/ARCHITECTURE.md (new boundary + no-PII-in-spans rule), docs/DECISIONS.md (D-AB), docs/RUNBOOK.md (two new units + how to query), CHANGELOG.md (symptom first), docs/PROD_READINESS.md (new infra row), docs/ENGINEERING_SUPERVISOR.md (evidence appended), control-plane/SESSION_COORDINATION.md
+Notes: MET. PRs #11 (code) + #12 (docs) merged (squash). Deployed 8b2fe16 via ops/deploy.sh --local. 532 tests passed, zero regressions. All spans wired. Tracing disabled by default (SAATHI_TRACING_ENABLED unset). Setup script and systemd units exist but not yet run — infra install is a separate ops/setup-tracing.sh step at enable time.

@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenTelemetry Collector (saathi - localhost only)
+After=network.target
+Documentation=docs/RUNBOOK.md #opentelemetry-collector
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/saathi-otelcol
+ExecStart=/opt/saathi-otelcol/otelcol --config=/opt/saathi-otelcol/config.yaml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=saathi-otelcol
+
+[Install]
+WantedBy=multi-user.target

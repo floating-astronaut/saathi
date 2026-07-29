@@ -19,10 +19,14 @@ Ordering here is the product, not an implementation detail:
 """
 from __future__ import annotations
 
+import io
 import logging
+import math
+import wave
 
 from . import (accounts, commands, conversation, documents, identity, memory,
-               media_store, onboarding, privacy, provenance, training, vision)
+               media_store, observability, onboarding, privacy, provenance,
+               rate_limit, training, usage, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -169,8 +173,55 @@ async def transcribe_voice(conn, user_id: int, media_id: str,
     # what the user actually sent.
     await media_store.put_voice(conn, user_id, ogg, wa_message_id=wa_message_id)
     wav = await ogg_to_wav16k(ogg)
+    with wave.open(io.BytesIO(wav), "rb") as audio:
+        seconds = audio.getnframes() / audio.getframerate()
+    rounded_seconds = math.ceil(seconds)
+    estimated_paise = usage.sarvam_stt_cost_paise(rounded_seconds)
+    row = await (await conn.execute("select account_id from users where id = %s",
+                                    (user_id,))).fetchone()
+    account_id = row[0] if row else None
+    reservation = None
+
+    if usage.enforcement_enabled(
+            enabled=settings.saathi_usage_enforcement_enabled,
+            mode=settings.saathi_usage_ledger_mode,
+            account_cap_paise=settings.saathi_usage_account_cap_paise):
+        if account_id is None or not wa_message_id:
+            raise usage.UsageAccountingUnavailable("STT accounting lacks account or idempotency key")
+        reservation = await usage.reserve(
+            conn, idempotency_key=f"stt:{wa_message_id}", user_id=user_id,
+            account_id=account_id, vendor="sarvam", service="stt",
+            operation="speech_to_text", reserved_minor=estimated_paise,
+            currency="INR", cap_minor=settings.saathi_usage_account_cap_paise)
+        if reservation is None:
+            raise usage.UsageCapExceeded("STT account cap exceeded")
+        if reservation.state != "held":
+            raise usage.UsageAccountingUnavailable("STT reservation is not reusable for a new call")
+
     entities = await memory.surface_forms(conn, user_id)
-    return await stt_mod.transcribe(wav, entities=entities)
+    transcript = await stt_mod.transcribe(wav, entities=entities)
+    if reservation is not None:
+        try:
+            await usage.settle(conn, reservation.id, actual_minor=estimated_paise)
+        except Exception:  # noqa: BLE001 -- paid call already succeeded
+            log.exception("STT usage reservation settlement failed")
+    # Saaras bills audio time, not bytes. The WAV supplies exact duration
+    # without putting content in the ledger; failures cannot retry a success.
+    try:
+        await usage.record_event(
+            conn, vendor="sarvam", service="stt", operation="speech_to_text",
+            status="success", user_id=user_id, account_id=account_id,
+            reservation_id=reservation.id if reservation else None,
+            request_id=f"stt:{wa_message_id}" if wa_message_id else None,
+            model=stt_mod.MODEL,
+            units={"audio_seconds": seconds, "rounded_seconds": rounded_seconds},
+            cost={"currency": "INR", "estimated_paise": estimated_paise},
+            cost_source="catalog_estimate",
+            metadata={"language": transcript.language,
+                      "pricing_version": usage.SARVAM_STT_PRICE_VERSION}, latency_ms=transcript.ms)
+    except Exception:  # noqa: BLE001 -- observe-only after a paid success
+        log.exception("observe-only STT usage event failed")
+    return transcript
 
 
 async def _contribute_corrections(conn, user_id: int, transcript) -> None:
@@ -204,6 +255,10 @@ async def _contribute_corrections(conn, user_id: int, transcript) -> None:
 # the sender's decision, not ours.
 _MEDIA_GATE = backpressure.Gate("media", settings.saathi_media_concurrency)
 _DOC_GATE = backpressure.Gate("document", settings.saathi_doc_concurrency)
+# All inbound work after identity/dedupe passes this gate, including text,
+# audio/STT, image/document work and the agent.  It is a process-local overload
+# guard; RATE-2 below supplies the durable per-user frequency limit.
+_TURN_GATE = backpressure.Gate("turn", settings.saathi_turn_concurrency)
 
 
 # Refusals an elder can act on. Bilingual and specific, in the register the rest
@@ -222,6 +277,22 @@ MEDIA_BUSY = (
     "dijiye, main zaroor padhungi. 🙏\n\n"
     "I'm reading something else just now. Please send this again in a minute and "
     "I'll read it."
+)
+
+TURN_BUSY = (
+    "Main abhi bahut saare sandesh sambhaal rahi hoon. Kripya ek minute baad phir "
+    "bhej dijiye. 🙏\n\n"
+    "I'm handling several messages right now. Please try again in a minute."
+)
+
+TURN_RATE_LIMITED = (
+    "Aapne abhi kaafi sandesh bheje hain. Kripya ek minute rukkar phir bhej dijiye. 🙏\n\n"
+    "You've sent several messages just now. Please wait a minute, then send it again."
+)
+
+USAGE_CAP_LIMITED = (
+    "Aaj ke liye voice-note limit poori ho gayi hai. Kripya chhota text message bhej dijiye. 🙏\n\n"
+    "The voice-note limit for now is reached. Please send a short text message instead."
 )
 
 DOC_TOO_LONG = (
@@ -548,8 +619,6 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     edit here.
     """
     from . import capabilities  # noqa: F401 - registers the chain on import
-    from .core.context import MessageContext
-    from .core.handlers import dispatch
 
     transport = registry.get(channel)
     handle = msg.get("from")
@@ -559,17 +628,103 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     who = await identity.resolve(conn, channel, handle, contact_name,
                                  dm_policy=settings.saathi_dm_policy)
 
+    if await already_seen(conn, wa_mid):
+        log.info("duplicate webhook for %s, ignoring", wa_mid)
+        return {"skipped": "duplicate"}
+
+    # A brand-new handle may present the short move code issued in a guarded
+    # stale-handle chat.  Do this before admission/onboarding so the temporary
+    # identity created by `resolve` never gets a second signup or an agent turn.
+    text = (msg.get("text") or {}).get("body", "") if kind == "text" else ""
+    move = identity.MOVE_CODE_RE.match(text)
+    if move:
+        moved = await identity.move_to_new_handle(conn, move.group(1), channel, handle)
+        if moved:
+            if transport.capabilities.has_session_window:
+                await window.touch(conn, moved)
+            await transport.send_text(conn, moved, handle,
+                                      "Your account is now on this number. / Aapka account ab is number par hai.")
+            return {"handled": "identity_move"}
+
     # Admission: under `pairing` an unknown handle never reaches the chain.
     if who.status == "pending" and settings.saathi_dm_policy == "pairing":
+        if transport.capabilities.has_session_window:
+            await window.touch(conn, who.user_id)
         if await identity.should_explain(conn, who.user_channel_id,
                                          settings.saathi_admission_max_replies):
             await transport.send_text(conn, who.user_id, handle, identity.ADMISSION_REPLY)
         log.info("unadmitted handle %s/%s — not processed", channel, handle)
         return {"skipped": "not_admitted"}
 
-    if await already_seen(conn, wa_mid):
-        log.info("duplicate webhook for %s, ignoring", wa_mid)
-        return {"skipped": "duplicate"}
+    # This gate is deliberately before window/conversation/transcription/logging
+    # and the capability chain.  A recycled number must not learn stored facts,
+    # cause a reminder change, or spend model/STT budget merely by sending text.
+    if who.needs_reverification:
+        if transport.capabilities.has_session_window:
+            await window.touch(conn, who.user_id)
+        button = ((msg.get("interactive") or {}).get("button_reply") or {}).get("id")
+        button = button or (msg.get("button") or {}).get("payload", "")
+        if button == "idv:continue":
+            await identity.confirm_reverification(conn, who.user_id, who.user_channel_id)
+            await transport.send_text(conn, who.user_id, handle,
+                                      "Thank you. Your access is active again. / Shukriya, aapka access phir se chalu hai.")
+            return {"handled": "identity_reverified"}
+        if button == "idv:move":
+            code = await identity.issue_link_code(conn, who.user_id, channel)
+            await transport.send_text(conn, who.user_id, handle,
+                                      "On your new number, send: MOVE " + code + ". This code expires in 15 minutes.")
+            return {"handled": "identity_move_code"}
+        await transport.send_buttons(
+            conn, who.user_id, handle,
+            "This number has been quiet for a while. Before I open your saved information, please confirm it is still yours. / Is number par kaafi din se baat nahi hui. Aapki saved baatein kholne se pehle, kripya confirm karein ki yeh number ab bhi aapka hai.",
+            [("idv:continue", "Yes, continue"), ("idv:move", "New number")])
+        return {"handled": "identity_reverification_required"}
+
+    # This is deliberately before audio transcription and before the capability
+    # chain. A rate check after either point would still spend STT/model money.
+    try:
+        turn_slot = _TURN_GATE.hold()
+        turn_slot.__enter__()
+    except backpressure.Busy:
+        if transport.capabilities.has_session_window:
+            await window.touch(conn, who.user_id)
+        if await rate_limit.claim_notice(
+                conn, who.user_id, "busy",
+                cooldown_seconds=settings.saathi_limit_notice_cooldown_s):
+            await transport.send_text(conn, who.user_id, handle, TURN_BUSY)
+        return {"skipped": "busy"}
+
+    try:
+        allowed = await rate_limit.reserve(
+            conn, who.user_id,
+            limit=settings.saathi_user_turn_limit,
+            window_seconds=settings.saathi_user_turn_window_s,
+        )
+        # A same-user request is currently making its reservation. Do not wait
+        # behind it and do not contend on the notice row; quiet refusal is the
+        # only response that is both bounded and free of a new queue.
+        if allowed is None:
+            return {"skipped": "rate_limited"}
+        if not allowed:
+            if transport.capabilities.has_session_window:
+                await window.touch(conn, who.user_id)
+            if await rate_limit.claim_notice(
+                    conn, who.user_id, "rate_limit",
+                    cooldown_seconds=settings.saathi_limit_notice_cooldown_s):
+                await transport.send_text(conn, who.user_id, handle, TURN_RATE_LIMITED)
+            return {"skipped": "rate_limited"}
+
+        return await _handle_admitted_message(conn, transport, who, msg, kind, handle,
+                                               wa_mid, channel)
+    finally:
+        turn_slot.__exit__(None, None, None)
+
+
+async def _handle_admitted_message(conn, transport, who, msg: dict, kind: str,
+                                    handle: str, wa_mid: str | None, channel: str) -> dict:
+    """Run a turn that has already passed dedupe, global and user admission."""
+    from .core.context import MessageContext
+    from .core.handlers import dispatch
 
     if transport.capabilities.has_session_window:
         await window.touch(conn, who.user_id)
@@ -590,8 +745,15 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
     # typed it or spoke it.
     if kind == "audio":
         media_id = (msg.get("audio") or {}).get("id")
-        ctx.transcript = await transcribe_voice(conn, who.user_id, media_id, channel,
-                                               wa_message_id=wa_mid)
+        try:
+            ctx.transcript = await transcribe_voice(conn, who.user_id, media_id, channel,
+                                                   wa_message_id=wa_mid)
+        except (usage.UsageAccountingUnavailable, usage.UsageCapExceeded):
+            if await rate_limit.claim_notice(
+                    conn, who.user_id, "usage_cap",
+                    cooldown_seconds=settings.saathi_limit_notice_cooldown_s):
+                await transport.send_text(conn, who.user_id, handle, USAGE_CAP_LIMITED)
+            return {"skipped": "usage_cap"}
         ctx.text = ctx.transcript.text
         if ctx.transcript.corrections:
             await _contribute_corrections(conn, who.user_id, ctx.transcript)
@@ -613,9 +775,10 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
         await log_message(conn, who.user_id, "in", "interactive",
                           wa_message_id=wa_mid, body=ctx.text)
 
-    result = await dispatch(ctx)
-    if ctx.meta.get("reply"):
-        await log_message(conn, who.user_id, "out", "text", body=ctx.meta["reply"])
+    with observability.span("pipeline.handle_message", kind="pipeline"):
+        result = await dispatch(ctx)
+        if ctx.meta.get("reply"):
+            await log_message(conn, who.user_id, "out", "text", body=ctx.meta["reply"])
     return {"channel": channel, **result}
 
 

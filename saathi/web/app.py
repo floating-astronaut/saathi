@@ -14,11 +14,14 @@ import logging
 
 from fastapi import FastAPI, Request, Response
 
-from .. import db, net_policy, pipeline
+from .. import db, net_policy, observability, pipeline
 from ..config import settings
 
 log = logging.getLogger("saathi.web")
 logging.getLogger().addFilter(net_policy.RedactingFilter())
+
+# Best-effort tracing — must never raise into a turn.
+observability.init()
 
 app = FastAPI(title="Saathi", version="0.1.0")
 

@@ -1,0 +1,27 @@
+[Unit]
+Description=Jaeger all-in-one (saathi — localhost only)
+After=network.target saathi-otelcol.service
+Documentation=docs/RUNBOOK.md #jaeger
+
+[Service]
+Type=simple
+User=ubuntu
+Environment=SPAN_STORAGE_TYPE=badger
+Environment=BADGER_EPHEMERAL=false
+Environment=BADGER_DIRECTORY_VALUE=/opt/saathi-jaeger/data
+Environment=BADGER_SPAN_STORE_TTL=168h
+Environment=BADGER_DIRECTORY_KEY=/opt/saathi-jaeger/key
+ExecStart=/opt/saathi-jaeger/jaeger-all-in-one \
+    --collector.otlp.enabled \
+    --collector.otlp.grpc.host-port=127.0.0.1:4318 \
+    --query.host-port=127.0.0.1:16686 \
+    --collector.host-port=127.0.0.1:14267 \
+    --admin.http.host-port=127.0.0.1:14269
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=saathi-jaeger
+
+[Install]
+WantedBy=multi-user.target

@@ -30,6 +30,21 @@ or holding a lot of context, it is yours.
 Do not skip to code if the task touches product behaviour, safety, memory,
 reminders, speech, privacy, pricing or the WhatsApp channel.
 
+## CodeGraph first, when indexed
+
+CodeGraph is installed for Claude Code and Codex on the box. In a source
+checkout with `.codegraph/` at the repo root, use it before crawling with
+grep/find/read when you need code flow, symbol location, or blast radius:
+
+```
+codegraph status
+codegraph explore "openrouter.resolve account key routing"
+```
+
+The graph is a generated local aid, not source of truth. If `.codegraph/` is
+missing or stale, run `codegraph init` / `codegraph index` in the source
+checkout, then verify against the owning docs and current files before editing.
+
 ## Know which box you are on — they are not interchangeable
 
 | Box | Region | Can |

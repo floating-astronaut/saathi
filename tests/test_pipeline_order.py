@@ -3,6 +3,8 @@
 These are the rules that make the product safe rather than merely working:
 safety before the model, dedupe before side effects, window touch before send.
 """
+import io
+import wave
 from datetime import datetime, timezone
 
 import pytest
@@ -34,6 +36,8 @@ class FakeConn:
             return FakeCursor((1,) if self.seen_message else None)
         if "from conversations" in low:
             return FakeCursor((7,))
+        if "select account_id from users" in low:
+            return FakeCursor((8,))
         # already onboarded — these tests exercise the steady state
         if "select onboarding" in low:
             return FakeCursor(("done",))
@@ -182,3 +186,94 @@ async def test_unknown_handle_goes_quiet_after_the_reply_cap(spy, monkeypatch):
                      "text": {"body": "hello again"}})
     assert out["skipped"] == "not_admitted"
     assert spy == []          # silence, not an argument
+
+
+def _wav(seconds: int = 2) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(16000)
+        audio.writeframes(b"\0\0" * 16000 * seconds)
+    return buf.getvalue()
+
+
+async def test_stt_usage_cap_refuses_before_sarvam(spy, monkeypatch):
+    monkeypatch.setattr(pipeline.settings, "saathi_usage_enforcement_enabled", True)
+    monkeypatch.setattr(pipeline.settings, "saathi_usage_ledger_mode", "enforce")
+    monkeypatch.setattr(pipeline.settings, "saathi_usage_account_cap_paise", 1)
+    monkeypatch.setattr(pipeline.media_store, "put_voice", _noop)
+    monkeypatch.setattr(pipeline.memory, "surface_forms", _empty_forms)
+
+    async def fake_fetch(media_id, max_bytes):
+        return b"ogg"
+
+    async def fake_wav(ogg):
+        return _wav(seconds=2)
+
+    async def refuse_reservation(*args, **kwargs):
+        assert kwargs["currency"] == "INR"
+        assert kwargs["reserved_minor"] == 2
+        assert kwargs["cap_minor"] == 1
+        return None
+
+    async def no_stt(*args, **kwargs):
+        raise AssertionError("Sarvam STT ran after usage cap refusal")
+
+    async def notify(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(registry.get("whatsapp"), "fetch_media", fake_fetch)
+    monkeypatch.setattr(pipeline, "ogg_to_wav16k", fake_wav)
+    monkeypatch.setattr(pipeline.usage, "reserve", refuse_reservation)
+    monkeypatch.setattr(pipeline.stt_mod, "transcribe", no_stt)
+    monkeypatch.setattr(pipeline.rate_limit, "claim_notice", notify)
+
+    out = await pipeline.handle_message(FakeConn(), {
+        "id": "voice-cap-1", "from": "91", "type": "audio",
+        "audio": {"id": "media.voice"}})
+
+    assert out == {"skipped": "usage_cap"}
+    assert len(spy) == 1 and "text message" in spy[0].lower()
+
+
+async def test_dormant_handle_cannot_reach_the_model_or_read_history(spy, monkeypatch):
+    async def dormant(*a, **k):
+        return pipeline.identity.Resolved(
+            user_id=1, user_channel_id=5, display_name="Kamala", tz="Asia/Kolkata",
+            voice_reply_pref="auto", is_new=False, needs_reverification=True,
+            status="reverify")
+    async def boom(*a, **k):
+        raise AssertionError("dormant handle reached the model")
+    monkeypatch.setattr(pipeline.identity, "resolve", dormant)
+    monkeypatch.setattr(pipeline.loop, "run", boom)
+    conn = FakeConn()
+    out = await pipeline.handle_message(
+        conn, {"id": "old-1", "from": "91", "type": "text", "text": {"body": "what do you know"}})
+    assert out["handled"] == "identity_reverification_required"
+    assert spy and "saved" in spy[0].lower()
+    assert not any("conversations" in s or "messages (" in s for s in conn.sql)
+
+
+async def test_dormant_handle_continue_is_deterministic_not_model_routed(spy, monkeypatch):
+    async def dormant(*a, **k):
+        return pipeline.identity.Resolved(1, 5, "Kamala", "Asia/Kolkata", "auto", False, True, "reverify")
+    async def confirmed(*a, **k):
+        return None
+    async def boom(*a, **k):
+        raise AssertionError("re-verification reached the model")
+    monkeypatch.setattr(pipeline.identity, "resolve", dormant)
+    monkeypatch.setattr(pipeline.identity, "confirm_reverification", confirmed)
+    monkeypatch.setattr(pipeline.loop, "run", boom)
+    out = await pipeline.handle_message(FakeConn(), {
+        "id": "old-2", "from": "91", "type": "interactive",
+        "interactive": {"button_reply": {"id": "idv:continue", "title": "Yes"}}})
+    assert out["handled"] == "identity_reverified"
+
+
+async def _noop(*args, **kwargs):
+    return None
+
+
+async def _empty_forms(*args, **kwargs):
+    return []

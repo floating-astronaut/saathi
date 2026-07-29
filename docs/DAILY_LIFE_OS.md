@@ -139,6 +139,13 @@ Acceptance: deterministic high-risk patterns still block before the model;
 lower-risk suspicious content produces a warning plus a safe next step and, when
 appropriate, a helpline path.
 
+Built 2026-07-29: all listed India-specific pressure pretexts now receive a
+deterministic `SUSPICIOUS` warning before the model. It says not to pay, open
+the sender's link, install an app or share a screen, and to find the
+organisation's official number/app independently; clear credential/transfer and
+digital-arrest patterns remain `SCAM`. Both provide 1930 when money may have
+gone.
+
 ### LIFE-6 — local errand and app handoffs
 
 Use the commercial-actions boundary for daily errands:

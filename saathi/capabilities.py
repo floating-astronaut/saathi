@@ -13,12 +13,14 @@ from __future__ import annotations
 import logging
 
 from . import (accounts, commands, conversation, documents, identity, memory,
-               onboarding, openrouter, payments, provenance as prov, vision)
+               onboarding, openrouter, payments, provenance as prov, usage, vision)
 from .agent import loop as agent_loop
 from .agent.tools.handlers import Handlers
 from .core.context import MessageContext
 from .core.handlers import register, simple
 from .safety.classifier import classify
+from . import observability
+from .config import settings
 
 log = logging.getLogger("saathi.capabilities")
 
@@ -30,7 +32,8 @@ def _safety_matches(ctx: MessageContext) -> bool:
 
 
 async def _safety_handle(ctx: MessageContext) -> dict:
-    v = classify(ctx.text)
+    with observability.span("safety.classify", kind="safety"):
+        v = classify(ctx.text)
     await ctx.conn.execute(
         """insert into safety_events (user_id, message_id, trigger, matched, action)
            values (%s,%s,%s,%s,'blocked_llm')""",
@@ -229,11 +232,28 @@ async def _agent(ctx: MessageContext) -> dict:
         "saathi.agent.tools.specs", fromlist=["TOOLS"]).TOOLS}
     account_id = await accounts.ensure_for_user(ctx.conn, ctx.user_id)
     ai_api_key = await openrouter.resolve(ctx.conn, account_id)
-    turn = await agent_loop.run(
+
+    async def record_usage(resp: dict, vendor: str, latency_ms: int, hop: int) -> None:
+        request_id = resp.get("request_id")
+        if vendor == "bedrock":
+            request_id = (resp.get("ResponseMetadata") or {}).get("RequestId")
+        units = resp.get("usage") or {}
+        cost = ({"currency": "USD", "reported_decimal": str(resp["reported_cost"])}
+                if resp.get("reported_cost") is not None else {})
+        await usage.record_event(
+            ctx.conn, vendor=vendor, service="llm", operation="converse", status="success",
+            user_id=ctx.user_id, account_id=account_id, request_id=request_id,
+            model=settings.saathi_model_id,
+            units={"input_tokens": units.get("inputTokens", 0),
+                   "output_tokens": units.get("outputTokens", 0)},
+            cost=cost, cost_source="vendor_reported" if cost else "unknown",
+            metadata={"hop": hop}, latency_ms=latency_ms)
+    with observability.span("agent.loop.run", kind="agent_loop"):
+        turn = await agent_loop.run(
         prov.fence(ctx.text, p), facts, Handlers(ctx.conn, ctx.user_id, ctx.tz).handle,
         history=prior, user_name=ctx.display_name,
         allowed_tools=prov.allowed_tools(names, p), tz=ctx.tz,
-        lang=ctx.lang, ai_api_key=ai_api_key)
+        lang=ctx.lang, ai_api_key=ai_api_key, usage_recorder=record_usage)
     if ctx.conversation_id:
         await conversation.touch(ctx.conn, ctx.conversation_id)
     await agent_loop.record(ctx.conn, turn, ctx.user_id, ctx.message_id,
