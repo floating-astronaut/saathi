@@ -12,6 +12,23 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - CodeGraph installed for agent code navigation
+
+### Added
+
+- CodeGraph v1.5.0 is installed on the box and wired into Codex and Claude Code
+  as a local MCP server.
+- The Saathi source checkout now has a local `.codegraph/` index marker; the
+  generated database remains untracked and can be regenerated with
+  `codegraph init` or `codegraph index`.
+
+### Verified
+
+- `codegraph status` reports 102 Python files, 1,686 nodes, 3,633 edges, and an
+  up-to-date index in `/tmp/saathi-main-sync`.
+- `codegraph explore` returned line-numbered source and blast-radius output for
+  the WhatsApp pipeline and observability paths.
+
 ## 2026-07-29 - tracing can export to Logfire project when token is present
 
 **Focused tests passing:** `uv run pytest -q tests/test_observability.py` — 15

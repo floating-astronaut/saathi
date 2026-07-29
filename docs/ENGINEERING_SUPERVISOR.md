@@ -1566,3 +1566,26 @@ Secrets:
 Verified:
 - `uv run pytest -q tests/test_observability.py` - 15 passed.
 - `uv run pytest -q` - 536 passed.
+
+## CodeGraph agent tooling - 2026-07-29 (Codex)
+
+Read: `AGENTS.md`, `CLAUDE.md`, `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`, `control-plane/ACTIVE_LANE_BOARD.md`, `control-plane/SESSION_COORDINATION.md`, CodeGraph README, installer script, package metadata, Codex/Claude target writers, shared config writer, and telemetry docs.
+
+Changed:
+- Installed CodeGraph v1.5.0 standalone bundle under `/home/ubuntu/.codegraph` with launcher at `/home/ubuntu/.local/bin/codegraph`.
+- Wired CodeGraph MCP into Codex (`/home/ubuntu/.codex/config.toml`) and Claude Code (`/home/ubuntu/.claude.json`, `/home/ubuntu/.claude/settings.json`, `/home/ubuntu/.claude/CLAUDE.md`) using explicit `codex,claude` targets.
+- Initialized CodeGraph for `/tmp/saathi-main-sync`; committed only `.codegraph/.gitignore`, not the generated SQLite index.
+- Updated `AGENTS.md`, `CLAUDE.md`, `docs/AGENT_SYNC_PROTOCOL.md`, `CHANGELOG.md`, and session coordination so agents use CodeGraph first when `.codegraph/` exists.
+
+Verified:
+- `codegraph version` - 1.5.0.
+- `codegraph telemetry off` - telemetry disabled persistently and buffered,
+  unsent data deleted.
+- `codegraph telemetry status` - disabled by saved config when no override is
+  present.
+- `codegraph init` - 102 files indexed; 1,686 nodes; 3,633 edges.
+- `codegraph status` - index up to date.
+- `codegraph explore` returned line-numbered source and blast-radius output for WhatsApp pipeline and observability paths.
+
+Remains:
+- Codex/Claude sessions must restart before the MCP server appears as a live tool in their tool lists. Shell fallback works now with `codegraph explore`.
