@@ -1,7 +1,8 @@
 # Usage ledger
 
-Status: **designed, not built**. This is the Saathi-owned source of truth for
-paid vendor usage across model, speech, document, messaging and search calls.
+Status: **foundation built, observe-only (LEDGER-1, 2026-07-29)**. The database
+tables and atomic accounting API exist, but no paid call site writes or enforces
+them yet; they remain deliberately inert until the integration slices below.
 
 The basic PR-15 availability guard is implemented separately in
 `saathi.rate_limit`: it bounds inbound-turn frequency before a paid call but
@@ -426,10 +427,14 @@ reservation rather than silently disappearing.
 
 ### Exact integration sequence
 
-**Slice A — foundation.** Migration, `saathi.usage` API, config defaults set to
-observe-only, reservation sweeper, and full fake-DB concurrency tests. Deploy
-without enforcement and compare ledger events to existing `llm_calls` and
-WhatsApp outbound records for seven days.
+**Slice A — foundation — complete 2026-07-29.** Migration 015 provides
+content-free append-only event and reservation tables; `saathi.usage` provides
+idempotent account-locked holds, settlement/release, expiry and event inserts;
+the existing worker sweeps expired holds without deleting their audit rows; and
+`SAATHI_USAGE_LEDGER_MODE=observe` is the default. Focused fake-connection
+tests prove lock ordering, idempotency, cap refusal and state transitions. No
+paid path is wired yet, so the planned seven-day comparison starts only after
+Slice B/C introduce events.
 
 **Slice B — LLM.** Wrap direct Bedrock and OpenRouter paths at the common agent
 boundary. Record Bedrock `Converse`/`ConverseStream` `usage` and latency; AWS
