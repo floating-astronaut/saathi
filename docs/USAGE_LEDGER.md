@@ -444,9 +444,12 @@ failure is logged but cannot turn a successful model reply into an outage while
 mode remains observe-only. Streaming, pricing catalog/shadow price and the
 seven-day comparison remain follow-up work; OpenRouter routing is unchanged.
 
-**Slice C — speech and templates.** Reserve before Sarvam upload, settle against
-rounded audio seconds, and record template sends only after a WhatsApp message
-id returns. Free-form WhatsApp replies are never charged as templates.
+**Slice C — speech and templates — implemented observe-only 2026-07-29.** A
+successful Sarvam STT call records exact WAV seconds and rounded billable seconds
+after transcription; a successful WhatsApp template records only after Meta
+returns its message id. A post-success ledger failure cannot cause either call
+to retry. Pre-call reservations/settlement remain part of Slice D; free-form
+WhatsApp replies are never template events.
 
 **Slice D — enforce.** Turn on account caps first for internal accounts, then
 small cohort, then all users. Each phase needs a deliberate rollback flag that

@@ -179,10 +179,23 @@ async def send_template(conn, user_id: int, wa_id: str, name: str,
         components.append({"type": "button", "sub_type": "quick_reply",
                            "index": str(i),
                            "parameters": [{"type": "payload", "payload": payload}]})
-    return await _send(conn, user_id, wa_id, {
+    mid = await _send(conn, user_id, wa_id, {
         "type": "template",
         "template": {"name": name, "language": {"code": lang}, "components": components},
     }, Channel.TEMPLATE)
+    # The Meta id exists only after the send succeeds. Observe-only accounting
+    # must never turn that already-delivered message into a caller retry.
+    try:
+        from .. import usage
+        row = await (await conn.execute("select account_id from users where id = %s", (user_id,))).fetchone()
+        await usage.record_event(conn, vendor="whatsapp", service="template",
+                                 operation="send_template", status="success", user_id=user_id,
+                                 account_id=row[0] if row else None, request_id=mid, model=name,
+                                 units={"template_messages": 1},
+                                 metadata={"language": lang})
+    except Exception:  # noqa: BLE001
+        log.exception("observe-only template usage event failed after %s", mid)
+    return mid
 
 
 async def send_audio(conn, user_id: int, wa_id: str, media_id: str) -> str:
