@@ -1030,3 +1030,15 @@ absence is deliberate rather than forgotten.
 
 
 OpenRouter workspace correction verified 2026-07-27: `OPENROUTER_WORKSPACE_ID` is set to `718e8438-6c5a-48f9-85c9-f8909f2e4c47`; all seven active Saathi keys list under that workspace with limit 5 and no reset; Default workspace lists no Saathi keys; account 1 completed a real OpenRouter turn returning `workspace route ok` with token usage.
+
+### PR-27 - OTel Collector + Jaeger add ~230-370 MB RAM to a 2-vCPU box
+
+Tracing was added on 2026-07-29 (OBS-1). The new services - saathi-otelcol
+(~80-120 MB idle) and saathi-jaeger (~150-250 MB idle) - run alongside the
+existing web, worker, Postgres and Cloudflare tunnel. At our current volume
+(~10-50 turns/day) the memory overhead is tolerable, but any future addition
+(such as TTS or an additional model) must re-check total available RAM.
+
+The disk cap is 4 GiB via Jaeger badger configuration with a 7-day span TTL.
+Spans can be disabled by unsetting SAATHI_TRACING_ENABLED and restarting the
+web and worker units; the collector and Jaeger can then be stopped independently.
