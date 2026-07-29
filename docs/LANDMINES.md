@@ -311,7 +311,20 @@ hands over the stale token without refreshing first.
    `CONTRIBUTING.md` forbids. The failure is loud, but only if you look: the
    GitHub push line scrolls past looking like success.
 
-**Fix:** force a refresh before pushing, then push:
+**Preferred fix on the Saathi runtime/source box:** use SSH. The `gitlab`
+remote should be:
+
+    git@gitlab-saathi:nuraveda-lab/saathi.git
+
+The alias `gitlab-saathi` uses `/home/ubuntu/.ssh/saathi_gitlab_ed25519`,
+registered in GitLab as `saathi runtime ip-172-31-32-37 2026-07-29` and expiring
+on 2027-07-29. Verify with:
+
+    ssh -T gitlab-saathi
+    git ls-remote gitlab main | cut -c1-7
+
+**HTTPS recovery fix:** on a box without that SSH key, force a refresh before
+pushing, then push:
 
     glab api user >/dev/null      # any glab command refreshes the token
     git push origin main && git push gitlab main
