@@ -7,6 +7,7 @@ must refuse that call rather than treating missing accounting as free spend.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 
 
@@ -20,6 +21,17 @@ class Reservation:
 
 def _json(value: dict | None) -> str:
     return json.dumps(value or {}, separators=(",", ":"), sort_keys=True)
+
+
+# Sarvam published price, verified 2026-07-29: ₹30/hour for STT, charged per
+# second and rounded up per request. Keep integer paise, never floats.
+SARVAM_STT_PRICE_VERSION = "sarvam-2026-07-29"
+
+
+def sarvam_stt_cost_paise(rounded_seconds: int) -> int:
+    if rounded_seconds < 0:
+        raise ValueError("rounded_seconds must be non-negative")
+    return math.ceil(rounded_seconds * 30 * 100 / 3600)
 
 
 async def reserve(conn, *, idempotency_key: str, user_id: int | None,
