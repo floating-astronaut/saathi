@@ -12,6 +12,13 @@ Focused verification: `uv run pytest -q tests/test_openrouter_keys.py tests/test
 
 # Changelog
 
+## 2026-07-29 - Meta responder guard (SEC-1)
+
+- Added an hourly systemd guard that fails loudly if Saathi's own WhatsApp
+  webhook subscription disappears or Meta Business Agent settings appear.
+- The check enters the existing `OnFailure` SNS alert path; it never logs a
+  bearer token or callback URL.
+
 ## 2026-07-29 - inbound rate and concurrency admission (RATE-1/RATE-2)
 
 ### Added

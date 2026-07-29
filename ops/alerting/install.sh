@@ -17,6 +17,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 install -m 0755 "$HERE/saathi-alert"  /usr/local/bin/saathi-alert
 install -m 0755 "$HERE/saathi-metric" /usr/local/bin/saathi-metric
 install -m 0644 "$HERE/saathi-alert@.service" /etc/systemd/system/saathi-alert@.service
+install -m 0644 "$HERE/../saathi-meta-guard.service" /etc/systemd/system/saathi-meta-guard.service
+install -m 0644 "$HERE/../saathi-meta-guard.timer" /etc/systemd/system/saathi-meta-guard.timer
 
 # OnFailure drop-ins rather than editing the units, so a redeploy of a unit
 # file does not silently drop the alerting with it.
@@ -37,4 +39,5 @@ ExecStartPost=/usr/local/bin/saathi-metric BackupSuccess 1
 CONF
 
 systemctl daemon-reload
+systemctl enable --now saathi-meta-guard.timer
 echo "installed. verify with: systemctl show saathi-worker -p OnFailure"
