@@ -271,6 +271,15 @@ refusal is itself a paid outbound message. The global gate does not consume a
 user's quota. These are availability/fairness controls, not the future
 cross-vendor monetary ledger in `USAGE_LEDGER.md`.
 
+**Vendor accounting is a separate, fail-closed foundation.** Migration 015
+creates append-only, content-free `vendor_usage_events` and auditable
+`vendor_usage_reservations`. `saathi.usage.reserve` takes a transaction-scoped
+account advisory lock, expires stale holds, applies an optional cap and commits
+an idempotent hold before a future vendor call; settlement/release never delete
+the hold. The default is `SAATHI_USAGE_LEDGER_MODE=observe`, and LEDGER-1 does
+not yet hook any paid path. Later call-site slices must refuse a paid request if
+reservation accounting is unavailable rather than failing open.
+
 **Meta is not allowed to become a responder.** The hourly
 `saathi-meta-guard.timer` requires the configured Saathi app to retain its
 `whatsapp_business_account/messages` webhook subscription and fails if Meta's
