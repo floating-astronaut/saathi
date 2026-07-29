@@ -23,13 +23,22 @@ Severity: **P0** blocks first external user · **P1** blocks paid launch ·
 ### RUNTIME-MIGRATION-1 · Runtime box migration (2026-07-29)
 The application runtime is moving from `i-01b2c27883acb25ca` (EIP
 `15.252.75.191`, ap-south-1) to a successor box `ip-172-31-41-224` (ap-south-1,
-egress `15.206.170.88`). **Not yet live on the new box.** Open items before this
-row can move to Resolved:
+egress `15.206.170.88`).
 
-- `saathi-web` (uvicorn `:3130`) and `saathi-worker` not running on the new box.
-  Their systemd units (`saathi-web.service`, `saathi-worker.service`) are not
-  defined in the repo — `ops/deploy_onbox.sh` restarts them but nothing
-  installs them. They were hand-installed on the original box.
+**Phase 1 done (2026-07-29):** the app boots on the new box. Python venv rebuilt
+on 3.13.14; PostgreSQL 16.14 installed; `saathi` role+DB created; `extensions.sql`
++ `schema.sql` + all 14 migrations applied (26 tables, checksum-ledgered). `/healthz`
+returned `{"ok":true,...}` HTTP 200 on `127.0.0.1:3130`. A second SSO profile
+(`saathi`, AWSAdministratorAccess in `559896294326`) was registered via device-code
+flow and verified read-only reach to `saathi/dev/runtime`. See
+`docs/ENGINEERING_SUPERVISOR.md` RUNTIME-MIGRATION-1 (Phase 1).
+
+**Phase 2 remains — open items before this row can move to Resolved:**
+
+- `saathi-web` (uvicorn `:3130`) and `saathi-worker` not running **as services**
+  on the new box. The app was proven to boot manually (Phase 1), but the systemd
+  units (`saathi-web.service`, `saathi-worker.service`) are still not defined in
+  the repo — `ops/deploy_onbox.sh` restarts them but nothing installs them.
 - Postgres not provisioned on the new box; schema/migrations not applied there.
 - The `saathi-dev` tunnel connector (`d4e9e4ad`) still runs on the original box.
   DNS for `saathi.n8nworld.store` is unchanged (points at the tunnel); only the

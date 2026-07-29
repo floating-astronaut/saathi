@@ -1,4 +1,26 @@
-## 2026-07-29 — runtime migration docs; webhook host briefly mispointed at Pages
+## 2026-07-29 — runtime bring-up Phase 1: app boots on the successor box
+
+Symptom: the successor runtime box (`ip-172-31-41-224`) had no runnable app —
+the `.venv` targeted Python 3.14 but symlinked to system 3.12, so `import fastapi`
+failed; no Postgres server; no schema.
+
+Fix (on-box provisioning, no application code changed): rebuilt the venv cleanly
+on Python 3.13.14 via `uv` (satisfies `requires-python = ">=3.13"`); installed
+PostgreSQL 16.14; created the `saathi` role + database to match the existing
+`SAATHI_DB_DSN`; applied `db/extensions.sql` (pg_trgm), `db/schema.sql` (base v1
+tables) and all 14 migrations (002–015) through the idempotent `schema_migrations`
+checksum ledger (26 tables, 14 rows). Separately registered a second SSO profile
+(`saathi`, AWSAdministratorAccess in `559896294326`) via device-code flow and
+verified read-only reach to the `saathi/dev/runtime` secret (described, not read).
+
+Verified: `GET http://127.0.0.1:3130/healthz` → `{"ok":true,"pg":"16.14
+(Ubuntu 16.14-0ubuntu0.24.04.1)","model":"zai.glm-5"}` HTTP 200, 2.3 ms — the
+`ops/deploy_verify.sh` success signal. The live webhook on
+`saathi.n8nworld.store` was untouched throughout (still served from the original
+box).
+
+Phase 2 remains: systemd units, cloudflared connector, live cutover. No
+application code changed.
 
 Symptom: `saathi.n8nworld.store` (the WhatsApp webhook host) returned 404/405 for
 `/healthz` and `POST /webhook` — i.e. a static site, not the FastAPI app.
