@@ -1515,3 +1515,26 @@ Verified:
 Remains:
 - The optional collector/Jaeger binaries are still not installed until
   `ops/setup-tracing.sh` is intentionally run.
+
+## 2026-07-29 — GitLab mirroring moved from HTTPS helper to SSH
+
+Operator asked to stop the repeated GitLab sync failures caused by the glab
+HTTPS/OAuth credential helper. Created a dedicated ed25519 SSH key on the
+runtime/source box:
+
+- private key path: `/home/ubuntu/.ssh/saathi_gitlab_ed25519`
+- GitLab public key title: `saathi runtime ip-172-31-32-37 2026-07-29`
+- public fingerprint: `SHA256:MxJY407pxa6juUHqg2o2rQ+fnJl39pcV8rcDhm/3zzU`
+- expiry: 2027-07-29
+
+Changed local SSH config to add host alias `gitlab-saathi`, switched the source
+checkout's `gitlab` remote to `git@gitlab-saathi:nuraveda-lab/saathi.git`, and
+verified `ssh -T gitlab-saathi` authenticates as `@floating-astronaut`.
+
+Verified: `git push gitlab main` over SSH succeeded, bringing GitLab from
+`d9bee45` to `3dced24`; `git ls-remote origin main` and `git ls-remote gitlab
+main` both returned `3dced240381ef45b952f447cdd1cc5fe40ccc28b`.
+
+Docs updated: `CONTRIBUTING.md`, `docs/RUNBOOK.md`, `docs/LANDMINES.md`, and
+the CRED-1 lane notes. CRED-1 remains open because this improves reliability
+but does not decide whether the runtime box should keep forge write access.

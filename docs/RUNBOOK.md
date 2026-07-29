@@ -196,7 +196,23 @@ that skips them. Point it at a scratch database, not the live one.
 > than replaces, the next one would have overwritten them without a conflict, an
 > error, or a diff. Recovered in `2a11443`. Edit the checkout, never `~/saathi`.
 
-## Pushing to GitLab — "HTTP Basic: Access denied" with a valid token
+## Pushing to GitLab — use SSH, not the glab HTTPS helper
+
+Runtime/source checkouts should use the SSH alias configured on this box:
+
+```bash
+git remote set-url gitlab git@gitlab-saathi:nuraveda-lab/saathi.git
+ssh -T gitlab-saathi
+git push gitlab main
+git ls-remote gitlab main
+```
+
+The local SSH key is `/home/ubuntu/.ssh/saathi_gitlab_ed25519`; the matching
+public key is registered in GitLab as `saathi runtime ip-172-31-32-37
+2026-07-29` and expires on 2027-07-29. The private key must never be printed,
+copied into the repo, or placed in a remote URL.
+
+### Old HTTPS symptom: "HTTP Basic: Access denied" with a valid token
 
 `git push gitlab main` can fail with `HTTP Basic: Access denied` while
 `glab auth status` reports a healthy login and `glab api user` succeeds. The
@@ -216,8 +232,8 @@ git -c credential.https://gitlab.com.helper= \
 ```
 
 The empty first value is required: git *appends* helpers, so without it the
-broken one still runs first. Making this permanent means the same two lines in
-`git config --global`, which is worth doing and has not been done.
+broken one still runs first. Prefer the SSH remote above instead; the workaround
+is kept only for recovery on a box that does not yet have the SSH key.
 
 ## Secrets
 

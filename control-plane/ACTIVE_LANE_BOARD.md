@@ -189,6 +189,12 @@ Notes: `gh` 2.46.0 and `glab` 1.53.0 installed on `i-01b2c27883acb25ca` and
   keeps write access or drops to read-only — is still unmet. Deciding it by
   continuing to use it is how the question stops being asked.
 
+  2026-07-29 reliability update: GitLab mirroring now uses a dedicated SSH key
+  (`gitlab-saathi`, `/home/ubuntu/.ssh/saathi_gitlab_ed25519`, public key title
+  `saathi runtime ip-172-31-32-37 2026-07-29`, expires 2027-07-29) instead of
+  the brittle HTTPS/OAuth helper path. This fixes sync reliability, not the
+  underlying forge-write-credentials risk.
+
 ### SEC-1 — Meta Business Agent is subscribed to our WABA   [OPEN]
 Owner: unassigned        Opened: 2026-07-26 (migrated from supervisor Queued)
 Reading: docs/LANDMINES.md, docs/PROD_READINESS.md (PR-6), docs/DECISIONS.md (D-E)
