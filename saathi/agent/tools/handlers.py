@@ -1,10 +1,14 @@
 """Tool side effects. The only code that mutates state on the model's behalf."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from dateutil.rrule import rrulestr
+
+from ... import commercial_actions, memory
+from ...lookup import base as lookup
 
 _DAYS = {"mon": "MO", "tue": "TU", "wed": "WE", "thu": "TH",
          "fri": "FR", "sat": "SA", "sun": "SU"}
@@ -78,10 +82,27 @@ class Handlers:
             (self.user_id, a["title"], rrule, self.tz, when),
         )).fetchone()
         rid = row[0]
-        await self.conn.execute(
-            """insert into reminder_fires (reminder_id, user_id, scheduled_for)
-               values (%s,%s,%s) on conflict do nothing""",
-            (rid, self.user_id, when),
+        # Onto the queue the worker actually reads.
+        #
+        # This used to insert into `reminder_fires`. Migration 006 made
+        # `scheduled_turns` the single dispatch queue and back-filled the
+        # existing fires once — but this write was never moved, and
+        # `worker/reminder_scheduler.py`, the only reader of `reminder_fires`,
+        # is not referenced anywhere. So every reminder created after that
+        # migration was written to a table nothing reads and never fired.
+        #
+        # Imported here rather than at module scope: `worker.turns` imports the
+        # rrule helpers above, so a top-level import would be circular. The
+        # import is what registers the kinds, and `enqueue` refuses an
+        # unregistered kind loudly — in the web process nothing else pulls
+        # `worker.turns` in.
+        from ...worker import turns  # noqa: F401
+        from ... import scheduling
+
+        await scheduling.enqueue(
+            self.conn, self.user_id, "reminder", when,
+            payload={"reminder_id": rid},
+            dedupe_key=f"reminder:{rid}:{when.isoformat()}",
         )
         return {"reminder_id": rid, "title": a["title"],
                 "next_fire_at_local": when.astimezone(ZoneInfo(self.tz)).strftime("%Y-%m-%d %H:%M"),
@@ -112,13 +133,26 @@ class Handlers:
 
     # --- memory ------------------------------------------------------------
 
+    @staticmethod
+    def _bias_forms(value: str) -> list[str]:
+        """Extract the tokens ASR actually mangles: proper nouns and drug names.
+
+        Storing the whole sentence as a bias phrase is worthless - biasing works
+        on the specific rare token, so we pull capitalised words and any long
+        non-Hindi-stopword token, and keep the full value as a fallback.
+        """
+        stop = {"Dr", "Mr", "Mrs", "Ms", "The", "Aapka", "Meri", "Mere"}
+        toks = re.findall(r"[A-Z][A-Za-z]{2,}", value)
+        names = [t for t in toks if t not in stop]
+        return list(dict.fromkeys(names)) or [value]
+
     async def _remember(self, a: dict) -> dict:
         await self.conn.execute(
             """insert into facts (user_id, kind, key, value, surface_forms)
                values (%s,%s,%s,%s,%s)
                on conflict (user_id, kind, key) where deleted_at is null
                do update set value=excluded.value, updated_at=now()""",
-            (self.user_id, a["kind"], a["key"], a["value"], [a["value"]]),
+            (self.user_id, a["kind"], a["key"], a["value"], self._bias_forms(a["value"])),
         )
         return {"stored": {a["key"]: a["value"]}}
 
@@ -132,7 +166,95 @@ class Handlers:
     # --- cart --------------------------------------------------------------
 
     async def _build_cart(self, a: dict) -> dict:
-        # Tier 3 of PRD §C4 is the contract: a clean numbered list, always.
-        items = [str(i).strip() for i in a.get("items", []) if str(i).strip()]
-        listing = "\n".join(f"{n}. {item}" for n, item in enumerate(items, 1))
-        return {"items": items, "list": listing, "note": a.get("note")}
+        # Tier 0 is the contract: a clean numbered list, always. Provider links
+        # are visible handoffs only; no checkout/session/account state exists.
+        handoff = commercial_actions.build_cart_handoff(
+            a.get("items", []), note=a.get("note"), kind=a.get("kind") or "grocery",
+        )
+        return {
+            "items": handoff.items,
+            "list": handoff.list,
+            "note": a.get("note"),
+            "query": handoff.query,
+            "provider_links": [p.__dict__ for p in handoff.providers],
+            "omitted_from_links": handoff.omitted_from_links,
+            "boundary": "I made links to search/open the provider. I did not order, book or pay.",
+        }
+
+    # --- introspection & control (C1, §13, D4) -----------------------------
+
+    async def _what_you_know(self, _a: dict) -> dict:
+        return await memory.describe(self.conn, self.user_id)
+
+    async def _forget_everything(self, a: dict) -> dict:
+        # The model must have confirmed first; the tool refuses otherwise.
+        # "Forget everything about me" has to actually work (§13), so this is
+        # a hard delete, not a tombstone.
+        if not a.get("confirmed"):
+            return {"error": "not confirmed - ask the user to confirm first"}
+        return await memory.erase(self.conn, self.user_id, hard=True)
+
+    async def _set_preference(self, a: dict) -> dict:
+        sets, vals = [], []
+        if a.get("voice_replies"):
+            sets.append("voice_reply_pref = %s"); vals.append(a["voice_replies"])
+        if a.get("language"):
+            sets.append("lang_pref = %s"); vals.append(a["language"])
+        if not sets:
+            return {"error": "nothing to change"}
+        vals.append(self.user_id)
+        await self.conn.execute(f"update users set {', '.join(sets)} where id = %s", vals)
+        return {"updated": {k: v for k, v in a.items() if v}}
+
+    async def _snooze_reminder(self, a: dict) -> dict:
+        mins = max(1, min(int(a.get("minutes", 15)), 24 * 60))
+        cur = await self.conn.execute(
+            """update reminder_fires
+                  set state = 'snoozed', snoozed_to = now() + (%s || ' minutes')::interval
+                where reminder_id = %s and user_id = %s
+                  and state in ('sent', 'nudged', 'pending')""",
+            (str(mins), a["reminder_id"], self.user_id))
+        return {"snoozed_minutes": mins, "fires_updated": cur.rowcount}
+
+    # --- looking things up -------------------------------------------------
+
+    async def _look_up(self, a: dict) -> dict:
+        """Answer from the world, via a registered provider.
+
+        The provider's text comes back fenced: it is third-party content, and a
+        search result saying "ignore previous instructions" must be as inert as
+        a forwarded WhatsApp message.
+        """
+        from ...lookup import weather, wiki, web  # noqa: F401 - registers providers
+        kind = (a.get("kind") or "fact").lower()
+        query = (a.get("query") or "").strip()
+        order = {"weather": ["weather"],
+                 "fact": ["wikipedia", "web"],
+                 "web": ["web", "wikipedia"]}.get(kind, ["wikipedia", "web"])
+
+        city = None
+        if kind == "weather":
+            row = await (await self.conn.execute(
+                """select value from facts
+                    where user_id = %s and deleted_at is null
+                      and (kind = 'place' or key ilike '%%city%%' or key ilike '%%shehar%%')
+                    order by updated_at desc limit 1""", (self.user_id,))).fetchone()
+            city = row[0] if row else None
+            if not city and not query:
+                return {"need": "city",
+                        "say": "Aap kis shehar mein rehte hain? Bata dijiye, main yaad "
+                               "rakh lungi aur aage se mausam bata dungi."}
+
+        for name in order:
+            p = lookup.get(name)
+            if not p or not p.available():
+                continue
+            try:
+                ans = await p.lookup(query, city=city)
+            except Exception as exc:  # noqa: BLE001 - a dead provider must not kill the turn
+                continue
+            if ans:
+                return {"found": True, "provider": name, "content": ans.fenced(),
+                        "url": ans.url}
+        return {"found": False,
+                "say": "Yeh main abhi pata nahi kar payi. Kuch aur poochhna ho to bataiye."}

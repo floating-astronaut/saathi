@@ -56,3 +56,74 @@ def test_most_urgent_wins():
 
 def test_zero_width_obfuscation_is_normalised():
     assert classify("I want to ​kill myself").trigger is Trigger.SELF_HARM
+
+
+# --- hypoglycaemia: its own trigger, because the right action differs --------
+
+HYPO = [
+    "mera sugar gir gaya hai",
+    "sugar low ho gaya achanak",
+    "sugar kam ho gaya lag raha hai",
+    "chakkar aa raha hai aur pasina bhi",
+    "low sugar feeling",
+    "hypoglycemia ho raha hai shayad",
+]
+
+
+@pytest.mark.parametrize("t", HYPO)
+def test_hypoglycemia_detected(t):
+    assert classify(t).trigger is Trigger.HYPOGLYCEMIA, f"missed: {t!r}"
+
+
+def test_hypoglycemia_advice_leads_with_sugar_not_an_ambulance():
+    """Sending someone to 112 while they need 15g of glucose is worse advice
+    than saying nothing. Escalation comes second, not first."""
+    r = classify("sugar low ho gaya").reply
+    first_line = r.split("\n")[0].lower()
+    assert "मीठा" in first_line or "sugar" in first_line
+    assert "112" in r                       # escalation still present
+    # Order is the contract, not the wording: eat sugar first, escalate second.
+    assert r.index("मीठा") < r.index("112")
+
+
+def test_sugar_gir_gaya_is_not_read_as_a_fall():
+    """'gir gaya' means fell; 'sugar gir gaya' means blood sugar dropped. Without
+    this distinction a diabetic reporting a hypo is told to call an ambulance
+    and never told to eat something."""
+    assert classify("mera sugar gir gaya").trigger is Trigger.HYPOGLYCEMIA
+    assert classify("papa gir gaye hain").trigger is Trigger.MEDICAL_EMERGENCY
+
+
+def test_a_real_emergency_still_outranks_low_sugar():
+    assert classify("seene mein dard aur sugar low").trigger is Trigger.MEDICAL_EMERGENCY
+    assert classify("behosh ho gaye, sugar low tha").trigger is Trigger.MEDICAL_EMERGENCY
+
+
+# --- digital arrest ----------------------------------------------------------
+
+DIGITAL_ARREST = [
+    "cbi se baat kar raha hai video call par",
+    "mujhe digital arrest ki dhamki di hai",
+    "parcel mein drugs mila bol rahe hain",
+    "court se warrant aaya hai bol rahe hain",
+    "police video call kar rahi hai",
+    "money laundering case bata rahe hain",
+]
+
+
+@pytest.mark.parametrize("t", DIGITAL_ARREST)
+def test_digital_arrest_detected(t):
+    assert classify(t).trigger is Trigger.SCAM, f"missed: {t!r}"
+
+
+def test_scam_reply_gives_a_number_to_call_after_the_fact():
+    """The old copy said 'do not share your OTP' but gave nowhere to turn if
+    money had already gone. 1930 is India's cyber-fraud helpline."""
+    r = classify("cbi se baat kar raha hai video call par").reply
+    assert "1930" in r
+    assert "video call" in r.lower()
+
+
+def test_scam_reply_states_the_thing_that_defeats_digital_arrest():
+    r = classify("digital arrest").reply
+    assert "giraftari" in r or "arrests anyone over a video call" in r
