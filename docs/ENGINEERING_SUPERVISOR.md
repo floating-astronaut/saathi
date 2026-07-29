@@ -1538,3 +1538,31 @@ main` both returned `3dced240381ef45b952f447cdd1cc5fe40ccc28b`.
 Docs updated: `CONTRIBUTING.md`, `docs/RUNBOOK.md`, `docs/LANDMINES.md`, and
 the CRED-1 lane notes. CRED-1 remains open because this improves reliability
 but does not decide whether the runtime box should keep forge write access.
+
+## OBS-3 - Logfire cloud binding for indofolk-ai - 2026-07-29 (Codex)
+
+Read: `docs/DOC_SYSTEM.md`, `docs/AGENT_SYNC_PROTOCOL.md`,
+`control-plane/ACTIVE_LANE_BOARD.md`, `docs/ARCHITECTURE.md`,
+`docs/DECISIONS.md`, `docs/RUNBOOK.md`, `saathi/observability.py`,
+`tests/test_observability.py`, and `ops/set-secret.sh`.
+
+Changed:
+- `saathi/observability.py` - Logfire cloud export is now
+  `send_to_logfire="if-token-present"` and the local OTel Collector exporter is
+  passed as an additional span processor instead of replacing Logfire's
+  processors.
+- `tests/test_observability.py` - coverage now pins token-gated cloud export,
+  local collector preservation, `inspect_arguments=False`, scrub behavior, and
+  disabled-by-default behavior.
+- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/RUNBOOK.md`,
+  `CHANGELOG.md`, lane board and session coordination - OBS-3 write-back.
+
+Secrets:
+- Stored `SAATHI_TRACING_ENABLED=1` and `LOGFIRE_TOKEN` in Secrets Manager
+  `saathi/dev/runtime` through `ops/set-secret.sh`, value-blind. The write token
+  points to Pydantic Logfire project `indofolk-ai`. The broader Pydantic API key
+  was not stored because app runtime does not need it.
+
+Verified:
+- `uv run pytest -q tests/test_observability.py` - 15 passed.
+- `uv run pytest -q` - 536 passed.
