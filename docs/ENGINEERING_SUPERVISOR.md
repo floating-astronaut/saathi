@@ -1699,3 +1699,29 @@ tunnel and PostgreSQL active, public health 200, unsigned webhook 403, zero rest
 
 Remains: tune patterns only with explicit false-positive examples; broad payment
 words alone intentionally do not trigger the shield.
+
+## LEDGER-1 — vendor usage ledger foundation — 2026-07-29 (Codex)
+
+Read: doc system/sync/control plane, PRD/build plan, `USAGE_LEDGER.md` §11,
+architecture, PR-15, runbook, current rate limiter/worker/config/migration
+conventions, and CodeGraph call paths.
+
+Changed: migration 015 creates content-free append-only vendor usage events and
+auditable reservation rows. `saathi.usage` supplies idempotent, account advisory
+lock-protected holds, cap refusal, settlement, release, event insertion and
+expiry; the worker sweeps only stale holds into `expired`, never deletes them.
+The config default is observe-only and no paid model, speech or template call is
+hooked in this slice. PR-15 and the runbook now also record the existing
+Cloudflare webhook edge rule and its positive/negative verification.
+
+Verified: focused `tests/test_usage.py` passed 9; full suite passed 569 before
+merge and again during `ops/deploy.sh --local`. PR #27 merged as `b71a849`;
+migration 015 applied; web, worker, Cloudflare tunnel and PostgreSQL were
+active; localhost and public health returned 200; unsigned webhook returned
+403; no worker warnings since restart. Read-only PostgreSQL check confirmed
+both ledger tables and the reservation-state type exist.
+
+Remains: Slice B wires direct Bedrock/OpenRouter call paths and begins the
+seven-day comparison; Slice C adds speech/templates; Slice D introduces caps.
+PR-15 is still open until monetary enforcement and the cross-process global
+coordination decision are finished or explicitly retired.
