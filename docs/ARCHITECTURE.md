@@ -54,6 +54,27 @@ through to normal conversation. A separate identity-lifecycle lane owns the full
 90-day stale-handle policy: warn during dormancy, let the user confirm or move
 the account, then revoke/delete only after the written window expires.
 
+**Stale WhatsApp-handle lifecycle (ID-2).** A handle is evidence of control of
+a delivery address, never the account or a durable proof of the human. On its
+last positive inbound message we book a 60-day lifecycle check. At 60 days of
+silence the worker sends the existing content-free `daily_checkin` template;
+the template does not name the person or disclose that an account exists. At
+90 days of *continuous* silence it revokes the handle and removes its primary
+claim. The user record and its data are retained so the real person can move
+the account through a verified channel; the recycled handle cannot read them.
+
+If a handle returns after 60 days, identity resolution changes it to
+`reverify` before any session touch, transcription, message log, conversation,
+capability, memory lookup or model work. The only allowed responses are the
+fixed confirmation/move controls. Confirming restores `active` and schedules a
+fresh 60-day check. Moving issues a 15-minute, six-digit code to the gated old
+chat; a **brand-new** WhatsApp handle must send `MOVE <code>`, then becomes the
+primary active handle while the old one is revoked. A bare number is never a
+code, and a code entered from an established account is refused. This confirms
+continued control of the old chat, not legal identity; the privacy control is
+the no-data gate plus the dead-air revocation, not a claim that phone numbers
+cannot be recycled.
+
 **Forwarded content is data, never command.** Text the user did not author —
 forwarded, quoted, or lifted out of an image or PDF — is `RELAYED`, and is
 enforced in **two** places, because withholding tools only ever covered the

@@ -631,6 +631,16 @@ the user immediately: stale handles should be warned and reverified through a
 written window, with account move/confirm paths, before revocation or deletion
 after the 90-day dead-air period.
 
+**Implemented lifecycle, 2026-07-29 (ID-2).** `60 days` without inbound is the
+warning/re-verification threshold and `90 days` of continuous dead air is the
+revocation threshold. The day-60 worker uses only the generic, content-free
+`daily_checkin` template, because WhatsApp permits no free-form proactive text
+outside the session and the notification must not leak prior ownership. A
+returning stale handle is `reverify` and is stopped before any stored-data or
+model path. It can explicitly continue, or receive a short-lived move code for
+a new, blank handle. At day 90 the old handle is revoked; the user identity is
+not deleted merely because its delivery address went quiet.
+
 ### D-AC · Runtime forge write access is retained as mirror authority · 2026-07-29
 
 Operator decision: retain GitHub/GitLab write credentials and the dedicated SSH

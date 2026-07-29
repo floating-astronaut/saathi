@@ -182,3 +182,37 @@ async def test_unknown_handle_goes_quiet_after_the_reply_cap(spy, monkeypatch):
                      "text": {"body": "hello again"}})
     assert out["skipped"] == "not_admitted"
     assert spy == []          # silence, not an argument
+
+
+async def test_dormant_handle_cannot_reach_the_model_or_read_history(spy, monkeypatch):
+    async def dormant(*a, **k):
+        return pipeline.identity.Resolved(
+            user_id=1, user_channel_id=5, display_name="Kamala", tz="Asia/Kolkata",
+            voice_reply_pref="auto", is_new=False, needs_reverification=True,
+            status="reverify")
+    async def boom(*a, **k):
+        raise AssertionError("dormant handle reached the model")
+    monkeypatch.setattr(pipeline.identity, "resolve", dormant)
+    monkeypatch.setattr(pipeline.loop, "run", boom)
+    conn = FakeConn()
+    out = await pipeline.handle_message(
+        conn, {"id": "old-1", "from": "91", "type": "text", "text": {"body": "what do you know"}})
+    assert out["handled"] == "identity_reverification_required"
+    assert spy and "saved" in spy[0].lower()
+    assert not any("conversations" in s or "messages (" in s for s in conn.sql)
+
+
+async def test_dormant_handle_continue_is_deterministic_not_model_routed(spy, monkeypatch):
+    async def dormant(*a, **k):
+        return pipeline.identity.Resolved(1, 5, "Kamala", "Asia/Kolkata", "auto", False, True, "reverify")
+    async def confirmed(*a, **k):
+        return None
+    async def boom(*a, **k):
+        raise AssertionError("re-verification reached the model")
+    monkeypatch.setattr(pipeline.identity, "resolve", dormant)
+    monkeypatch.setattr(pipeline.identity, "confirm_reverification", confirmed)
+    monkeypatch.setattr(pipeline.loop, "run", boom)
+    out = await pipeline.handle_message(FakeConn(), {
+        "id": "old-2", "from": "91", "type": "interactive",
+        "interactive": {"button_reply": {"id": "idv:continue", "title": "Yes"}}})
+    assert out["handled"] == "identity_reverified"

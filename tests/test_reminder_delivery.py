@@ -146,3 +146,14 @@ async def test_a_tick_sweeps_before_it_claims():
     claimed = [i for i, s in enumerate(conn.sql) if "update scheduled_turns t" in s]
     assert swept and claimed
     assert swept[0] < claimed[0]
+
+
+async def test_90_day_dead_handle_is_revoked_not_silently_left_active():
+    from datetime import datetime, timedelta, timezone
+    conn = Conn({"from user_channels": [
+        (datetime.now(timezone.utc) - timedelta(days=91), "active")
+    ]})
+    await turns.reverify(conn, turn_id=7, user_id=3,
+                         payload={"user_channel_id": 5, "stage": "revoke"},
+                         scheduled_for=datetime.now(timezone.utc))
+    assert conn.wrote("set revoked_at=now(), is_primary=false")
