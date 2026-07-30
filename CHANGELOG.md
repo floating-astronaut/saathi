@@ -1,3 +1,33 @@
+## 2026-07-30 — Postgres 18.4, so recovery is single-headed again
+
+Symptom: nothing was broken, which is what made this worth fixing. This box ran
+Postgres **16.14** (the Ubuntu 24.04 default) while the original box ran **18.4**
+(the Ubuntu 26.04 default). A custom-format dump from 18 is archive version 1.16
+and `pg_restore` 16 refuses it outright — so the documented recovery path pointed
+at a file this box could not read. That only surfaces during an incident, holding
+a backup that will not open.
+
+Fix: installed 18.4 from PGDG (`apt.postgresql.org`, noble) — the distro has no 18
+for 24.04 — and upgraded with `pg_upgradecluster 16 main`. Chose that over a
+hand-rolled dump/restore because it carries the cluster globals: the `saathi` role
+kept its password and `CREATEDB`, table ownership survived, and it swapped the
+ports itself, so the app's `:5432` DSN needed no edit. Downtime was 52 seconds,
+taken 6½ hours ahead of the next due reminder rather than at an arbitrary moment.
+
+Verified after: `users=8 messages=262 scheduled_turns=58` and the state histogram
+(`acked 12, failed 1, pending 9, sent 25, skipped 11`) unchanged; 26 tables, 14
+`schema_migrations` rows, `pg_trgm 1.6`, all 26 tables still owned by `saathi`;
+sequences still at the data's max (`users` 21, `messages` 274). `/healthz` reports
+`18.4` through the tunnel, the app reads through its own DSN as the `saathi` role,
+577 tests pass, zero errors, and a fresh backup dumped and verified by restore on
+18.
+
+The claim this was all for, proven rather than assumed: the original box's own 1.16
+dump — the exact file that failed under 16 — now lists 26 TABLE DATA entries and
+restores 8/262/58 into a throwaway database. The 16 cluster is kept **stopped on
+port 5433** as a rollback; release it with `pg_dropcluster 16 main` once you are
+satisfied. Closes MIGRATION-PG-VERSION-1.
+
 ## 2026-07-30 — the database finally followed the tunnel
 
 Symptom: `/healthz` was 200 through the tunnel and the box looked cut over, but

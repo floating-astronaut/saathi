@@ -20,27 +20,6 @@ Severity: **P0** blocks first external user · **P1** blocks paid launch ·
 
 ## In-progress migration
 
-### MIGRATION-PG-VERSION-1 · The two boxes run different Postgres majors (2026-07-30)
-The original box runs **18.4**; Phase 1 installed **16.14** here. The data was
-migrated on 2026-07-30 by going through plain SQL, because a custom-format dump
-from 18 cannot be read by `pg_restore` 16 at all.
-
-Why it still matters now that the data has moved: the fallback direction is
-closed. The old box's dump cannot be restored here without the plain-SQL detour,
-and **this box's dumps cannot be restored onto an 18 server at all** in the other
-direction without the same care. More to the point, `docs/RUNBOOK.md` described
-the runtime database as 18.4 for a day while it was actually 16.14 — so anyone
-reaching for the documented recovery path would have been holding the wrong tool.
-
-The plain-SQL route also only worked because the schema happened to carry exactly
-one version-specific line (`SET transaction_timeout = 0`, v17+). That is luck, not
-a property of the schema, and it will not hold as migrations accumulate.
-
-**Fix:** bring this box to Postgres 18.4 to match, then re-point the documented
-recovery path at a same-major restore. Severity **P2** — nothing is broken today,
-and the app is version-agnostic; it is the *recovery* story that is quietly
-two-headed, which is the kind of thing only discovered during an incident.
-
 ### MIGRATION-BEDROCK-1 · Inference still runs on a MeshPilot-org SSO token (2026-07-30)
 Everything else in Saathi's AWS estate now lives in `635860424621` (mcc org):
 buckets, both secrets, the `saathi-alerts` topic, both alarms, and least-privilege
@@ -1150,6 +1129,7 @@ box.
 | Privacy policy claimed 7-day voice retention that did not exist | 2026-07-26 — retention now real and the promise is kept by an **S3 lifecycle rule**, not by our code: if every worker died, voice notes would still expire on day 7. Kept deliberately because India is not one language and a transcript alone cannot tell you whether the model mis-heard or the speaker used a regional form. Erasure deletes objects immediately rather than waiting for the rule. |
 | Search ran on MeshPilot's Gemini key, on a global endpoint (was PR-21) | 2026-07-26 — Saathi's own GCP project `saathi-ai-503623` with its own service account, billing linked, and search served from **Vertex asia-south1**. The service account reaches the box via Secrets Manager, never SSM. AI Studio remains a fallback so an unpaid project or a bad key file cannot cost a user their answer. |
 | Scheduler was reminder-shaped (was PR-16) | 2026-07-26 — `scheduled_turns` is a general queue; kinds register. Worker reports `['checkin', 'media_purge', 'nudge', 'reminder']` and a test asserts it names none of them. |
+| The two boxes ran different Postgres majors (was MIGRATION-PG-VERSION-1) | 2026-07-30 — this box was **16.14** (Ubuntu 24.04 default) against the original box's **18.4** (Ubuntu 26.04 default), so a custom-format dump could not move between them at all: archive version 1.16 and `pg_restore` 16 refuses it outright. Upgraded to **18.4** from PGDG via `pg_upgradecluster 16 main`, which preserved roles, the `saathi` password and ownership, and swapped the ports so the app's `:5432` DSN needed no change. 52 seconds of downtime. Proven, not assumed: the original box's own 1.16 dump — the exact file that failed under 16 — now lists 26 TABLE DATA entries and restores 8 users / 262 messages / 58 scheduled turns into a throwaway database. Recovery is single-headed again. |
 
 ### PR-20 · Google's search index is global, even when the request is not
 Search now runs on **Vertex AI in `asia-south1` (Mumbai)**, so the request is
