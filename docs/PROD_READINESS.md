@@ -20,6 +20,27 @@ Severity: **P0** blocks first external user · **P1** blocks paid launch ·
 
 ## In-progress migration
 
+### MIGRATION-PG-VERSION-1 · The two boxes run different Postgres majors (2026-07-30)
+The original box runs **18.4**; Phase 1 installed **16.14** here. The data was
+migrated on 2026-07-30 by going through plain SQL, because a custom-format dump
+from 18 cannot be read by `pg_restore` 16 at all.
+
+Why it still matters now that the data has moved: the fallback direction is
+closed. The old box's dump cannot be restored here without the plain-SQL detour,
+and **this box's dumps cannot be restored onto an 18 server at all** in the other
+direction without the same care. More to the point, `docs/RUNBOOK.md` described
+the runtime database as 18.4 for a day while it was actually 16.14 — so anyone
+reaching for the documented recovery path would have been holding the wrong tool.
+
+The plain-SQL route also only worked because the schema happened to carry exactly
+one version-specific line (`SET transaction_timeout = 0`, v17+). That is luck, not
+a property of the schema, and it will not hold as migrations accumulate.
+
+**Fix:** bring this box to Postgres 18.4 to match, then re-point the documented
+recovery path at a same-major restore. Severity **P2** — nothing is broken today,
+and the app is version-agnostic; it is the *recovery* story that is quietly
+two-headed, which is the kind of thing only discovered during an incident.
+
 ### MIGRATION-BEDROCK-1 · Inference still runs on a MeshPilot-org SSO token (2026-07-30)
 Everything else in Saathi's AWS estate now lives in `635860424621` (mcc org):
 buckets, both secrets, the `saathi-alerts` topic, both alarms, and least-privilege
