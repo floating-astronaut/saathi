@@ -42,6 +42,15 @@ def sarvam_stt_cost_paise(rounded_seconds: int) -> int:
     return math.ceil(rounded_seconds * 30 * 100 / 3600)
 
 
+def sarvam_tts_cost_paise(chars: int, *, paise_per_1k: int) -> int:
+    """Estimated TTS cost. Sarvam bills per character; the exact rate is not in a
+    captured doc, so this is a `catalog_estimate` from a configured paise/1k
+    (D-AE, USAGE_LEDGER.md). The recorded character count is the exact truth."""
+    if chars < 0:
+        raise ValueError("chars must be non-negative")
+    return math.ceil(chars * paise_per_1k / 1000)
+
+
 def enforcement_enabled(*, enabled: bool, mode: str, account_cap_paise: int) -> bool:
     """A zero/unapproved cap can never accidentally begin refusing care."""
     return enabled and mode == "enforce" and account_cap_paise > 0

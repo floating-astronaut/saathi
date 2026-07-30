@@ -79,7 +79,7 @@ async def _record_outbound(conn, user_id: int, wa_message_id: str, payload: dict
                values (%s,'out',%s,%s,%s,%s)
                on conflict (wa_message_id) do nothing""",
             (user_id, kind, wa_message_id, body, template))
-    except Exception:  # noqa: BLE001 - the send succeeded; only the record failed
+    except Exception:
         log.exception("outbound %s was sent but not recorded", wa_message_id)
 
 
@@ -193,7 +193,7 @@ async def send_template(conn, user_id: int, wa_id: str, name: str,
                                  account_id=row[0] if row else None, request_id=mid, model=name,
                                  units={"template_messages": 1},
                                  metadata={"language": lang})
-    except Exception:  # noqa: BLE001
+    except Exception:
         log.exception("observe-only template usage event failed after %s", mid)
     return mid
 
@@ -202,6 +202,76 @@ async def send_audio(conn, user_id: int, wa_id: str, media_id: str) -> str:
     """Send a previously-uploaded OGG/Opus voice note."""
     return await _send(conn, user_id, wa_id,
                        {"type": "audio", "audio": {"id": media_id}}, Channel.FREEFORM)
+
+
+async def send_voice_note(conn, user_id: int, wa_id: str, text: str, lang: str,
+                          *, wa_message_id: str | None = None) -> str | None:
+    """Speak `text` as a voice note (PR-8, D-AE). Best-effort: any failure logs
+    and returns None, because the text reply has already been sent and a broken
+    voice note must not surface as a broken turn.
+
+    Metered through the usage ledger exactly like STT — a content-free
+    `sarvam/tts` event per real synthesis, and a pre-call cap when the global
+    enforcement flag is on. A cache hit spends nothing and records nothing.
+    """
+    from .. import usage
+    from ..speech import tts
+
+    row = await (await conn.execute(
+        "select account_id from users where id = %s", (user_id,))).fetchone()
+    account_id = row[0] if row else None
+
+    reservation = None
+    est_paise = usage.sarvam_tts_cost_paise(
+        len(text or ""), paise_per_1k=settings.saathi_sarvam_tts_paise_per_1k_chars)
+    if usage.enforcement_enabled(
+            enabled=settings.saathi_usage_enforcement_enabled,
+            mode=settings.saathi_usage_ledger_mode,
+            account_cap_paise=settings.saathi_usage_account_cap_paise):
+        if account_id is None or not wa_message_id:
+            log.warning("tts skipped: enforcement on but no account/idempotency key")
+            return None
+        reservation = await usage.reserve(
+            conn, idempotency_key=f"tts:{wa_message_id}", user_id=user_id,
+            account_id=account_id, vendor="sarvam", service="tts",
+            operation="text_to_speech", reserved_minor=est_paise,
+            currency="INR", cap_minor=settings.saathi_usage_account_cap_paise)
+        if reservation is None or reservation.state != "held":
+            # Cap exceeded or a stale reservation — skip voice, keep the text reply.
+            log.info("tts skipped: usage cap for user %s", user_id)
+            return None
+
+    try:
+        speech = await tts.synthesize_ogg(text, lang)
+        media_id = await upload_media(speech.ogg, "audio/ogg")
+        mid = await send_audio(conn, user_id, wa_id, media_id)
+    except Exception:
+        log.exception("tts voice note failed for user %s", user_id)
+        if reservation is not None:
+            await usage.release(conn, reservation.id)
+        return None
+
+    actual_paise = 0 if speech.cached else usage.sarvam_tts_cost_paise(
+        speech.chars, paise_per_1k=settings.saathi_sarvam_tts_paise_per_1k_chars)
+    if reservation is not None:
+        try:
+            await usage.settle(conn, reservation.id, actual_minor=actual_paise)
+        except Exception:
+            log.exception("tts usage settlement failed")
+    if not speech.cached:
+        # No vendor call on a cache hit -> nothing to bill or record.
+        try:
+            await usage.record_event(
+                conn, vendor="sarvam", service="tts", operation="text_to_speech",
+                status="ok", user_id=user_id, account_id=account_id,
+                reservation_id=reservation.id if reservation else None,
+                model=settings.saathi_tts_model, request_id=speech.request_id,
+                units={"characters": speech.chars},
+                cost={"minor": actual_paise, "currency": "INR"},
+                cost_source="catalog_estimate", latency_ms=speech.ms)
+        except Exception:
+            log.exception("tts usage event failed")
+    return mid
 
 
 def _as_int(value) -> int | None:

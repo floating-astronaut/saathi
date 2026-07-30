@@ -2,7 +2,14 @@
 
 Status: **vendor hooks live, STT enforcement gate built but disabled by default
 (LEDGER-1/2, 2026-07-29)**. LLM, Sarvam STT and WhatsApp template successes now
-write content-free usage events. Sarvam STT also has a pre-call reservation path
+write content-free usage events. **Sarvam TTS joined 2026-07-30 (PR-8, D-AE):**
+each synthesis writes a `sarvam/tts` event with a character count and, under the
+same global enforcement flag as STT, a pre-call reservation caps it per account —
+which is what let D-S's STT-only restriction be reversed. One caveat: Sarvam's
+per-character TTS *price* is not in a captured doc, so the TTS event's cost is a
+labelled `catalog_estimate` (`SAATHI_SARVAM_TTS_PAISE_PER_1K_CHARS`) until
+reconciled against an invoice; the character count is exact. Sarvam STT also has a
+pre-call reservation path
 that can refuse before the vendor call, but it requires the explicit enforcement
 flag, `SAATHI_USAGE_LEDGER_MODE=enforce`, and a positive operator-approved INR
 paise cap.

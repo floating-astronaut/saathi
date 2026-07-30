@@ -1978,3 +1978,53 @@ proving the honesty gate — the harness cannot emit a synthetic number.
 **Remains:** the corpus is empty. The first *real* entity-accuracy number, and any confirm/
 refute of the PRD §15 >95% target, waits on lane **DATA-1** (collect + hand-transcribe real
 consented elder voice notes). PR-9 closes as a harness, not a measured accuracy.
+
+---
+
+## 2026-07-30 · PR-8 — TTS voice replies (Sarvam Bulbul, built inert behind a flag)
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/tts-voice-replies`).
+
+**Read:** docs/PRD.md §9, docs/DECISIONS.md (D-S), docs/USAGE_LEDGER.md, saathi/speech/
+(audio.py, stt.py, correct.py), saathi/wa/client.py, saathi/core/context.py + handlers.py,
+saathi/channels/, saathi/config.py, control-plane board.
+
+**Symptom:** PR-8 — the biggest felt gap. Saathi is voice-first, elders speak to it, and it
+answered only in text.
+
+**Decisions taken (operator):** provider **Sarvam Bulbul** over Google TTS; trigger
+**voice-in→voice-out** to start. The Sarvam choice reverses **D-S** (Sarvam was STT-only for
+lack of per-account capping) — legitimate now because the usage ledger meters/caps it, the
+exact reversal condition D-S named. Recorded as **D-AE**.
+
+**Verified the vendor contract live before coding** (value-blind, key sha `2e832192`): our STT
+key has TTS access; `POST /text-to-speech` returns base64 WAV + request_id. Captured to
+docs/vendor/sarvam/text-to-speech.md. Live testing then caught a real cap — `inputs ≤ 3 per
+request` (5 inputs → 400) — so long replies chunk on sentence boundaries and send in batches of
+3, concatenating the WAVs.
+
+**Changed:**
+- `saathi/speech/tts.py` (new) — `TTSProvider` protocol, `SarvamTTS`, sentence-boundary
+  chunking + WAV concat, bounded phrase-bank cache (fixed phrases synthesised once),
+  `synthesize_ogg` (→ OGG/Opus via existing `wav_to_ogg_opus`).
+- `saathi/wa/client.py` — `send_voice_note`: synthesize → upload_media → send_audio, **best-
+  effort** (any failure logs + returns None), metered like STT (reserve under the enforcement
+  flag; content-free `sarvam/tts` event with char units; cache hit spends/records nothing).
+- `saathi/channels/base.py` + `whatsapp.py` — `send_voice` (default no-op; SMS degrades to text).
+- `saathi/core/context.py` — `should_voice` (flag → preference → voice-in→voice-out default;
+  onboarding text-only) and a best-effort voice step in `ctx.reply`, additive to the text reply.
+- `saathi/usage.py` — `sarvam_tts_cost_paise`; `saathi/config.py` — `SAATHI_TTS_ENABLED` (off)
+  + speaker/model/sample-rate/max-chars/price-estimate.
+- Write-back: DECISIONS D-AE, ARCHITECTURE (outbound-voice boundary), USAGE_LEDGER (TTS metered
+  + pricing caveat), PROD_READINESS PR-8, CHANGELOG (symptom first), board (PR-8 BUILT/INERT),
+  SESSION_COORDINATION.
+
+**Verified:** 12 new tests (`tests/test_tts.py`) — chunking, WAV concat, phrase cache, the
+should_voice policy matrix, and that a TTS failure/disable leaves the text reply intact. Full
+suite **614 passed** (was 602). Changed files ruff-clean. End-to-end live proof: real Sarvam
+call → valid OGG/Opus (`OggS`) for single- and multi-chunk text; cache hit spends nothing.
+
+**Remains (why it is INERT, not done):** `SAATHI_TTS_ENABLED` is off and **no voice note has
+round-tripped to a real WhatsApp thread** — that live send is the enable-time step (operator
+turns it on, confirms the voice, one handset observation). And Sarvam's per-char TTS price is a
+labelled `catalog_estimate` until reconciled against an invoice (character count is exact).

@@ -122,6 +122,18 @@ free-form sends outside the window. Every outbound path funnels through
 `wa/client.py::_send`, which calls the guard first — so it is not possible to
 send by forgetting to check.
 
+**Speaking back is additive and best-effort (PR-8, D-AE).** When enabled
+(`SAATHI_TTS_ENABLED`, off by default), a reply is also spoken as a Sarvam Bulbul
+voice note — but only after the text reply has already gone. Policy (whether to
+speak) lives in `core/context.should_voice`: gated by the flag, then the user's
+`voice_reply_pref`, defaulting to voice-in→voice-out; onboarding stays text-only.
+Mechanism lives in the channel (`send_voice`), so SMS degrades to text rather than
+erroring. Two boundaries hold: TTS input is Saathi's *own* reply text, never the
+user's inbound content, and stays in India (Sarvam), preserving the inference-in-
+India rule; and every synthesis is metered through the usage ledger like STT. A
+TTS failure, cap refusal, or outage can never take down the turn — the text reply
+already succeeded.
+
 **Memory serves ASR, not just personalisation.** `facts.surface_forms` is the
 entity-bias vocabulary for the correction pass. This is why the product hears
 someone better the longer they use it — a retention mechanic, not an accuracy
@@ -154,7 +166,7 @@ against is silent, not loud.
 
     saathi/web/       FastAPI — webhook (verify + signed receive), healthz
     saathi/wa/        Cloud API client, window guard, templates, text formatter
-    saathi/speech/    ffmpeg transcode, Saaras STT, entity correction
+    saathi/speech/    ffmpeg transcode, Saaras STT, entity correction, Bulbul TTS
     saathi/agent/     tool loop, streaming, prompt + prefix budget, tools
     saathi/safety/    deterministic pre-LLM classifier
     saathi/worker/    reminder scheduler, reminder sender

@@ -691,3 +691,36 @@ value is being the *trusted, Indianised, safer layer over* the Meta ecosystem, n
 a thinner copy of Meta's identity linking. The moat is the shield, not the graph.
 The feature is off unless `SAATHI_CAPI_DATASET_ID` is set, and it fails closed:
 capture and report both no-op without it, and a Graph outage never touches a turn.
+
+### D-AE · Sarvam adopted for TTS (Bulbul), reversing D-S's STT-only scope · 2026-07-30
+
+Operator decision (chose "Sarvam Bulbul, reverse D-S" over Google Cloud TTS).
+D-S confined Sarvam to speech-to-text because its single shared key gave no way
+to **attribute or cap** spend per household — and named the reversal condition:
+*"(b) we build our own metering that prices vendor calls per account and enforces
+a cap before the call."* That metering now exists — the usage ledger (D-V,
+LEDGER-1/2, `USAGE_LEDGER.md`), with `reserve`/`settle`/`record_event` already
+capping STT. So the condition D-S set is met, and TTS may ride Sarvam too.
+
+Why Sarvam over Google TTS: it keeps the **"inference stays in India"** boundary
+clean (Bulbul is an in-India endpoint, verified our key has access 2026-07-30);
+it gives the best Indic/code-mix elder voice; and it reuses a vendor already
+wired for STT rather than adding one. Google Cloud TTS would have sidestepped the
+D-S question but is a new vendor with weaker in-India residency guarantees.
+
+What this authorises: outbound TTS on Sarvam Bulbul (`bulbul:v2`), **metered
+through the ledger exactly like STT** — every synthesis records a content-free
+`vendor=sarvam, service=tts` event with character units, and when the global
+usage-enforcement flag is on, a pre-call reservation caps it per account. TTS
+input is Saathi's *own* reply text (which may contain a user's name), never the
+user's inbound content; the ledger event stays content-free (counts, not text).
+
+What this does **not** change: the "it never transacts" boundary; STT stays the
+STT lane. TTS ships behind `SAATHI_TTS_ENABLED` (default off) and, when on,
+defaults to voice-in→voice-out (`voice_reply_pref='auto'`). The one open item is
+price: Sarvam's per-character TTS rate is not in a captured doc, so the ledger's
+cost is a labelled estimate until reconciled against an invoice (see
+`USAGE_LEDGER.md`), the same path STT pricing took. The durable record — the
+character count — is exact regardless.
+
+**Reverse it** only if Sarvam TTS residency or spend-attribution assumptions break.

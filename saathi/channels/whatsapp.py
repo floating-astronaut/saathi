@@ -28,6 +28,10 @@ class WhatsAppTransport(Transport):
     async def send_text(self, conn, user_id, handle, text):
         return await wa.send_text(conn, user_id, handle, text)
 
+    async def send_voice(self, conn, user_id, handle, text, lang, *, wa_message_id=None):
+        return await wa.send_voice_note(conn, user_id, handle, text, lang,
+                                        wa_message_id=wa_message_id)
+
     async def send_buttons(self, conn, user_id, handle, body, buttons):
         return await wa.send_buttons(conn, user_id, handle, body, buttons)
 
