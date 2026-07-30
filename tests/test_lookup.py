@@ -127,3 +127,28 @@ def test_prompt_has_forwarded_content_daily_life_rules():
     assert "forwards or shows you" in SYSTEM
     assert "Extract amount, date, place, person and action" in SYSTEM
     assert "what would they like you to do with it" in SYSTEM
+
+
+# --- weather: an explicitly-named city beats the stored home city ----------
+# Regression: "temp in Toronto" from a Mumbai user returned Mumbai's weather
+# (or nothing), because the stored home city overrode the query.
+
+def test_named_city_wins_over_home_city():
+    assert weather._place_candidates("Toronto", "Mumbai")[0] == "Toronto"
+
+
+def test_phrase_is_reduced_to_a_place():
+    assert weather._strip_filler("temp in Toronto") == "Toronto"
+    assert weather._strip_filler("toronto ka temperature") == "toronto"
+    # the place is reachable even when the raw phrase would not geocode
+    assert "Toronto" in weather._place_candidates("temp in Toronto", "Mumbai")
+
+
+def test_bare_weather_question_falls_back_to_home_city():
+    cands = weather._place_candidates("aaj mausam kaisa hai", "Mumbai")
+    assert cands[-1] == "Mumbai"                 # home city is the fallback
+    assert weather._strip_filler("aaj mausam kaisa hai") == ""   # no place named
+
+
+def test_no_query_and_no_city_yields_no_candidate():
+    assert weather._place_candidates("", None) == []
