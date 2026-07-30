@@ -168,6 +168,21 @@ What does *not* change:
 **Reverse this if a second contributor appears.** At that point signatures start
 carrying information again, and the runtime box should drop to read-only tokens.
 
+**Update · 2026-07-30 — the runtime box now signs too.** It was given its own
+SSH signing key (`~/.ssh/saathi_github_ed25519`), git configured to sign by
+default (`gpg.format=ssh`, `commit.gpgsign=true`,
+`gpg.ssh.allowedSignersFile=~/.config/git/allowed_signers`), and the public key
+registered as a **signing** key on both GitHub and GitLab. So the operative line
+above — *"the runtime box pushes unsigned"* — no longer holds: commits authored
+on either box are SSH-signed and verify (`%G?` = `G`). Signing is still **not a
+gate** on landing work; this only removes the friction that blocked
+runtime-authored commits, and the false `N`-means-unsigned reading of `%G?` (that
+was a missing `allowedSignersFile`, now set). What this does *not* soften is the
+blast-radius point in PR-22 — it sharpens it: the runtime box now holds a signing
+key **and** forge write credentials, so a compromise of this box can push *signed*
+commits. The "drop to read-only tokens if a second contributor appears" trigger
+stands, and is now more important, not less.
+
 ### D-M · Saathi moves to an Indian number on a second WABA · 2026-07-27
 The product now runs on **+91 8071 581 944** (`phone_number_id 1266402176549539`)
 under WABA `1687148075730227`, display name **"Indofolk AI"**, currency **INR**.
