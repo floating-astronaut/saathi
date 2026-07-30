@@ -612,6 +612,13 @@ Write-back: docs/RUNBOOK.md (new box details, systemd units, cloudflared), docs/
 Notes: Builds on Phase 1 (46a537e). Box: ip-172-31-41-224, 7.6 GiB RAM, 96 GB disk, Postgres 16.14, venv on 3.13.14. SSO profile saathi = AWSAdministratorAccess in 559896294326. saathi.n8nworld.store currently points to original box i-01b2c27883acb25ca via cloudflared; cutover means moving the tunnel connector here.
 Closed 2026-07-30: cutover confirmed during Phase 3 — this box is the sole tunnel connector, `/healthz` 200 through the tunnel, original box's connector gracefully shut at the same minute the new one registered (2026-07-29 20:58). Board flipped from CLAIMED to reflect reality.
 
+### RUNTIME-ENVSYNC-1 — saathi-env-sync into the repo so deploys stop aborting   [CLOSED]
+Owner: Claude (runtime box ip-172-31-41-224)        Opened: 2026-07-30 · Closed: 2026-07-30
+Reading: ops/deploy_onbox.sh, ops/set-secret.sh, docs/RUNBOOK.md, CLAUDE.md, ~/saathi/.env vs saathi/dev/runtime
+Acceptance: `ops/deploy.sh --local` completes through env-sync without aborting, with `/usr/local/bin/saathi-env-sync` installed *by the deploy* from the repo (not hand-placed); the regenerated `.env` loses no key and changes no value; services restart and health is green.
+Write-back: CHANGELOG.md, docs/RUNBOOK.md, docs/PROD_READINESS.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/ACTIVE_LANE_BOARD.md
+Notes: MET. env-sync only ever existed in /usr/local/bin on the terminated original box; the hand-built successor box never had it, so every deploy aborted at `saathi-env-sync: command not found`. Root cause under it: the runtime secret was not the full source of truth — `.env` carried 8 keys (incl. SAATHI_DB_DSN with the DB password) that a naive rewrite would drop. Moved those 8 into the secret value-blind (now 45 keys, complete); added ops/saathi-env-sync (instance-role read, atomic 0600 writes of .env + ~/saathi-gcp-sa.json, value-blind, backs up prior .env); deploy_onbox.sh now installs it before use. Verified regenerated .env is a lossless superset (only TUNNEL_TOKEN added). Deployed via PR.
+
 ### RUNTIME-MIGRATION-3 — Phase 3: move Saathi's estate off the MeshPilot org + retire the old box   [CLOSED]
 Owner: Claude (runtime box ip-172-31-41-224)        Opened: 2026-07-30 · Closed: 2026-07-30
 Reading: docs/RUNBOOK.md, docs/PROD_READINESS.md, docs/DECISIONS.md, docs/ENGINEERING_SUPERVISOR.md, CLAUDE.md, saathi/config.py, saathi/bedrock.py, saathi/media_store.py, ops/deploy.sh, ops/alerting/
