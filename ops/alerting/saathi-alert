@@ -11,7 +11,15 @@ set -euo pipefail
 
 UNIT="${1:?unit name required}"
 REGION="ap-south-1"
-TOPIC="arn:aws:sns:${REGION}:559896294326:saathi-alerts"
+TOPIC="arn:aws:sns:${REGION}:635860424621:saathi-alerts"
+
+# Asked of IMDS rather than hardcoded: the instance id was pinned to the old box
+# and stayed wrong through the 559896294326 -> 635860424621 move, so every alert
+# named a host that had not sent it.
+IMDS_TOKEN=$(curl -s -X PUT -m 2 "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null || true)
+INSTANCE_ID=$(curl -s -m 2 -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
+  "http://169.254.169.254/latest/meta-data/instance-id" 2>/dev/null || true)
 
 STATE=$(systemctl is-active "$UNIT" 2>/dev/null || true)
 SINCE=$(systemctl show "$UNIT" -p ActiveEnterTimestamp --value 2>/dev/null || true)
@@ -21,7 +29,7 @@ aws sns publish --region "$REGION" --topic-arn "$TOPIC" \
   --message "$(cat <<MSG
 ${UNIT} entered a failed state.
 
-  host    : $(hostname -s) (i-01b2c27883acb25ca, ap-south-1)
+  host    : $(hostname -s) (${INSTANCE_ID:-unknown}, ap-south-1)
   unit    : ${UNIT}
   state   : ${STATE:-unknown}
   since   : ${SINCE:-unknown}

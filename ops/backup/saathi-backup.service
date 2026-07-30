@@ -1,0 +1,7 @@
+[Unit]
+Description=Saathi Postgres backup (dump, verify by restore, upload to S3)
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/saathi-backup

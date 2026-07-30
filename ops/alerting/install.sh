@@ -16,6 +16,13 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 install -m 0755 "$HERE/saathi-alert"  /usr/local/bin/saathi-alert
 install -m 0755 "$HERE/saathi-metric" /usr/local/bin/saathi-metric
+
+# The backup unit this script wires alerting onto. It used to exist only in
+# /usr/local/bin on one box, so the successor inherited the alerting and not the
+# backup — the BackupSuccess alarm was armed against a job that could never run.
+install -m 0755 "$HERE/../backup/saathi-backup" /usr/local/bin/saathi-backup
+install -m 0644 "$HERE/../backup/saathi-backup.service" /etc/systemd/system/saathi-backup.service
+install -m 0644 "$HERE/../backup/saathi-backup.timer"   /etc/systemd/system/saathi-backup.timer
 install -m 0644 "$HERE/saathi-alert@.service" /etc/systemd/system/saathi-alert@.service
 install -m 0644 "$HERE/../saathi-meta-guard.service" /etc/systemd/system/saathi-meta-guard.service
 install -m 0644 "$HERE/../saathi-meta-guard.timer" /etc/systemd/system/saathi-meta-guard.timer
@@ -40,4 +47,6 @@ CONF
 
 systemctl daemon-reload
 systemctl enable --now saathi-meta-guard.timer
+systemctl enable --now saathi-backup.timer
 echo "installed. verify with: systemctl show saathi-worker -p OnFailure"
+echo "                        systemctl list-timers saathi-backup.timer"

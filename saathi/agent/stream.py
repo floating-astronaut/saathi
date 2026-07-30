@@ -24,8 +24,7 @@ import re
 import time
 from typing import AsyncIterator
 
-import boto3
-
+from .. import bedrock
 from ..config import settings
 from .prompt import build_prefix
 from .tools.specs import TOOL_CONFIG
@@ -42,7 +41,7 @@ _client = None
 def client():
     global _client
     if _client is None:
-        _client = boto3.client("bedrock-runtime", region_name=settings.bedrock_region)
+        _client = bedrock.runtime_client()
     return _client
 
 

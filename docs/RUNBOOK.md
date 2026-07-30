@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| AWS account | `559896294326` (Mesh Pilot Dev) |
+| AWS account | `635860424621` (mcc org, profile `mcc-dev`) — Saathi's estate moved here 2026-07-30. `559896294326` (Mesh Pilot Dev) still holds the **retired** originals and, until AWS grants model access, the **live Bedrock entitlement**: see `docs/PROD_READINESS.md` MIGRATION-BEDROCK-1 |
 | Region | **ap-south-1** (Mumbai) |
 | Instance | `i-01b2c27883acb25ca` · t3.large · Ubuntu 26.04 · 60 GB gp3 encrypted |
 | Elastic IP | `15.252.75.191` (`eipalloc-095dc7178aceb1f5c`) |
@@ -41,7 +41,31 @@
 > box's Cloudflare access. Neither announces itself — you find out when the
 > thing you were about to do stops working.
 | Tunnel | `saathi-dev` `d4e9e4ad-04ca-4ebf-92af-d39c7cb5f831` |
-| Artifacts | `s3://saathi-dev-artifacts-559896294326` |
+| Artifacts | `s3://saathi-dev-artifacts-635860424621` (was `…-559896294326`) |
+| Audio | `s3://saathi-dev-audio-635860424621/voice/` — 7-day TTL (was `…-559896294326`) |
+| Secrets | `saathi/dev/runtime` and `saathi/dev/gcp-sa`, both ap-south-1 in `635860424621` |
+| Alerts | `arn:aws:sns:ap-south-1:635860424621:saathi-alerts` → `support@glitchexecutor.com` |
+
+> **Bedrock model access for a fresh account.** A new account has no model access
+> at all — `get-foundation-model-availability` returns `NOT_AUTHORIZED` for every
+> model, including Amazon's own, and `converse()` fails with the unhelpful
+> `ValidationException: Operation not allowed`. Access is gated on a use-case form,
+> and on some accounts `PutUseCaseForModelAccess` is itself refused
+> ("create a support case"). The form accepted for `559896294326` was:
+>
+>     companyName        Nuraveda
+>     companyWebsite     https://nuraveda.com/
+>     intendedUsers      1
+>     industryOption     Software as a Service
+>     useCases           A WhatsApp assistant for older adults in India. The model
+>                        interprets text and transcribed voice messages to set and
+>                        manage reminders, remember user-stated preferences, answer
+>                        everyday questions, explain confusing forwarded messages,
+>                        and compile shopping lists. Languages: Hindi and English.
+>                        It gives no medical, legal or financial advice, performs no
+>                        transactions and holds no credentials. Emergency and
+>                        self-harm phrasing is caught by a deterministic filter
+>                        before the model is called.
 
 > **Runtime migration in progress (2026-07-29).** The application is moving from
 > the box above to a successor runtime box:
@@ -50,10 +74,10 @@
 |---|---|
 | Hostname | `ip-172-31-41-224` |
 | Region | ap-south-1 (Mumbai) — egress `15.206.170.88` (AWS) |
-| Instance id | _TBD — IMDS is blocked on this box; fill in from the console_ |
+| Instance id | `i-03a4911f2f7de793d` · t3.large · role `IndofolkDevBoxRole` (IMDS answers; the earlier "blocked" reading was wrong) |
 | Repo on box | `/home/ubuntu/saathi` |
 | AWS CLI | configured: Identity Center SSO `mcc`, profiles `mcc` (621481811158, AdministratorAccess) and `mcc-dev` (635860424621, DevAdmin). Usable for any AWS work in the **mcc org**. `session-manager-plugin` installed. |
-| **Not** reachable | the Saathi account `559896294326` (different AWS org) — Saathi's own S3/Secrets/SSM stay out of reach from here. |
+| Reach into `559896294326` | SSO profile `saathi` (AWSAdministratorAccess) **is** configured here and works. That is how the 2026-07-30 migration was performed — and it is also how inference is still being served, which is the dependency being removed. See `docs/PROD_READINESS.md` MIGRATION-BEDROCK-1. |
 | State | app, worker, Postgres and the `saathi-dev` tunnel connector are **not yet running here**. The original box still serves `saathi.n8nworld.store` until the connector is repointed and the cutover is verified. See `docs/PROD_READINESS.md`. |
 
 The migration moves the tunnel connector onto the successor box; the webhook
