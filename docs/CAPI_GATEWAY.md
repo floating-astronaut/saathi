@@ -4,9 +4,17 @@
 > captures the `ctwa_clid` and reports a `LeadSubmitted` on onboarding completion —
 > `saathi/capi.py`, migration 016, call sites in `pipeline.py` and `onboarding.py`.
 > The design below is what shipped. Enabled by setting `SAATHI_CAPI_DATASET_ID`
-> (dataset `2038444060213473`, owner Indofolk). Boundary: D-AD. The separate Cloud
-> Run **Gateway** the operator deployed is a web-pixel path this flow does not use —
-> the sections below on it are kept for the teardown decision.
+> (dataset `2038444060213473`, owner Indofolk). Boundary: D-AD.
+>
+> **The Cloud Run Gateway was torn down on 2026-07-30** — it was a web-pixel path
+> this CTWA flow never used. Deleted from GCP project `saathi-ai-503623`: both
+> Cloud Run services (`gc05b56ab51771-capig`, `-hub`), the
+> `gc05b56ab51771-storage-bucket` (which also held stray `capig-restore-key-*`
+> secret files), and the two installer service accounts. Verified gone via the
+> Run and Storage APIs. This was infrastructure deletion, so it is recorded here
+> rather than in code. One residue only GCP-side cleanup cannot reach: Meta's
+> Events Manager still shows a stale "installed" gateway record — clear it there
+> when convenient. The sections below are kept as the description of what existed.
 >
 > Live evidence: a probe with the exact event payload was accepted by the dataset on
 > every field (endpoint, token, `action_source`, `messaging_channel`, `user_data`
