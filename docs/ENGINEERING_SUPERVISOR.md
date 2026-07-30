@@ -1904,3 +1904,34 @@ Event Invalid Ctwa Clid"` — endpoint/schema/token correct, only a real ad clic
 **Remains:** enable in production (`SAATHI_CAPI_DATASET_ID` in the runtime secret + deploy);
 add the third-party-egress line to the privacy policy; decide the Cloud Run Gateway's fate
 (billing since 2026-07-27, unused by this path).
+
+## RUNTIME-ENVSYNC-1 — saathi-env-sync into the repo — 2026-07-30 (Claude)
+
+**Read:** ops/deploy_onbox.sh, ops/set-secret.sh, docs/RUNBOOK.md, CLAUDE.md; compared
+`~/saathi/.env` against `saathi/dev/runtime`.
+
+**Symptom:** every `ops/deploy.sh --local` aborted at `saathi-env-sync: command not found`
+before restarting services. The helper had only ever lived in `/usr/local/bin` on the
+terminated original box; it was never version-controlled, so the hand-built successor box
+never had it and `.env` was maintained by hand.
+
+**Root cause underneath:** the runtime secret was not the full source of truth. `.env`
+carried 8 keys not in the secret — including `SAATHI_DB_DSN` (the DB password) — so a naive
+"rewrite `.env` from secret" (which is what env-sync does) would have dropped the DB
+connection. That is likely why env-sync was skipped here rather than fixed.
+
+**Changed:** moved the 8 box-local keys into `saathi/dev/runtime` value-blind (now 45 keys,
+complete; the DB password is in Secrets Manager rather than only on disk). Added
+`ops/saathi-env-sync` — instance-role read (no profile), atomic 0600 writes of `.env` and
+`~/saathi-gcp-sa.json`, backs up the prior `.env`, prints only counts + sha prefixes.
+`ops/deploy_onbox.sh` now `install`s it from the repo before the step that calls it.
+
+**Verified:** overlapping keys already matched (36/36, so a rewrite changes nothing);
+regenerated `.env` is a lossless superset of the old one (only `TUNNEL_TOKEN` added, which
+the app ignores); `settings` load the DB DSN, audio bucket, CAPI dataset, GCP SA path, model
+and dm_policy. A full `ops/deploy.sh --local` completed through env-sync → uv sync → tests →
+restart → verify **with the manual `/usr/local/bin` copy removed first**, proving the deploy
+installs it. Health green after.
+
+**Remains:** the box is still hand-built in other respects (no full IaC) — PR-2 stands. This
+closes only the env-sync omission.

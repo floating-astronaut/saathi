@@ -231,6 +231,10 @@ done
 if [ "$REHEARSAL" = "1" ]; then
   echo "  REHEARSAL: skipping saathi-env-sync (it rewrites $CANONICAL_REPO/.env)"
 else
+  # Install env-sync from the repo before the deploy that needs it, so the box
+  # never depends on a hand-placed copy — that omission is exactly what aborted
+  # every deploy on the successor box (RUNTIME-ENVSYNC-1). Idempotent.
+  install -m 0755 "$REPO/ops/saathi-env-sync" /usr/local/bin/saathi-env-sync
   if ! saathi-env-sync; then
     echo "ABORT: saathi-env-sync failed — .env may be stale or partial, and a"
     echo "service restarted against it fails in ways that look like anything else."
