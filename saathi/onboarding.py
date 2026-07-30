@@ -28,8 +28,38 @@ import logging
 from datetime import datetime, timezone
 
 from . import capi, training
+from .config import settings
+from .speech import sarvam_lang
 
 log = logging.getLogger("saathi.onboarding")
+
+
+async def _voice_user(conn, user_id: int) -> bool:
+    """Has this person ever spoken to us? A voice note in their history means we
+    should onboard them by voice too — many elders talk far more easily than they
+    read (VOICE-2). Reads the `messages` log, so no new state is needed."""
+    row = await (await conn.execute(
+        "select 1 from messages where user_id = %s and direction = 'in' "
+        "and kind = 'audio' limit 1", (user_id,))).fetchone()
+    return row is not None
+
+
+async def _maybe_voice(conn, transport, user_id: int, handle: str,
+                       text: str, lang: str) -> None:
+    """Speak an onboarding message too, for a voice user. Additive to the text +
+    buttons and best-effort: the message has already gone, and TTS is a vendor
+    call on our own fixed copy (not the model), so this does not touch the
+    "onboarding never calls the model" boundary. Fixed strings hit the phrase
+    cache, so it is nearly free. Buttons/lists can't ride a voice note, so the
+    text+buttons stay the primary; the voice is an accessibility layer on top."""
+    if not settings.saathi_tts_enabled:
+        return
+    if not await _voice_user(conn, user_id):
+        return
+    try:
+        await transport.send_voice(conn, user_id, handle, text, sarvam_lang(lang))
+    except Exception:  # noqa: BLE001 -- voice must never break onboarding
+        log.exception("onboarding voice failed for user %s", user_id)
 
 CONSENT_VERSION = "2026-07-27.v2"
 
@@ -378,6 +408,7 @@ async def _welcome(conn, transport, user_id: int, handle: str, lang: str) -> dic
         ("ob:consent:info", b(lang, "more")),
         ("ob:consent:no", b(lang, "not_now")),
     ))
+    await _maybe_voice(conn, transport, user_id, handle, t(lang, "welcome"), lang)
     return {"onboarding": "consent"}
 
 
@@ -400,6 +431,7 @@ async def handle_button(conn, transport, user_id: int, handle: str,
             "select onboarding::text from users where id = %s", (user_id,))).fetchone()
         if row and row[0] == "done":
             await transport.send_text(conn, user_id, handle, t(lang, "lang_changed"))
+            await _maybe_voice(conn, transport, user_id, handle, t(lang, "lang_changed"), lang)
             return {"onboarding": "done", "language": lang}
         return await _welcome(conn, transport, user_id, handle, lang)
 
@@ -412,10 +444,12 @@ async def handle_button(conn, transport, user_id: int, handle: str,
                     ("ob:consent:yes", b(lang, "ok_start")),
                     ("ob:consent:no", b(lang, "not_now")),
                 ))
+            await _maybe_voice(conn, transport, user_id, handle, t(lang, "consent_detail"), lang)
             return {"onboarding": "consent"}
         if choice == "no":
             await conn.execute("update users set onboarding = 'new' where id = %s", (user_id,))
             await transport.send_text(conn, user_id, handle, t(lang, "declined"))
+            await _maybe_voice(conn, transport, user_id, handle, t(lang, "declined"), lang)
             return {"onboarding": "declined"}
         # granted — record the language the consent was actually read in
         await conn.execute(
@@ -431,13 +465,17 @@ async def handle_button(conn, transport, user_id: int, handle: str,
                 conn, user_id, handle, t(lang, "confirm_name", name=display_name),
                 _buttons(("ob:name:yes", b(lang, "yes")),
                          ("ob:name:other", b(lang, "other_name"))))
+            await _maybe_voice(conn, transport, user_id, handle,
+                               t(lang, "confirm_name", name=display_name), lang)
         else:
             await transport.send_text(conn, user_id, handle, t(lang, "ask_name"))
+            await _maybe_voice(conn, transport, user_id, handle, t(lang, "ask_name"), lang)
         return {"onboarding": "name"}
 
     if step == "name":
         if choice == "other":
             await transport.send_text(conn, user_id, handle, t(lang, "ask_name"))
+            await _maybe_voice(conn, transport, user_id, handle, t(lang, "ask_name"), lang)
             return {"onboarding": "name"}
         return await _ask_reminders(conn, transport, user_id, handle, display_name)
 
@@ -448,6 +486,7 @@ async def handle_button(conn, transport, user_id: int, handle: str,
         await transport.send_buttons(
             conn, user_id, handle, t(lang, "ask_improve"), _buttons(
                 ("ob:imp:yes", b(lang, "yes_fine")), ("ob:imp:no", b(lang, "no"))))
+        await _maybe_voice(conn, transport, user_id, handle, t(lang, "ask_improve"), lang)
         return {"onboarding": "improve"}
 
     if step == "imp":
@@ -462,6 +501,7 @@ async def handle_button(conn, transport, user_id: int, handle: str,
         await capi.report_lead(conn, user_id)
         name = await _name(conn, user_id)
         await transport.send_text(conn, user_id, handle, t(lang, "done", name=name))
+        await _maybe_voice(conn, transport, user_id, handle, t(lang, "done", name=name), lang)
         log.info("user %s finished onboarding (training=%s)", user_id, choice)
         return {"onboarding": "done"}
 
@@ -494,6 +534,7 @@ async def _ask_reminders(conn, transport, user_id, handle, name):
         conn, user_id, handle, t(lang, "ask_reminders", name=nm),
         _buttons(("ob:rem:yes", b(lang, "yes_send")),
                  ("ob:rem:no", b(lang, "not_now"))))
+    await _maybe_voice(conn, transport, user_id, handle, t(lang, "ask_reminders", name=nm), lang)
     return {"onboarding": "reminders"}
 
 

@@ -1,3 +1,24 @@
+## 2026-07-30 — onboarding is now voiced for voice users (VOICE-2)
+
+A person who talks to Saathi by voice was still onboarded in silent text — the
+worst case being an elder who can barely read. Now, if someone has ever sent a
+voice note, every onboarding message (welcome, consent detail, the name/reminders/
+training questions, "all set!") is **also** sent as a voice note in their chosen
+language, on top of the text + buttons.
+
+- **Detection needs no new state:** `_voice_user()` checks the `messages` log for
+  any inbound voice note. So a voice user is recognised across the tap-driven
+  steps, not just on the message they happened to speak.
+- **Additive + best-effort:** buttons/lists can't ride a voice note, so text stays
+  the primary and the voice is an accessibility layer; a TTS failure never breaks
+  onboarding.
+- **Boundary intact:** this does not violate "onboarding never calls the model" —
+  TTS is a Sarvam vendor call on our *own fixed copy*, not the LLM, and the fixed
+  strings hit the phrase-bank cache so it's nearly free. The language-picker
+  message stays visual (a list to tap); voicing begins at the welcome.
+
+4 new tests, 632 total.
+
 ## 2026-07-30 — "temp in Toronto" got "couldn't find it" (or the wrong city) (LOOKUP-1)
 
 Symptom: asked the weather for Toronto, Saathi answered it couldn't find it. Two
