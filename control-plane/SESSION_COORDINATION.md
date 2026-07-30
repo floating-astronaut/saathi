@@ -108,4 +108,9 @@ a tree the next session will read and believe.
 
 > When you hand a lane to another agent, note it here so they have context.
 
-- _none yet_
+- **CAPI-1** (Claude, 2026-07-30) — claimed on branch `agent/meta-capi-gcs-bridge`.
+  Docs-first increment (`docs/CAPI_GATEWAY.md`) landed: the Meta Conversions API
+  Gateway is verified live on Cloud Run, credentials work, the app simply never
+  emits events. The lane is **blocked on the operator** for the whose-data/which-
+  events decision and three identifiers (Gateway URL, pixel/dataset ID, Gateway
+  token). No code written yet — deliberately, it touches the privacy boundary.

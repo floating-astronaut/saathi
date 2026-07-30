@@ -134,6 +134,13 @@ Acceptance: user can ask for short WhatsApp-ready drafts in their selected scrip
 Write-back: docs/DAILY_LIFE_OS.md, CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
 Notes: Likely prompt/tool surface only; preserve one-question rule.
 
+### CAPI-1 — dispatch conversion events into the Meta CAPI Gateway   [IN PROGRESS]
+Owner: Claude        Opened: 2026-07-30
+Reading: docs/CAPI_GATEWAY.md, docs/DECISIONS.md, docs/PRD.md §12, saathi/onboarding.py, saathi/metrics.py, saathi/config.py
+Acceptance: given the operator's whose-data decision (default: marketing funnel only), the Gateway URL and pixel/dataset ID, Saathi emits exactly one content-free conversion event on onboarding completion; the payload provably carries no message/turn content; a Gateway outage never raises into a turn; focused tests pass.
+Write-back: docs/CAPI_GATEWAY.md, docs/DECISIONS.md (new entry for third-party egress), docs/PROD_READINESS.md (privacy-policy line), CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md
+Notes: Docs-first increment done (docs/CAPI_GATEWAY.md) — infra verified live: CAPI Gateway v2.7.0 healthy on Cloud Run in saathi-ai-503623 since 2026-07-27, GCP SA reads/writes the bucket, Meta system-user token has ads_management/business_management. BLOCKED on operator: (1) whose-data/which-events decision — privacy boundary, not to be guessed; (2) Gateway Cloud Run URL; (3) pixel/dataset ID; (4) Gateway access token. Code (saathi/capi.py + onboarding call site) is designed but not written until (1)–(4) land.
+
 ### LIFE-5 — stronger scam shield   [CLOSED]
 Owner: Codex (source branch `agent/stronger-scam-shield`)        Opened: 2026-07-28 · Claimed/Closed: 2026-07-29
 Reading: docs/DAILY_LIFE_OS.md, docs/foundations/SAFETY_AND_CLINICAL.md, docs/ARCHITECTURE.md, saathi/safety/classifier.py, tests/test_safety.py
