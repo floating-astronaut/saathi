@@ -1,3 +1,47 @@
+## 2026-07-30 — Saathi's AWS estate moved out of the MeshPilot org account
+
+Symptom: the successor box looked healthy — `/healthz` 200 through the tunnel,
+services active — while three things were silently wrong. `cloudwatch:PutMetricData`
+was failing every 30 s with AccessDenied, so `WorkerHeartbeat` was not being
+emitted by this box at all; the `saathi-worker-heartbeat-missing` alarm still read
+`OK` because it was watching the *old* box's datapoints. Audio writes and artifact
+reads were AccessDenied for the instance role. And both services carried a systemd
+drop-in pinning `AWS_PROFILE=saathi` — an Identity Center profile into
+`559896294326` — so every Bedrock call, metric and voice-note upload was crossing
+into the MeshPilot org on a borrowed SSO token with hours left on it.
+
+Fix (2026-07-30): moved everything movable into `635860424621` (mcc org),
+ap-south-1. Created `saathi-dev-artifacts-635860424621` and
+`saathi-dev-audio-635860424621` reproducing the originals' encryption, versioning,
+public-access-block and lifecycle (90-day backups, 7-day voice TTL), and copied all
+21 objects — verified by ETag manifest, and by SHA-256 for `saathi-repo.tar.gz`
+where a multipart upload changes the ETag but not the bytes. Migrated
+`saathi/dev/gcp-sa` byte-exactly (`aws --output text` appends a newline; the first
+copy was 2369 bytes against the source's 2368, so it was rewritten through boto3).
+Recreated the `saathi-alerts` SNS topic and both alarms. Replaced the borrowed
+account's grants with five least-privilege inline policies on `IndofolkDevBoxRole`
+mirroring the old `saathi-dev-box` role, scoped to the new account's ARNs.
+Repointed `SAATHI_AUDIO_BUCKET` in `.env` and in the runtime secret;
+`ops/deploy.sh` to the new instance, bucket and profile; and `ops/alerting/saathi-alert`
+to the new topic, asking IMDS for the instance id rather than hardcoding it, since
+the hardcoded one had gone stale through the move.
+
+Verified with the instance role, no profile: voice-prefix put/get/delete, artifacts
+list and `backups/` write, both secrets readable, `PutMetricData` in namespace
+`Saathi` accepted. The negative cases deny — a write outside `backups/` and a
+`PutMetricData` outside the `Saathi` namespace both return AccessDenied, so the
+scoping fails closed. `/healthz` 200 locally and through the tunnel after restart;
+`settings.saathi_audio_bucket` resolves to the new bucket; zero AccessDenied lines
+since.
+
+**Not moved, and blocking:** Bedrock. Every model in `635860424621` reports
+`authorizationStatus: NOT_AUTHORIZED` — the account has never been granted model
+access, and `PutUseCaseForModelAccess` refuses with "Your account is not authorized
+to perform this action. Please create a support case." So `AWS_PROFILE=saathi`
+**still stands** on both units and is the one remaining MeshPilot dependency; it
+cannot be removed until AWS enables Bedrock on the new account. See
+`docs/PROD_READINESS.md` MIGRATION-BEDROCK-1.
+
 ## 2026-07-29 — runtime bring-up Phase 1: app boots on the successor box
 
 Symptom: the successor runtime box (`ip-172-31-41-224`) had no runnable app —

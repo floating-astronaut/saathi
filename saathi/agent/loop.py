@@ -14,8 +14,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-import boto3
-
+from .. import bedrock
 from .. import openrouter
 from .. import observability
 from ..config import settings
@@ -37,7 +36,7 @@ _client = None
 def client():
     global _client
     if _client is None:
-        _client = boto3.client("bedrock-runtime", region_name=settings.bedrock_region)
+        _client = bedrock.runtime_client()
     return _client
 
 

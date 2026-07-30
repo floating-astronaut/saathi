@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Dump -> verify by restoring -> upload. Fails loudly; never reports success on
+# a dump it could not read back.
+#
+# This lived only in /usr/local/bin on the original box until 2026-07-30, which
+# is why the successor box ran for a day with no backups and nothing said so:
+# ops/alerting/install.sh wires up a BackupSuccess datapoint for a unit the repo
+# never shipped. It is in the repo now so the next box gets it from the deploy.
+set -uo pipefail
+BUCKET=saathi-dev-artifacts-635860424621
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+DIR=/var/backups/saathi
+FILE="$DIR/saathi-$STAMP.dump"
+VERIFY_DB="saathi_verify_$$"
+log() { logger -t saathi-backup "$*"; echo "$(date -u +%FT%TZ) $*"; }
+
+mkdir -p "$DIR"
+
+# custom format: parallel restore, selective restore, and pg_restore -l can
+# read the table of contents without a database.
+sudo -u postgres pg_dump -Fc -d saathi > "$FILE" 2>/tmp/bkerr || { log "FAIL dump: $(tail -1 /tmp/bkerr)"; exit 1; }
+SIZE=$(stat -c%s "$FILE")
+[ "$SIZE" -lt 1000 ] && { log "FAIL dump suspiciously small: $SIZE bytes"; exit 1; }
+
+# The dump must be readable, not merely present.
+sudo -u postgres pg_restore -l "$FILE" >/dev/null 2>&1 || { log "FAIL dump unreadable"; exit 1; }
+
+# Restore into a scratch DB and count. This is the step that turns a file into
+# a backup.
+sudo -u postgres createdb "$VERIFY_DB" || { log "FAIL createdb verify"; exit 1; }
+trap 'sudo -u postgres dropdb --if-exists "$VERIFY_DB" >/dev/null 2>&1' EXIT
+sudo -u postgres pg_restore -d "$VERIFY_DB" "$FILE" >/dev/null 2>&1
+TABLES=$(sudo -u postgres psql -d "$VERIFY_DB" -tAc \
+  "select count(*) from pg_tables where schemaname='public'")
+[ "${TABLES:-0}" -lt 10 ] && { log "FAIL restore produced only $TABLES tables"; exit 1; }
+USERS=$(sudo -u postgres psql -d "$VERIFY_DB" -tAc "select count(*) from users" 2>/dev/null || echo 0)
+
+gzip -f "$FILE"
+aws s3 cp "$FILE.gz" "s3://$BUCKET/backups/postgres/saathi-$STAMP.dump.gz" \
+    --region ap-south-1 --sse AES256 --only-show-errors \
+  || { log "FAIL upload"; exit 1; }
+
+# Local copies are a convenience, not the backup. Keep a week.
+find "$DIR" -name 'saathi-*.dump.gz' -mtime +7 -delete
+log "OK  ${SIZE}B  tables=$TABLES users=$USERS  -> s3://$BUCKET/backups/postgres/saathi-$STAMP.dump.gz"

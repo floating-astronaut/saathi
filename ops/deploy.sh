@@ -31,10 +31,10 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-INSTANCE=i-01b2c27883acb25ca
-BUCKET=saathi-dev-artifacts-559896294326
+INSTANCE=i-03a4911f2f7de793d
+BUCKET=saathi-dev-artifacts-635860424621
 REGION=ap-south-1
-PROFILE=mp-dev
+PROFILE=mcc-dev
 CANONICAL_REPO=/home/ubuntu/saathi
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }

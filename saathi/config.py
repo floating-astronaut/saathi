@@ -28,6 +28,21 @@ class Settings(BaseSettings):
 
     # Bedrock — regional ap-south-1, inference stays in India (plan §5c)
     bedrock_region: str = "ap-south-1"
+    #: AWS profile used **for Bedrock only**. Empty means the ambient credential
+    #: chain (on the box: the instance role), which is what we want everywhere.
+    #:
+    #: It exists because Saathi's estate moved to account `635860424621` on
+    #: 2026-07-30 but Bedrock model access could not move with it — the new
+    #: account is `NOT_AUTHORIZED` for every model and the use-case form is
+    #: refused pending an AWS support case. Setting `AWS_PROFILE` process-wide
+    #: was the previous workaround, and it dragged S3, Secrets Manager and
+    #: CloudWatch into the old account too — including writes aimed at the new
+    #: buckets, which then failed cross-account. Scoping the borrowed profile to
+    #: the one client that needs it keeps the blast radius at inference.
+    #:
+    #: Delete this setting once MIGRATION-BEDROCK-1 in `docs/PROD_READINESS.md`
+    #: closes. It is a dated workaround, not an extension point.
+    saathi_bedrock_profile: str = ""
     saathi_model_id: str = "zai.glm-5"
     # No prompt caching on this model, so cost is linear in prompt size.
     # The agent asserts against this before every call.

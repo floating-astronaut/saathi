@@ -20,6 +20,48 @@ Severity: **P0** blocks first external user · **P1** blocks paid launch ·
 
 ## In-progress migration
 
+### MIGRATION-BEDROCK-1 · Inference still runs on a MeshPilot-org SSO token (2026-07-30)
+Everything else in Saathi's AWS estate now lives in `635860424621` (mcc org):
+buckets, both secrets, the `saathi-alerts` topic, both alarms, and least-privilege
+grants on `IndofolkDevBoxRole`. **Bedrock did not move.** Every model in the new
+account returns `authorizationStatus: NOT_AUTHORIZED` — model access has never been
+granted there — and the self-serve path is closed:
+
+    aws bedrock put-use-case-for-model-access --form-data …
+    ValidationException: Your account is not authorized to perform this action.
+    Please create a support case … and we will get back to you.
+
+So `saathi-web` and `saathi-worker` still carry the drop-in
+`/etc/systemd/system/saathi-{web,worker}.service.d/20-aws-profile.conf` setting
+`AWS_PROFILE=saathi`, which resolves to AWSAdministratorAccess in `559896294326`.
+Inference is therefore billed to, and served from, the MeshPilot org account.
+
+Why this is worse than an ordinary shortcut: it is a **credential with an expiry**,
+not a role. The Identity Center access token for the `saathi` session expires
+roughly every 8 hours and is renewed from a refresh token in
+`~/.aws/sso/cache/`. When that chain finally fails — a revoked session, a rotated
+assignment, an org change on a project Saathi is meant to be independent of —
+`converse()` starts returning an auth error, and the failure surfaces as an
+assistant that has stopped answering. Nothing on this box can renew it
+non-interactively.
+
+**Fix, in order:** (1) open an AWS Support case against `635860424621` requesting
+Bedrock model access for `zai.glm-5` and `qwen.qwen3-vl-235b-a22b` in ap-south-1 —
+the use-case form already accepted for `559896294326` is reproduced verbatim in
+`docs/RUNBOOK.md`; (2) once `authorizationStatus` reads `AUTHORIZED`, confirm a
+`converse()` "pong" through the instance role with no profile set; (3) delete both
+drop-ins and `systemctl daemon-reload && systemctl restart saathi-web saathi-worker`;
+(4) remove the `saathi` profile and its SSO session from `~/.aws/config` so the
+dependency cannot be picked up again by accident.
+
+Severity **P0**: this is the last tie to the MeshPilot org, it is the one the
+product cannot run without, and it fails on someone else's schedule.
+
+Do **not** work around it by repointing to an Anthropic `global.` model. That
+would trade an org dependency for a data-residency breach — "inference stays in
+India" is a product boundary in `docs/DECISIONS.md`, and the Anthropic endpoints
+reachable here are `global.`-only.
+
 ### RUNTIME-MIGRATION-1 · Runtime box migration (2026-07-29)
 The application runtime is moving from `i-01b2c27883acb25ca` (EIP
 `15.252.75.191`, ap-south-1) to a successor box `ip-172-31-41-224` (ap-south-1,
