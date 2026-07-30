@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from . import training
+from . import capi, training
 
 log = logging.getLogger("saathi.onboarding")
 
@@ -357,6 +357,10 @@ async def handle_button(conn, transport, user_id: int, handle: str,
             "update users set onboarding = 'done', onboarded_via = 'self' where id = %s",
             (user_id,))
         await _grant_free_allowance(conn, user_id)
+        # Attribution (CAPI-1): if this signup came from a click-to-WhatsApp ad,
+        # report the conversion. No-op for organic signups and when disabled;
+        # never raises, so it cannot cost the person their completion reply.
+        await capi.report_lead(conn, user_id)
         name = await _name(conn, user_id)
         await transport.send_text(conn, user_id, handle, t(lang, "done", name=name))
         log.info("user %s finished onboarding (training=%s)", user_id, choice)

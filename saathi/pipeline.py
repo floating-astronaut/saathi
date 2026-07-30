@@ -24,9 +24,9 @@ import logging
 import math
 import wave
 
-from . import (accounts, commands, conversation, documents, identity, memory,
-               media_store, observability, onboarding, privacy, provenance,
-               rate_limit, training, usage, vision)
+from . import (accounts, capi, commands, conversation, documents, identity,
+               memory, media_store, observability, onboarding, privacy,
+               provenance, rate_limit, training, usage, vision)
 from .config import settings
 from .agent import loop
 from .agent.tools.handlers import Handlers
@@ -627,6 +627,12 @@ async def handle_message(conn, msg: dict, contact_name: str | None = None,
 
     who = await identity.resolve(conn, channel, handle, contact_name,
                                  dm_policy=settings.saathi_dm_policy)
+
+    # Attribution capture (CAPI-1): if this message began with an ad tap, store
+    # its ctwa_clid write-once. Before the admission/dedupe gates on purpose — the
+    # ad click is a fact even for a handle that never gets admitted or onboards.
+    # No-op unless a referral is present, so it costs a dict lookup otherwise.
+    await capi.capture_referral(conn, who.user_id, msg)
 
     if await already_seen(conn, wa_mid):
         log.info("duplicate webhook for %s, ignoring", wa_mid)

@@ -1870,3 +1870,37 @@ alert paths (OnFailure + alarm→SNS) confirmed by executed-action records.
   the long-lived-key trade this created.
 - OpenRouter is the live inference path for all 8 accounts (verified); the Bedrock key is
   the fallback, not the default.
+
+## CAPI-1 — Click-to-WhatsApp conversion attribution — 2026-07-30 (Claude)
+
+**Read:** docs/CAPI_GATEWAY.md, docs/DECISIONS.md, Meta CAPI-for-business-messaging +
+Automatic-Events + CTWA docs (2026-07-30), saathi/pipeline.py, saathi/onboarding.py,
+saathi/identity.py, saathi/config.py, saathi/metrics.py, db/migrations/. Used CodeGraph on
+the source checkout to confirm the handle_message → resolve → dispatch flow and the
+onboarding completion call site + blast radius before editing.
+
+**Symptom:** ads-that-click-to-WhatsApp spend had no conversion signal; Meta's `ctwa_clid`
+arrived on the first ad-originated message and was discarded (extract_messages passes the
+whole message; nothing read `referral`).
+
+**Changed:** migration 016 (content-free `ctwa_clid`/`ctwa_captured_at` on users);
+`saathi/capi.py` — `capture_referral` (write-once, no-op without a referral) and
+`report_lead` (LeadSubmitted to `graph.facebook.com/v21.0/{DATASET_ID}/events`,
+`action_source: business_messaging`, only ctwa_clid + WABA id in user_data, never raises);
+call sites in `pipeline.handle_message` (after resolve, before the gates) and `onboarding.py`
+(after `_grant_free_allowance`); config `SAATHI_CAPI_DATASET_ID` + `SAATHI_CAPI_TEST_EVENT_CODE`.
+Chose Model B (self-reported) over the Automatic Events API (Meta NLP over threads) —
+boundary D-AD. Left the Cloud Run Gateway as a teardown follow-up since CTWA events go direct
+to the dataset.
+
+**Verified:** 587 tests (10 new) assert the event structurally cannot carry message content
+or PII (exact key sets), capture is write-once, organic/unconfigured no-op, Graph outage
+returns cleanly. Ruff clean on new code (pipeline.py's 16 findings are pre-existing, identical
+on origin/main). Live: migration applied to the box (both columns present); a probe with the
+exact payload was accepted on every field by dataset 2038444060213473 (owner Indofolk
+935287898727459) and rejected *only* the synthetic ctwa_clid, subcode 2804087 `"Messaging
+Event Invalid Ctwa Clid"` — endpoint/schema/token correct, only a real ad click's id needed.
+
+**Remains:** enable in production (`SAATHI_CAPI_DATASET_ID` in the runtime secret + deploy);
+add the third-party-egress line to the privacy policy; decide the Cloud Run Gateway's fate
+(billing since 2026-07-27, unused by this path).

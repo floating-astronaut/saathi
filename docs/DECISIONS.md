@@ -655,3 +655,24 @@ poison a future application deploy or the public site, so the PR checkpoint,
 two-remote synchronization, deploy verification, and explicit source-branch
 workflow remain required. Revisit the decision if the runtime box becomes more
 exposed, a second contributor appears, or the site branch gains sensitive flows.
+
+### D-AD · Attribution sends signals to Meta, never builds a cross-Meta identity graph · 2026-07-30
+
+Operator decision, made explicit because it governs a boundary. Saathi reports
+Click-to-WhatsApp conversions to Meta's Conversions API so ad spend can be
+attributed — but only as a **one-way signal**, and only the marketing funnel.
+
+What is allowed: on onboarding completion, one `LeadSubmitted` carrying the
+`ctwa_clid` Meta itself minted on the ad click, plus an event name and a time.
+Meta's own `ctwa_clid` is the match key, so the event contains **nothing about the
+elder** — no phone, no message content, no thread. Chosen over Meta's Automatic
+Events API precisely because that alternative would have Meta run NLP over elders'
+WhatsApp conversations; we send our own signal instead.
+
+What is refused: Saathi does **not** build or read a graph linking a person's
+Facebook identity, phone number and WhatsApp together. Meta does not expose the FB
+identity behind a number anyway, but the point stands as a boundary — the product's
+value is being the *trusted, Indianised, safer layer over* the Meta ecosystem, not
+a thinner copy of Meta's identity linking. The moat is the shield, not the graph.
+The feature is off unless `SAATHI_CAPI_DATASET_ID` is set, and it fails closed:
+capture and report both no-op without it, and a Graph outage never touches a turn.

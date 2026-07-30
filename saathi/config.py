@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     #: `docs/PROD_READINESS.md`. Delete both with the profile above.
     saathi_bedrock_access_key_id: str = ""
     saathi_bedrock_secret_access_key: str = ""
+
+    # Click-to-WhatsApp (CTWA) conversion attribution (CAPI-1). Empty dataset id
+    # disables the feature outright — capture and report both no-op — exactly like
+    # an empty audio bucket disables media capture. The Meta token and WABA id it
+    # uses are `wa_access_token` / `wa_business_account_id` above. See
+    # docs/CAPI_GATEWAY.md.
+    saathi_capi_dataset_id: str = ""
+    #: When set, events are routed to Events Manager's Test Events tab only and do
+    #: not touch production attribution. For verification; unset in normal running.
+    saathi_capi_test_event_code: str = ""
     saathi_model_id: str = "zai.glm-5"
     # No prompt caching on this model, so cost is linear in prompt size.
     # The agent asserts against this before every call.
