@@ -1,3 +1,23 @@
+## 2026-07-30 — "temp in Toronto" got "couldn't find it" (or the wrong city) (LOOKUP-1)
+
+Symptom: asked the weather for Toronto, Saathi answered it couldn't find it. Two
+bugs in `lookup/weather.py`, both reproduced live:
+
+1. **The stored home city overrode the named city.** `city = ctx.get("city") or
+   query` meant a Mumbai user asking "temp in Toronto" got *Mumbai's* weather —
+   the wrong-city answer the module's own docstring calls worse than "I don't
+   know". (If they had no stored city, it fell through to #2.)
+2. **Phrases didn't geocode.** Open-Meteo needs a bare place name; the model often
+   passes "temp in Toronto" / "toronto ka temperature", which returned no hits →
+   "couldn't find it". (Also, multi-word cities like "New York" were never URL-
+   encoded, so they broke too.)
+
+Fix: a place **named in the question wins** over the stored home city, which is
+now only the fallback for a bare "aaj mausam?". Geocoding tries the raw query,
+then a filler-stripped version ("temp in Toronto" → "Toronto"), then the home
+city; names are URL-encoded. Verified live: Toronto/New York now answer correctly,
+and a bare "aaj mausam" still uses the home city. 4 new tests, 628 total.
+
 ## 2026-07-30 — voice notes sounded muddy and robotic; fixed the engine + encode (VOICE-1)
 
 Symptom: TTS was enabled, the round-trip worked, but the voice sounded bad —

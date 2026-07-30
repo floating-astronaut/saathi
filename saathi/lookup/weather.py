@@ -4,13 +4,17 @@ Open-Meteo needs no key and no attribution burden, which matters: a capability
 that depends on a paid key is a capability that silently stops working when the
 card expires.
 
-Location comes from the user's stored `city` fact rather than being asked every
-time. If we do not know where they live, we say so and offer to remember it —
-that is a better answer than a wrong city, and it teaches the product something.
+Location precedence: a place **named in the question wins** over the user's stored
+home city. Someone in Mumbai asking "temp in Toronto" wants Toronto, not Mumbai —
+and returning Mumbai silently is the wrong-city answer this product treats as worse
+than "I don't know". The stored `city` is the fallback for a bare "aaj mausam?".
+If we have neither, we say so and offer to remember their city.
 """
 from __future__ import annotations
 
 import logging
+import re
+from urllib.parse import quote
 
 import httpx
 
@@ -21,6 +25,43 @@ log = logging.getLogger("saathi.lookup.weather")
 
 GEOCODE = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST = "https://api.open-meteo.com/v1/forecast"
+
+# Filler around a place name: "temp in Toronto", "Toronto ka mausam",
+# "what is the weather in New York". Stripping these lets a phrase geocode when
+# the raw string ("temp in Toronto") returns no hits.
+_FILLER = {
+    "temp", "temperature", "weather", "forecast", "mausam", "tapman", "climate",
+    "ka", "ki", "ke", "in", "at", "mein", "me", "of", "the", "is", "what", "whats",
+    "hows", "how", "kaisa", "kaisi", "kaise", "hai", "aaj", "abhi", "now", "today",
+    "kal", "barish", "baarish", "raining", "rain", "kya", "tell", "please",
+    "batao", "bata", "do", "degree", "degrees",
+}
+
+
+def _strip_filler(q: str) -> str:
+    """Drop weather/question words, leaving (hopefully) just the place name."""
+    words = [w for w in re.split(r"\s+", q.strip()) if w]
+    kept = [w for w in words if re.sub(r"[^a-z]", "", w.lower()) not in _FILLER]
+    return " ".join(kept).strip(" ?.,!")
+
+
+def _place_candidates(query: str | None, stored_city: str | None) -> list[str]:
+    """Ordered places to try: a place named in the query first, home city last."""
+    out: list[str] = []
+    q = (query or "").strip()
+    if q:
+        out.append(q)                       # a clean "Toronto" / "New York" hits directly
+        cleaned = _strip_filler(q)          # "temp in Toronto" -> "Toronto"
+        if cleaned and cleaned.lower() != q.lower():
+            out.append(cleaned)
+    if stored_city and stored_city.strip():
+        out.append(stored_city.strip())     # fallback for a bare "aaj mausam?"
+    seen, res = set(), []
+    for c in out:
+        if c.lower() not in seen:
+            seen.add(c.lower())
+            res.append(c)
+    return res
 
 _CODES = {
     0: "saaf aasman", 1: "halka baadal", 2: "baadal", 3: "poora baadal",
@@ -38,18 +79,24 @@ class Weather:
     def available(self) -> bool:
         return True                      # keyless
 
+    async def _geocode(self, http: httpx.AsyncClient, name: str) -> dict | None:
+        g_url = f"{GEOCODE}?name={quote(name)}&count=1&language=en&format=json"
+        net_policy.assert_safe_url(g_url)
+        hits = (await http.get(g_url)).json().get("results") or []
+        return hits[0] if hits else None
+
     async def lookup(self, query: str, **ctx) -> Answer | None:
-        city = (ctx.get("city") or query or "").strip()
-        if not city:
+        candidates = _place_candidates(query, ctx.get("city"))
+        if not candidates:
             return None
         async with httpx.AsyncClient(timeout=15) as http:
-            g_url = f"{GEOCODE}?name={city}&count=1&language=en&format=json"
-            net_policy.assert_safe_url(g_url)
-            g = (await http.get(g_url)).json()
-            hits = g.get("results") or []
-            if not hits:
+            place = None
+            for cand in candidates:
+                place = await self._geocode(http, cand)
+                if place:
+                    break
+            if not place:
                 return None
-            place = hits[0]
             f_url = (f"{FORECAST}?latitude={place['latitude']}&longitude={place['longitude']}"
                      "&current=temperature_2m,weather_code,relative_humidity_2m"
                      "&daily=temperature_2m_max,temperature_2m_min"
@@ -57,6 +104,7 @@ class Weather:
             net_policy.assert_safe_url(f_url)
             f = (await http.get(f_url)).json()
 
+        city = query or ctx.get("city") or ""
         cur, daily = f.get("current", {}), f.get("daily", {})
         desc = _CODES.get(cur.get("weather_code"), "")
         lo = (daily.get("temperature_2m_min") or [None])[0]
