@@ -2210,3 +2210,34 @@ and is a product decision, not a refactor — not done.
 **Remains (lane stays IN PROGRESS):** a measured tool-use/QA eval set (extend the PR-9 harness
 to score "did it answer correctly / did it reach for the right tool" on a fixed prompt list),
 and generalising the fallback/synthesis discipline across all kinds.
+
+---
+
+## 2026-07-30 · AGENT-1 (increment 2, CLOSES lane) — tool-use eval, measured live
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/tool-use-eval`).
+
+**Ask:** stop guessing at capability — measure it.
+
+**Built:** `saathi/eval/agent.py` + `agent_cases.py` — a tool-use/QA eval that RUNS each case
+through the real `agent.loop.run` against the live model and scores `Turn.tool_calls` + final
+text. Side-effect-free by construction: a **fake conn** (no DB; look_up's city read returns
+none) and a **dry-run tool handler** (real `look_up` search so we see if it answers; state-
+mutating tools stubbed — we record the model *reached* for them but write/send nothing). 13
+committed cases: weather (Toronto, home), fact (PM Canada, turmeric myth, diabetes), web
+(USD→INR, time in NY), direct (arithmetic, capital, chit-chat), action (reminder, remember,
+list). Scored: `tool_ok` (required tool called), `answer_ok` (expected text present), `gave_up`
+(surrender regex). Headline = answered well = all three.
+
+**Verified — ran it live against zai.glm-5:** **100% answered well, 100% right-tool selection,
+0% give-up** across all 13. Building it caught a real scorer bug: the give-up regex flagged
+"insulin kaam nahi kar paati" (a correct diabetes explanation) as a surrender via a bare "kar
+pa" — tightened to genuine give-ups (pata nahi kar/chal, nahi mila, couldn't find/check,
+information nahi, no access) and pinned with a regression test. 8 new tests (`test_eval_agent`),
+full suite green, ruff clean.
+
+**Closes AGENT-1.** Acceptance met: the agent reliably reaches for the right tool and answers
+(inc. the LOOKUP-1 weather fix + inc-1 fallback/prompt), measured on a fixed set, with a harness
+to catch regressions. The eval is non-deterministic (temperature 0.2) and 13 cases — it can grow;
+not a blocker. **Boundary reaffirmed throughout:** capability = reliable answering/acting, NOT
+code execution; "capability defined by absence" (no money/OTP/account tools) is untouched.

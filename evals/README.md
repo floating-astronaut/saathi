@@ -24,3 +24,18 @@ uv run python -m saathi.eval.run --corpus /path/to/corpus --out evals/report
 
 The unit tests (`tests/test_eval_*.py`) build throwaway corpora in a temp dir, so
 no synthetic audio is ever committed.
+
+## Agent tool-use eval (lane AGENT-1)
+
+Measures whether the agent **reaches for the right tool and answers** rather than
+giving up — the "can it tell me the temperature in Toronto" question, generalised.
+Unlike the STT corpus this one **runs** against the live model, with a fake DB and a
+dry-run tool handler (real `look_up` search; state-mutating tools stubbed, so no
+rows written, nothing sent). Cases are committed in `saathi/eval/agent_cases.py`.
+
+```bash
+uv run python -m saathi.eval.agent          # needs model creds; costs a few calls
+```
+
+Scored per case: called the required tool, answer contained the expected text, and
+did it give up. First live run (2026-07-30): **100% answered well** across 13 cases.
