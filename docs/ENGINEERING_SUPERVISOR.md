@@ -1935,3 +1935,46 @@ installs it. Health green after.
 
 **Remains:** the box is still hand-built in other respects (no full IaC) — PR-2 stands. This
 closes only the env-sync omission.
+
+---
+
+## 2026-07-30 · PR-9 — STT eval harness (entity accuracy against real audio, not TTS)
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/stt-eval-harness`).
+
+**Read:** docs/PRD.md §15 (the metric), docs/PROD_READINESS.md PR-9, docs/LANDMINES.md,
+saathi/speech/stt.py, saathi/speech/correct.py, saathi/speech/audio.py, control-plane board.
+
+**Symptom:** every entity-accuracy number Saathi has quoted was measured on TTS-generated
+speech. Synthetic audio is cleaner and *differently* distorted than a real elder on a bad
+line, so R1 (mishearing the medicine name) was unmeasured against reality. The fix cannot be
+fabricated — generating synthetic voice notes is the `ffmpeg -version` trap this lane names —
+so the deliverable is the measurement infrastructure, not a number. (Operator scoped it this
+way: "I build harness + collection protocol.")
+
+**Changed:**
+- `docs/STT_EVAL.md` (new, registered in DOC_SYSTEM map) — the collection/transcription/
+  consent (DPDP) protocol, the manifest schema, and the metric doctrine: entity accuracy is
+  primary, WER is a diagnostic that "will actively mislead you" (PRD §15).
+- `saathi/eval/` (new) — `metrics.py` (WER/CER diagnostics + `entity_present`, which reuses
+  correct.py's NFKC fold and 0.78 `SequenceMatcher` threshold so the eval measures exactly
+  what the pipeline can resolve; digits gated to exact match so a wrong time can't fuzz
+  through); `corpus.py` (loader that fails loudly on a malformed/duplicate/missing-audio
+  manifest); `score.py` (two-stage entity accuracy, raw vs corrected, to measure the
+  correction pass's lift); `run.py` (runner + CLI, aggregates by language/condition/entity
+  type, decode+transcribe injectable so it's testable without ffmpeg/Sarvam).
+- `evals/` — `corpus/` empty + git-ignored (real elder audio is personal data, never
+  committed), `SCHEMA.md`, READMEs.
+- Write-back: CHANGELOG (symptom first), PROD_READINESS PR-9 (partly closed; residual data
+  gap named), DOC_SYSTEM map, board (PR-9 CLOSED; corpus collection split to new lane DATA-1),
+  SESSION_COORDINATION.
+
+**Verified:** 15 new tests (`tests/test_eval_metrics.py`, `tests/test_eval_corpus.py`) — WER/
+CER/entity math, loader failure modes, two-stage correction-lift scoring, end-to-end run with
+an injected transcriber. Full suite **602 passed** (was 587). Ruff clean. Ran the CLI against
+the empty `evals/corpus/`: it printed "0 real samples → no accuracy claim" and exited 0,
+proving the honesty gate — the harness cannot emit a synthetic number.
+
+**Remains:** the corpus is empty. The first *real* entity-accuracy number, and any confirm/
+refute of the PRD §15 >95% target, waits on lane **DATA-1** (collect + hand-transcribe real
+consented elder voice notes). PR-9 closes as a harness, not a measured accuracy.

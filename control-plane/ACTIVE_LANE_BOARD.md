@@ -573,8 +573,22 @@ Notes: P1, and the biggest felt gap. Blocked on a route decision the operator
   Saathi's own GCP project. Stored voice id is Rachel (English default);
   `ZUrEGyu8GFMwnHbvLhv2` (Monika Sogam) is the better Hinglish start.
 
-### PR-9 — no real eval corpus; every STT number is synthetic   [OPEN]
-Owner: unassigned        Opened: 2026-07-26 (from PROD_READINESS)
+### DATA-1 — collect the real STT eval corpus and run it   [OPEN]
+Owner: unassigned        Opened: 2026-07-30
+Reading: docs/STT_EVAL.md, docs/PRD.md §15, evals/corpus/SCHEMA.md, foundations/ (DPDP)
+Acceptance: 50–100 real, consented elder voice notes per language (hi-IN, en-IN,
+  romanised hi-en), deliberately including the messy ones, hand-transcribed to the
+  manifest schema; `python -m saathi.eval.run --corpus <dir>` produces the first
+  **real** entity-accuracy number; the PRD §15 >95% target is confirmed or refuted.
+Write-back: docs/PRD.md §0 (replace the synthetic-accuracy claim with the measured
+  one), docs/PROD_READINESS.md (close PR-9's residual data gap), docs/BUILD_PLAN.md.
+Notes: this is a **data-collection** task, not code — the harness (PR-9) is done and
+  waiting. Needs real recordings only humans can supply; do not populate it with TTS.
+  Consent is per-speaker and separate from service/onboarding consent (DPDP). Corpus
+  lives out of band, never committed. Do this before the next model-version decision.
+
+### PR-9 — no real eval corpus; every STT number is synthetic   [CLOSED]
+Owner: Claude (runtime box, branch agent/stt-eval-harness)        Opened: 2026-07-26 (from PROD_READINESS) · Claimed/Closed: 2026-07-30
 Reading: docs/PRD.md §15, docs/PROD_READINESS.md (PR-9), docs/LANDMINES.md
 Acceptance: 50–100 real elder voice notes per language, hand transcribed,
   deliberately including the messy ones; entity accuracy re-measured against it.
@@ -582,6 +596,20 @@ Write-back: docs/PRD.md §0, docs/DECISIONS.md, docs/BUILD_PLAN.md
 Notes: P1. R1 is the product risk and it is unmeasured against reality. Every
   accuracy claim so far rests on TTS-generated speech, which is cleaner and
   differently distorted than a 70-year-old on a bad line with a television on.
+  Scoped 2026-07-30 (operator: build the harness, not the corpus): the corpus of
+  real elder voice notes needs real recordings only humans can supply, and
+  fabricating them is the exact `ffmpeg -version` trap this lane exists to name.
+  CLOSED 2026-07-30: MET for the harness. Shipped the *measurement infrastructure*
+  — docs/STT_EVAL.md (collection + transcription + consent protocol, manifest
+  schema), saathi/eval/ (loader that fails loudly, entity-accuracy-primary scorer
+  reusing correct.py's 0.78 threshold, runner/CLI), evals/corpus/ empty +
+  git-ignored. Primary metric is **entity accuracy** per PRD §15, not WER. The
+  runner refuses to emit an aggregate on an empty corpus ("0 real samples → no
+  accuracy claim"), so it can never fabricate a number; proven by running it.
+  15 new tests, 602 total (was 587), ruff clean. Deployed via PR (agent/stt-eval-
+  harness). **The corpus itself remains empty** — that data-collection work is
+  split out as lane DATA-1 above, so this closure claims a harness, not a measured
+  accuracy number.
 
 ---
 

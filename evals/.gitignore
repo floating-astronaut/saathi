@@ -1,0 +1,6 @@
+# Real elder voice notes + hand transcripts are personal data (DPDP) — never
+# commit them. Track only the harness docs/schema and the synthetic fixtures.
+corpus/*
+!corpus/README.md
+!corpus/SCHEMA.md
+report/
