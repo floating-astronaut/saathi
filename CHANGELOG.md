@@ -1,3 +1,28 @@
+## 2026-07-30 — the agent gave up instead of reaching for its tools (AGENT-1, increment 1)
+
+Symptom: "what's the temperature in Toronto" got "couldn't find it" — a question
+Google answers trivially. The weather bug (LOOKUP-1) was one cause; the deeper one
+is that the agent **surrendered** after one failed look_up instead of trying web
+search. The capability was never missing: live, our Google-grounded web search
+already answers Toronto's temperature, the PM of Canada, USD→INR, etc. The gap was
+reliability, not power.
+
+First increment (more under lane AGENT-1):
+- **Deterministic fallback:** `look_up` with kind `weather` now tries the forecast
+  provider *then web search*. A place the forecaster can't resolve is answered by
+  Google rather than failing the turn — no reliance on the model choosing to retry.
+- **Prompt:** the weather in another city is a normal thing to answer, not to
+  refuse; if one look_up returns nothing, try kind `web` before giving up; "I
+  couldn't find it" on a Google-answerable question is a failure, not humility.
+- **Tool description:** clearer — "answer a question about the world using live
+  search… reach for it rather than saying you can't help"; and pass a bare place
+  ("Toronto") to weather, not a sentence.
+
+1 new test, 633 total. Remaining in AGENT-1: a measured tool-use/QA eval set and
+broader hardening. **Scope note:** this makes Saathi *reliably answer and act*; it
+does NOT add code execution or unbounded actions — capability-by-absence (no money,
+no OTP, no account access) is the elder-safety boundary and stays.
+
 ## 2026-07-30 — onboarding is now voiced for voice users (VOICE-2)
 
 A person who talks to Saathi by voice was still onboarded in silent text — the

@@ -228,7 +228,11 @@ class Handlers:
         from ...lookup import weather, wiki, web  # noqa: F401 - registers providers
         kind = (a.get("kind") or "fact").lower()
         query = (a.get("query") or "").strip()
-        order = {"weather": ["weather"],
+        # Weather falls back to web search: if the forecast provider can't resolve
+        # a place (a phrase, an obscure town), Google-grounded search still answers
+        # "temp in Toronto" rather than the turn giving up (AGENT-1). Fact/web
+        # already cross-cover each other.
+        order = {"weather": ["weather", "web"],
                  "fact": ["wikipedia", "web"],
                  "web": ["web", "wikipedia"]}.get(kind, ["wikipedia", "web"])
 
