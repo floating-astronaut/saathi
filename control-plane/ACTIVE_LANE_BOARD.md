@@ -560,18 +560,28 @@ Notes (history): detection was built and induced:
   `active` rather than `failed` and `OnFailure` barely applies to it — a
   crash-looping worker looks alive, and only the heartbeat alarm catches it.
 
-### PR-8 — no TTS; a voice-first product that only writes back   [OPEN]
-Owner: unassigned        Opened: 2026-07-26 (from PROD_READINESS)
-Reading: docs/PRD.md §9, docs/DECISIONS.md, docs/PROD_READINESS.md (PR-8, PR-5)
+### PR-8 — no TTS; a voice-first product that only writes back   [BUILT, INERT]
+Owner: Claude (runtime box, branch agent/tts-voice-replies)        Opened: 2026-07-26 (from PROD_READINESS) · Built: 2026-07-30
+Reading: docs/PRD.md §9, docs/DECISIONS.md, docs/PROD_READINESS.md (PR-8, PR-5),
+  docs/USAGE_LEDGER.md, docs/vendor/sarvam/text-to-speech.md, saathi/speech/,
+  saathi/wa/client.py, saathi/core/context.py
 Acceptance: a voice reply reaches a real WhatsApp thread as OGG/Opus playable
   inline — **not** a file attachment — behind the swappable interface, with
   phrase-bank caching.
 Write-back: docs/ARCHITECTURE.md, docs/DECISIONS.md, docs/PROD_READINESS.md, CHANGELOG.md
-Notes: P1, and the biggest felt gap. Blocked on a route decision the operator
-  owns: the ElevenLabs key is MeshPilot's (PR-5) and reads as quota-exhausted
-  (10.7M used / 5.6M limit), so realistically this is Google `texttospeech` on
-  Saathi's own GCP project. Stored voice id is Rachel (English default);
-  `ZUrEGyu8GFMwnHbvLhv2` (Monika Sogam) is the better Hinglish start.
+Notes: Route decision resolved 2026-07-30 (operator): **Sarvam Bulbul**, not Google
+  or the exhausted MeshPilot ElevenLabs key — reverses D-S (now metered by the
+  ledger), recorded as D-AE. Trigger: voice-in→voice-out (maps to the existing
+  `voice_reply_pref='auto'` default). BUILT, INERT (like PAY-1): `saathi/speech/
+  tts.py` (swappable provider + Sarvam Bulbul + phrase-bank cache), `wa.send_voice_
+  note` (best-effort, ledger-metered), `Channel.send_voice`, `context.should_voice`
+  + voice step in `ctx.reply`. Behind `SAATHI_TTS_ENABLED` (**off**). Proven live:
+  real Sarvam call → OGG/Opus (single + multi-chunk; live testing found the
+  inputs≤3 cap and it's handled). 12 tests, 614 total. Deployed via PR
+  (agent/tts-voice-replies). **To make it live (flips INERT→done):** operator sets
+  `SAATHI_TTS_ENABLED=true`, confirms the speaker voice, and one real voice note is
+  observed round-tripping to a handset. **Also open:** TTS per-char price is a
+  labelled estimate until reconciled (PROD_READINESS PR-8).
 
 ### DATA-1 — collect the real STT eval corpus and run it   [OPEN]
 Owner: unassigned        Opened: 2026-07-30

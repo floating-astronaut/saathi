@@ -56,6 +56,15 @@ class Transport(Protocol):
 
     async def send_text(self, conn, user_id: int, handle: str, text: str) -> str: ...
 
+    async def send_voice(self, conn, user_id: int, handle: str, text: str, lang: str,
+                         *, wa_message_id: str | None = None) -> str | None:
+        """Speak a reply as a voice note, where the channel supports it (PR-8).
+
+        Best-effort and additive to `send_text`: returns the message id or None
+        (unsupported/disabled/failed). Default no-op — SMS has no voice notes, so
+        a voice-first product degrades to text there rather than erroring."""
+        return None
+
     async def send_buttons(self, conn, user_id: int, handle: str, body: str,
                            buttons: list[tuple[str, str]]) -> str: ...
 

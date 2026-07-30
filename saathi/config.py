@@ -77,6 +77,24 @@ class Settings(BaseSettings):
     #: bounded by the length of an audio file rather than by a model's appetite.
     sarvam_api_key: str = ""
 
+    # --- Text-to-speech: reply as a voice note (PR-8, D-AE) -----------------
+    #: Master switch. Off by default: TTS is real vendor spend and a live product
+    #: behaviour change, so it stays inert until deliberately enabled. When on,
+    #: *when* to speak is `core.context.should_voice` — default voice-in→voice-out
+    #: (`users.voice_reply_pref='auto'`), the trigger the operator chose to start.
+    saathi_tts_enabled: bool = False
+    #: Sarvam Bulbul voice. Female to match the persona (D-W / LANG-1). See
+    #: docs/vendor/sarvam/text-to-speech.md for the id set.
+    saathi_tts_speaker: str = "anushka"
+    saathi_tts_model: str = "bulbul:v2"
+    saathi_tts_sample_rate: int = 22050
+    #: Per-input character cap; longer replies are chunked and concatenated.
+    saathi_tts_max_chars: int = 1200
+    #: Ledger cost estimate — Sarvam's per-char TTS price is not in a captured
+    #: doc, so this is a labelled `catalog_estimate` (the recorded *character
+    #: count* is exact). Reconcile against an invoice; see USAGE_LEDGER.md.
+    saathi_sarvam_tts_paise_per_1k_chars: int = 150
+
     # --- OpenRouter: per-account keys (AI-1) --------------------------------
     #: The *provisioning* key. It mints capped sub-keys and is never used to
     #: serve a turn — see `docs/AI_ROUTING.md` §5. Empty means provisioning is

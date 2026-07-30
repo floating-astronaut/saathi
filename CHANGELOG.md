@@ -1,3 +1,35 @@
+## 2026-07-30 — a voice-first product that only wrote back can now speak (PR-8)
+
+Symptom: PR-8 was the biggest felt gap — Saathi is voice-first, elders talk to it,
+and it answered only in text. Now, when enabled, it replies with a Sarvam Bulbul
+voice note.
+
+- **Provider: Sarvam Bulbul** (`bulbul:v2`), chosen by the operator over Google
+  TTS. This reverses D-S (Sarvam was STT-only for lack of per-account capping) —
+  now legitimate because the usage ledger can meter and cap it, the exact reversal
+  condition D-S named. Recorded as **D-AE**. Verified live our key has TTS access
+  and the API contract (`docs/vendor/sarvam/text-to-speech.md`); live testing
+  caught the `inputs ≤ 3 per request` cap, so long replies batch and concatenate.
+- **Trigger: voice-in → voice-out**, the operator's start policy. It maps onto the
+  `users.voice_reply_pref='auto'` default that already existed; `always`/`never`
+  honoured; onboarding stays text-only. Whole feature behind `SAATHI_TTS_ENABLED`,
+  **off by default** — no live behaviour change until enabled.
+- **Additive and best-effort:** the voice note is sent *after* the text reply, so a
+  TTS failure, cap refusal, or Sarvam outage can never break a turn. Policy lives
+  in `core/context.should_voice`, mechanism in the channel (`send_voice`), so SMS
+  degrades to text. Most of the delivery path (`wav_to_ogg_opus`, `upload_media`,
+  `send_audio`) already existed; the new work is synthesis + a swappable provider +
+  a phrase-bank cache for the fixed strings.
+- **Metered like STT:** each synthesis writes a content-free `sarvam/tts` ledger
+  event (character count) and, under the global enforcement flag, reserves before
+  the call. TTS input is Saathi's own reply text (never user content) and stays
+  in India, preserving the inference-in-India rule.
+
+12 new tests (614 total, was 602). Proven end to end: real Sarvam call → OGG/Opus
+voice note, single- and multi-chunk. Remaining: the *live-in-prod* send to a real
+thread happens at enable time (flag off); and Sarvam's per-char TTS price is a
+labelled estimate until reconciled against an invoice (PROD_READINESS PR-8-TTS).
+
 ## 2026-07-30 — STT accuracy was unmeasured against real elders; built the harness to measure it (PR-9)
 
 Symptom: every entity-accuracy number Saathi has ever quoted was measured on

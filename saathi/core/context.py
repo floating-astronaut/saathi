@@ -6,8 +6,13 @@ without changing any signature that other handlers depend on.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+from ..config import settings
+
+log = logging.getLogger("saathi.core.context")
 
 
 @dataclass
@@ -65,7 +70,40 @@ class MessageContext:
     def is_onboarded(self) -> bool:
         return self.onboarding == "done"
 
+    def should_voice(self) -> bool:
+        """Whether to also speak this reply (PR-8, D-AE).
+
+        Policy lives here (context), mechanism in the channel. Gated by the
+        master flag, then the user's stored preference, then the default trigger
+        the operator chose to start with — voice-in→voice-out. Onboarding stays
+        text-only so the open door stays fast (D: onboarding never calls a model;
+        no reason to add TTS latency/cost to it either)."""
+        if not settings.saathi_tts_enabled:
+            return False
+        if not self.is_onboarded:
+            return False
+        if self.voice_pref == "never":
+            return False
+        if self.voice_pref == "always":
+            return True
+        return self.kind == "audio"          # 'auto': voice-in -> voice-out
+
+    def _tts_lang(self) -> str:
+        """Map the user's script choice to a Sarvam language code."""
+        return "en-IN" if self.lang == "en" else "hi-IN"
+
     async def reply(self, text: str) -> str:
-        """Send formatted text back on whatever channel this arrived from."""
-        return await self.transport.send_text(
+        """Send formatted text back, and — best-effort — speak it (PR-8).
+
+        The voice note is additive to and never gates the text reply: if TTS is
+        off, unsupported, capped, or fails, the text has already gone."""
+        mid = await self.transport.send_text(
             self.conn, self.user_id, self.handle, self.transport.format_text(text))
+        if self.should_voice():
+            try:
+                await self.transport.send_voice(
+                    self.conn, self.user_id, self.handle, text, self._tts_lang(),
+                    wa_message_id=self.wa_message_id)
+            except Exception:
+                log.exception("voice reply failed for user %s", self.user_id)
+        return mid
