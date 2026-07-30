@@ -148,17 +148,23 @@ TOOLS: list[dict] = [
         "toolSpec": {
             "name": "look_up",
             "description": (
-                "Look something up in the world: today's weather, or a factual "
-                "question about a person, place or thing. Use when the answer "
-                "depends on current or external information you cannot know. "
-                "Does NOT browse arbitrary websites."
+                "Answer a question about the world using live search: weather in "
+                "any city, prices, exchange rates, news, sports, or a fact about a "
+                "person, place, medicine or thing. Use it whenever the answer needs "
+                "current or external information you don't already know — reach for "
+                "it rather than saying you can't help. Backed by Google search."
             ),
             "inputSchema": {"json": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "what to look up"},
+                    "query": {"type": "string",
+                              "description": "the plain place or thing to look up — for "
+                                             "weather pass just the city (e.g. 'Toronto'), "
+                                             "not a sentence"},
                     "kind": {"type": "string", "enum": ["weather", "fact", "web"],
-                             "description": "weather for forecasts, fact for who/what questions"},
+                             "description": "'weather' for a forecast/temperature, 'fact' "
+                                            "for who/what questions, 'web' for anything "
+                                            "else current (prices, news, rates)"},
                 },
                 "required": ["query", "kind"],
             }},

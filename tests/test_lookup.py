@@ -152,3 +152,35 @@ def test_bare_weather_question_falls_back_to_home_city():
 
 def test_no_query_and_no_city_yields_no_candidate():
     assert weather._place_candidates("", None) == []
+
+
+# --- AGENT-1: weather falls back to web search instead of giving up --------
+
+class _FakeProv:
+    def __init__(self, ans): self._ans = ans
+    def available(self): return True
+    async def lookup(self, query, **ctx): return self._ans
+
+
+class _NoCityConn:
+    """Minimal conn: the user has no stored city fact."""
+    async def execute(self, q, params=None):
+        class _C:
+            async def fetchone(self_): return None
+            async def fetchall(self_): return []
+        return _C()
+
+
+async def test_weather_query_falls_back_to_web(monkeypatch):
+    from saathi.agent.tools.handlers import Handlers
+    from saathi.lookup import base
+    from saathi.lookup.base import Answer
+
+    fakes = {"weather": _FakeProv(None),                       # forecast provider misses
+             "web": _FakeProv(Answer(text="Toronto is 26C", source="web"))}
+    monkeypatch.setattr(base, "get", lambda n: fakes.get(n))
+
+    h = Handlers(_NoCityConn(), user_id=1)
+    out = await h._look_up({"kind": "weather", "query": "temp in Toronto"})
+    assert out.get("found") is True
+    assert "26C" in out["content"]                            # answered, not "couldn't find it"
