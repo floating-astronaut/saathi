@@ -1,3 +1,17 @@
+## 2026-07-30 — tore down the unused Meta Conversions API Gateway
+
+The Cloud Run Gateway the operator had stood up on 2026-07-27 was a web-pixel path
+that CTWA attribution (CAPI-1) never used — Saathi sends conversion events directly
+to the dataset. It had been billing since install. Deleted from GCP project
+`saathi-ai-503623`: both Cloud Run services (`gc05b56ab51771-capig`, `-hub`), the
+`gc05b56ab51771-storage-bucket` (107 objects, including stray `capig-restore-key-*`
+secret files), and the two installer service accounts. Verified gone via the Run
+and Storage APIs — the project now has zero Cloud Run services and zero buckets.
+
+Infrastructure deletion, so there is no code change; the record lives in
+`docs/CAPI_GATEWAY.md` and here. Only residue is a stale "installed" gateway record
+in Meta's Events Manager (GCP-side cleanup cannot reach it), to be cleared there.
+
 ## 2026-07-30 — docs reconciled: runtime box now signs, migration marked complete
 
 Symptom: the signing contract was self-contradictory across the tree. After the
