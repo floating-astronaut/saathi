@@ -1,10 +1,17 @@
 # Meta Conversions API Gateway — status and design
 
-> **State: infrastructure up, app disconnected.** A Meta Conversions API Gateway
-> is deployed and healthy, but no Saathi code sends it events. This doc exists
-> because the missing piece is a *contract* (which events, whose data, to which
-> pixel) and the rules say the contract is written before the code. It touches
-> privacy and third-party data egress, so it does not get built on a guess.
+> **State (2026-07-30): built and wired for CTWA attribution (CAPI-1).** Saathi now
+> captures the `ctwa_clid` and reports a `LeadSubmitted` on onboarding completion —
+> `saathi/capi.py`, migration 016, call sites in `pipeline.py` and `onboarding.py`.
+> The design below is what shipped. Enabled by setting `SAATHI_CAPI_DATASET_ID`
+> (dataset `2038444060213473`, owner Indofolk). Boundary: D-AD. The separate Cloud
+> Run **Gateway** the operator deployed is a web-pixel path this flow does not use —
+> the sections below on it are kept for the teardown decision.
+>
+> Live evidence: a probe with the exact event payload was accepted by the dataset on
+> every field (endpoint, token, `action_source`, `messaging_channel`, `user_data`
+> shape) and rejected *only* a synthetic `ctwa_clid` with `"Messaging Event Invalid
+> Ctwa Clid"` — the wiring is correct; only a real ad click's id is needed.
 
 ## What was found (verified 2026-07-30, not assumed)
 

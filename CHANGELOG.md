@@ -1,3 +1,36 @@
+## 2026-07-30 — Click-to-WhatsApp attribution (CAPI-1): the click id we were throwing away
+
+Symptom: ad spend on "ads that click to WhatsApp" had no conversion signal, so Meta
+could not attribute which ads brought which signups. The data was already arriving
+and being discarded — Meta puts a `ctwa_clid` on the first message of an
+ad-originated conversation, and `pipeline.extract_messages` passes the whole message
+through, so the click id sat in the payload and nothing read it.
+
+Fix (Model B — we send our own event, so Meta never analyses elders' threads):
+- Migration 016 adds `ctwa_clid` + `ctwa_captured_at` to `users` (content-free).
+- `capi.capture_referral`, called in `pipeline.handle_message` right after identity
+  resolve — before the admission/dedupe gates, because an ad click is a fact even
+  for a handle that never onboards — stores the click id **write-once**.
+- `capi.report_lead`, called at onboarding completion in `onboarding.py`, POSTs one
+  `LeadSubmitted` to `graph.facebook.com/v21.0/{DATASET_ID}/events` with
+  `action_source: business_messaging` and only the `ctwa_clid` + WABA id in
+  `user_data`. No phone, no message content — the click id is the match key, so the
+  event carries nothing about the person. Fire-and-forget with metrics.py's
+  discipline: it never raises into a turn, and it no-ops for organic signups
+  (no click id) and when `SAATHI_CAPI_DATASET_ID` is unset.
+
+Boundary recorded as D-AD: attribution is a one-way signal to Meta; Saathi does not
+build a cross-Meta identity graph. The Cloud Run Conversions API Gateway the
+operator had stood up is a web-pixel path this flow does not use — teardown
+candidate (docs/CAPI_GATEWAY.md).
+
+Verified: 587 tests (10 new) assert the event structurally cannot carry content or
+PII, capture is write-once, and a Graph outage returns cleanly. Live: migration
+applied to the box; a probe with our exact payload was accepted by dataset
+`2038444060213473` (owner Indofolk) on every field and rejected *only* the synthetic
+`ctwa_clid` — `"Messaging Event Invalid Ctwa Clid"` — proving the wiring is correct
+and only a real ad click's id is needed.
+
 ## 2026-07-30 — inference moved onto a Bedrock-only credential that cannot expire
 
 Symptom: nothing failing yet, and a deadline nobody set. Inference ran on
