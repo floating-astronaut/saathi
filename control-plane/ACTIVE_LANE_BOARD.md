@@ -28,6 +28,36 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LANG-2 — add Gujarati and Malayalam as full languages   [CLOSED]
+Owner: Claude (runtime box, branch agent/add-gujarati-malayalam)        Opened: 2026-07-30 · Closed: 2026-07-30
+Reading: saathi/onboarding.py, saathi/pipeline.py, saathi/capabilities.py, saathi/agent/prompt.py, saathi/speech/, saathi/safety/classifier.py, saathi/wa/client.py, saathi/core/context.py, docs/DECISIONS.md (D-W, LANG-1)
+Acceptance: a user can choose Gujarati or Malayalam at signup and be onboarded,
+  answered, and voiced in that language; STT/TTS use the right Sarvam codes; the
+  picker fits >3 languages; the safety-coverage decision is recorded.
+Write-back: docs/DECISIONS.md (D-AF), docs/PROD_READINESS.md (LANG-2), CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/*
+Notes: CLOSED 2026-07-30: MET. Onboarding already asked language first; extended
+  the picker from 3 quick-reply buttons to a **WhatsApp list** (new `send_list` on
+  client+channel; `context.button_id` reads `list_reply`) carrying 5 languages.
+  Added gu/ml to every language-keyed copy table (onboarding, ack/snooze, command,
+  paywall, onboarded), SCRIPT_RULE, and a shared `speech.sarvam_lang` map. **Fixed
+  a latent bug on the way:** STT was hardcoded `hi-IN` for everyone — now threaded
+  from `lang_pref` (gu-IN/ml-IN/en-IN). TTS `_tts_lang` reuses the same map.
+  Verified live Sarvam Bulbul serves gu-IN + ml-IN TTS. 8 new tests, 622 total.
+  Two documented residuals → PROD_READINESS LANG-2: safety regex is hi/en-only for
+  now (gap = lane **SAFE-LANG-1**, D-AF), and gu/ml copy is a first draft pending
+  native review. Deployed via PR (agent/add-gujarati-malayalam).
+
+### SAFE-LANG-1 — native-verified Gujarati/Malayalam safety patterns   [OPEN]
+Owner: unassigned        Opened: 2026-07-30
+Reading: saathi/safety/classifier.py, docs/DECISIONS.md (D-AF), docs/foundations/SAFETY_AND_CLINICAL.md
+Acceptance: the priority-0 classifier matches medical-emergency and scam families
+  in native Gujarati and Malayalam script (not only Hindi/English), verified by a
+  native speaker; test coverage pins each family; false-positive rate stays sane.
+Write-back: saathi/safety/classifier.py, tests/test_safety.py, docs/PROD_READINESS.md (close LANG-2 safety gap), CHANGELOG.md
+Notes: the deferred half of LANG-2 (D-AF). Until closed, gu/ml users have the
+  priority-0 safety guarantee only for forwarded Hindi/English content. Needs a
+  native speaker to author/verify patterns — do not ship guessed safety regex.
+
 ### LEDGER-2 — vendor usage hooks and staged STT enforcement   [CLOSED]
 Owner: Codex (source branches `agent/llm-usage-accounting`, `agent/ledger-stt-enforcement`)        Opened: 2026-07-29 · Closed: 2026-07-29
 Reading: docs/USAGE_LEDGER.md §11, docs/AI_ROUTING.md, docs/ARCHITECTURE.md, docs/PROD_READINESS.md PR-15, saathi/agent/loop.py, saathi/openrouter.py, saathi/capabilities.py, saathi/usage.py

@@ -43,25 +43,28 @@ CONSENT_VERSION = "2026-07-27.v2"
 # So: ask the language first, in both, then never repeat yourself again.
 
 ASK_LANG = (
-    "नमस्ते! 🙏 / Namaste! / Hello!\n\n"
-    "आप किस भाषा में बात करना चाहेंगे?\n"
-    "Aap kis bhaasha mein baat karna chahenge?\n"
-    "Which language would you like to use?"
+    "नमस्ते! 🙏 Namaste! / Hello! / નમસ્તે / നമസ്കാരം\n\n"
+    "अपनी भाषा चुनें / Choose your language:"
 )
 
-#: Three choices, which is also WhatsApp's hard limit of three quick replies —
-#: so a fourth language cannot be added here without redesigning this step.
+#: The label on the button that opens the language list (WhatsApp caps it at 20
+#: chars).
+LANG_LIST_BUTTON = "भाषा / Language"
+
+#: The languages we offer. This outgrew WhatsApp's three-quick-reply limit when
+#: Gujarati and Malayalam were added (LANG-2), so the picker is a **list message**
+#: (up to 10 rows), not buttons — see `begin()`.
 #:
 #: "हिंदी" and "Hinglish" are the same language in two scripts, and the split is
-#: not pedantry. Reading and typing are different skills for this audience:
-#: someone perfectly comfortable reading Devanagari may only have an English
-#: keyboard, and someone who reads English signage all day may still find
-#: "kehkar bulaaun" easier than "कहकर बुलाऊँ". Each label is written in the
-#: script it selects, so the choice is legible without being explained.
-LANG_BUTTONS = [
+#: not pedantry: reading and typing are different skills for this audience.
+#: Each label is written in the script it selects, so the choice is legible
+#: without being explained.
+LANG_ROWS = [
     ("ob:lang:hi", "हिंदी"),
     ("ob:lang:hi-en", "Hinglish"),
     ("ob:lang:en", "English"),
+    ("ob:lang:gu", "ગુજરાતી"),
+    ("ob:lang:ml", "മലയാളം"),
 ]
 
 COPY: dict[str, dict[str, str]] = {
@@ -189,6 +192,92 @@ COPY: dict[str, dict[str, str]] = {
             "No problem at all. Just say \"start\" whenever you'd like to begin."
         ),
     },
+    # ⚠️ gu/ml copy below is a first draft (LANG-2, 2026-07-30) and NEEDS NATIVE
+    # ELDER-AUDIENCE REVIEW before it can be considered final — see
+    # docs/PROD_READINESS.md (LANG-2) and D-AF. Structure mirrors hi/en exactly.
+    "gu": {
+        "welcome": (
+            "નમસ્તે! 🙏 હું *Indofolk AI* છું — તમારી સાથી.\n\n"
+            "હું તમારી સાથે છું — વાત કરવા માટે પણ, અને યાદ રાખવા માટે પણ. "
+            "દવાનો સમય, ડૉક્ટરની એપોઇન્ટમેન્ટ, સામાનની યાદી.\n\n"
+            "હું ક્યારેય પૈસા નથી માંગતી, ક્યારેય OTP નથી માંગતી, અને ક્યારેય "
+            "તમારા ખાતામાં કંઈ કરતી નથી.\n\n"
+            "શરૂ કરીએ?"
+        ),
+        "consent_detail": (
+            "હું આ યાદ રાખું છું: તમારું નામ, તમારા સંદેશા, અને જે તમે મને યાદ "
+            "રાખવા કહો છો (જેમ કે દવાનું નામ કે ડૉક્ટરનું નામ).\n\n"
+            "તમારા અવાજની રેકોર્ડિંગ 7 દિવસ પછી ભૂંસાઈ જાય છે. તમારો ડેટા "
+            "*ભારત*માં રહે છે. ગમે ત્યારે 'બધું ભૂલી જા' કહીને બધું હટાવી શકો છો.\n\n"
+            "પૂરી માહિતી: https://n8nworld.store/privacy/"
+        ),
+        "ask_name": "બહુ સરસ! હું તમને શું કહીને બોલાવું?",
+        "confirm_name": "હું તમને *{name}* કહીને બોલાવું?",
+        "ask_reminders": (
+            "{name}, શું હું તમને વસ્તુઓ યાદ કરાવું — જેમ કે દવાનો સમય?"
+        ),
+        "ask_improve": (
+            "છેલ્લો સવાલ. શું હું આપણી વાતોમાંથી શીખી શકું, જેથી ગુજરાતી અને "
+            "દવાઓના નામ વધુ સારી રીતે સમજી શકું?\n\n"
+            "હું તમારું નામ, કે કોઈ વ્યક્તિનું નામ, ક્યારેય રાખતી નથી — ફક્ત "
+            "શબ્દો જેમ કે દવાના નામ. તમે 'ના' કહી શકો છો, કોઈ ફરક નહીં પડે."
+        ),
+        "done": (
+            "થઈ ગયું, {name}! 🌼\n\n"
+            "હવે તમે મને કંઈ પણ કહી શકો છો. જેમ કે:\n"
+            "• \"રોજ સવારે આઠ વાગ્યે દવાનું રિમાઇન્ડર મૂકી દો\"\n"
+            "• \"મારા ડૉક્ટરનું નામ યાદ રાખજો — Dr Sharma\"\n"
+            "• \"આ સંદેશ સમજાયો નહીં, સમજાવો\"\n\n"
+            "બોલીને પણ મોકલી શકો છો — voice note."
+        ),
+        "lang_changed": "ઠીક છે, હવે હું ગુજરાતીમાં વાત કરીશ. 🌼",
+        "declined": (
+            "કોઈ વાંધો નહીં. જ્યારે પણ મન થાય, 'શરૂ કરીએ' લખી દેજો."
+        ),
+    },
+    "ml": {
+        "welcome": (
+            "നമസ്കാരം! 🙏 ഞാൻ *Indofolk AI* ആണ് — നിങ്ങളുടെ കൂട്ടുകാരി.\n\n"
+            "ഞാൻ നിങ്ങളോടൊപ്പമുണ്ട് — സംസാരിക്കാനും ഓർത്തുവയ്ക്കാനും. "
+            "മരുന്നിന്റെ സമയം, ഡോക്ടറുടെ അപ്പോയിന്റ്മെന്റ്, സാധനങ്ങളുടെ പട്ടിക.\n\n"
+            "ഞാൻ ഒരിക്കലും പണം ചോദിക്കില്ല, OTP ചോദിക്കില്ല, നിങ്ങളുടെ "
+            "അക്കൗണ്ടിൽ ഒന്നും ചെയ്യില്ല.\n\n"
+            "തുടങ്ങാമോ?"
+        ),
+        "consent_detail": (
+            "ഞാൻ ഇവ ഓർത്തുവയ്ക്കുന്നു: നിങ്ങളുടെ പേര്, നിങ്ങളുടെ സന്ദേശങ്ങൾ, "
+            "ഓർക്കാൻ നിങ്ങൾ പറയുന്നവ (മരുന്നിന്റെ പേര് അല്ലെങ്കിൽ ഡോക്ടറുടെ പേര് "
+            "പോലെ).\n\n"
+            "നിങ്ങളുടെ ശബ്ദ റെക്കോർഡിംഗ് 7 ദിവസത്തിനു ശേഷം മായ്ക്കപ്പെടും. "
+            "നിങ്ങളുടെ ഡാറ്റ *ഇന്ത്യയിൽ* തന്നെ നിൽക്കും. എപ്പോൾ വേണമെങ്കിലും "
+            "'എല്ലാം മറന്നുകളയൂ' എന്ന് പറഞ്ഞ് എല്ലാം നീക്കം ചെയ്യാം.\n\n"
+            "പൂർണ്ണ വിവരങ്ങൾ: https://n8nworld.store/privacy/"
+        ),
+        "ask_name": "വളരെ നല്ലത്! ഞാൻ നിങ്ങളെ എന്ത് വിളിക്കണം?",
+        "confirm_name": "ഞാൻ നിങ്ങളെ *{name}* എന്ന് വിളിക്കട്ടെ?",
+        "ask_reminders": (
+            "{name}, കാര്യങ്ങൾ ഞാൻ ഓർമ്മിപ്പിക്കണോ — മരുന്നിന്റെ സമയം പോലെ?"
+        ),
+        "ask_improve": (
+            "അവസാന ചോദ്യം. നമ്മുടെ സംഭാഷണങ്ങളിൽ നിന്ന് ഞാൻ പഠിക്കട്ടെ, "
+            "മലയാളവും മരുന്നുകളുടെ പേരുകളും നന്നായി മനസ്സിലാക്കാൻ?\n\n"
+            "നിങ്ങളുടെ പേരോ ആരുടെയെങ്കിലും പേരോ ഞാൻ ഒരിക്കലും സൂക്ഷിക്കില്ല — "
+            "മരുന്നിന്റെ പേര് പോലുള്ള വാക്കുകൾ മാത്രം. 'വേണ്ട' എന്ന് പറയാം, ഒരു "
+            "മാറ്റവുമില്ല."
+        ),
+        "done": (
+            "കഴിഞ്ഞു, {name}! 🌼\n\n"
+            "ഇനി നിങ്ങൾക്ക് എന്നോട് എന്തും പറയാം. ഉദാഹരണത്തിന്:\n"
+            "• \"എല്ലാ ദിവസവും രാവിലെ എട്ട് മണിക്ക് മരുന്ന് ഓർമ്മിപ്പിക്കൂ\"\n"
+            "• \"എന്റെ ഡോക്ടറുടെ പേര് ഓർത്തുവയ്ക്കൂ — Dr Sharma\"\n"
+            "• \"ഈ സന്ദേശം മനസ്സിലായില്ല, വിശദീകരിക്കൂ\"\n\n"
+            "വോയ്സ് നോട്ടായും അയയ്ക്കാം."
+        ),
+        "lang_changed": "ശരി, ഇനി ഞാൻ മലയാളത്തിൽ സംസാരിക്കാം. 🌼",
+        "declined": (
+            "കുഴപ്പമില്ല. എപ്പോൾ വേണമെങ്കിലും 'തുടങ്ങാം' എന്ന് എഴുതൂ."
+        ),
+    },
 }
 
 BTN: dict[str, dict[str, str]] = {
@@ -201,6 +290,14 @@ BTN: dict[str, dict[str, str]] = {
     "en": {"yes_start": "Yes, let's start", "more": "Tell me more", "not_now": "Not now",
            "ok_start": "Alright, start", "yes": "Yes", "other_name": "Another name",
            "yes_send": "Yes, please", "yes_fine": "Yes, that's fine", "no": "No"},
+    # ⚠️ gu/ml labels are a first draft (LANG-2) pending native review. Each must
+    # stay within WhatsApp's 20-char quick-reply button limit.
+    "gu": {"yes_start": "હા, શરૂ કરીએ", "more": "વધુ કહો", "not_now": "હમણાં નહીં",
+           "ok_start": "ઠીક છે, શરૂ", "yes": "હા", "other_name": "બીજું નામ",
+           "yes_send": "હા, મોકલો", "yes_fine": "હા, ઠીક છે", "no": "ના"},
+    "ml": {"yes_start": "അതെ, തുടങ്ങാം", "more": "കൂടുതൽ പറയൂ", "not_now": "ഇപ്പോൾ വേണ്ട",
+           "ok_start": "ശരി, തുടങ്ങാം", "yes": "അതെ", "other_name": "മറ്റൊരു പേര്",
+           "yes_send": "അതെ, അയയ്ക്കൂ", "yes_fine": "അതെ, ശരി", "no": "വേണ്ട"},
 }
 
 DEFAULT_LANG = "hi"
@@ -263,11 +360,13 @@ async def _grant_free_allowance(conn, user_id: int) -> None:
 async def begin(conn, transport, user_id: int, handle: str) -> dict:
     """First contact. Ask which language, before anything else.
 
-    This is the only message sent in both languages. Everything after it speaks
-    one, because the first thing a 70-year-old reads should not be twice as long
-    as it needs to be.
+    This is the only message sent in multiple languages. Everything after it
+    speaks one, because the first thing a 70-year-old reads should not be several
+    times as long as it needs to be. A **list**, not buttons: five languages
+    exceeds WhatsApp's three-quick-reply limit (LANG-2).
     """
-    await transport.send_buttons(conn, user_id, handle, ASK_LANG, _buttons(*LANG_BUTTONS))
+    await transport.send_list(conn, user_id, handle, ASK_LANG,
+                              LANG_LIST_BUTTON, list(LANG_ROWS))
     return {"onboarding": "new"}
 
 

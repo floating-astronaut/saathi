@@ -481,6 +481,19 @@ Two dev shortcuts remain:
   (`SAATHI_SARVAM_TTS_PAISE_PER_1K_CHARS`, default 150 paise/1k). Reconcile against
   a real invoice; the recorded character count is exact meanwhile.
 
+### LANG-2 · Gujarati/Malayalam shipped with provisional copy and a safety gap
+Gujarati and Malayalam were added as full languages (D-AF). Two knowingly-
+incomplete corners:
+- **Safety coverage.** The priority-0 deterministic classifier (emergencies +
+  scams) matches Hindi/English/Hinglish only. Native-*script* gu/ml emergencies
+  and scams are not caught deterministically — they fall through to the model
+  (still answered, but not the priority-0 guarantee). Forwarded Hindi/English
+  scams still catch. **Fix:** native-verified gu/ml patterns — lane SAFE-LANG-1.
+- **Translation quality.** The gu/ml onboarding/reply/ack/paywall copy is a first
+  draft (flagged in code), legible and correct-script but not native-reviewed.
+  **Fix:** native elder-audience review pass before wide rollout.
+Both are documented, not silent (safety/classifier.py, D-AF).
+
 ### PR-9 · No real eval corpus — every STT number so far is synthetic
 Entity accuracy was measured on **TTS-generated speech**, not on real elders.
 Synthetic audio is cleaner and differently distorted than a 70-year-old on a bad
