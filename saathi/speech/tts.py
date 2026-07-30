@@ -30,6 +30,7 @@ from typing import Protocol
 import httpx
 
 from ..config import settings
+from . import tts_speaker
 from .audio import wav_to_ogg_opus
 
 log = logging.getLogger("saathi.tts")
@@ -116,6 +117,8 @@ class SarvamTTS:
         chunks = _chunk(text, settings.saathi_tts_max_chars)
         if not chunks:
             raise TTSError("nothing to synthesize")
+        # Voice is per-language (VOICE-1): the natural speaker differs by language.
+        speaker = tts_speaker(lang, settings.saathi_tts_speaker)
         audios: list[str] = []
         request_id: str | None = None
         async with httpx.AsyncClient(timeout=60) as http:
@@ -129,9 +132,10 @@ class SarvamTTS:
                     json={
                         "inputs": batch,
                         "target_language_code": lang,
-                        "speaker": settings.saathi_tts_speaker,
+                        "speaker": speaker,
                         "model": settings.saathi_tts_model,
                         "speech_sample_rate": settings.saathi_tts_sample_rate,
+                        "enable_preprocessing": settings.saathi_tts_enable_preprocessing,
                     })
                 if r.status_code >= 400:
                     raise TTSError(f"sarvam tts {r.status_code}: {r.text[:300]}")
@@ -153,7 +157,8 @@ _CACHE_MAX = 256
 
 
 def _cache_key(provider: str, lang: str, text: str) -> tuple:
-    return (provider, settings.saathi_tts_speaker, lang, " ".join(text.split()))
+    speaker = tts_speaker(lang, settings.saathi_tts_speaker)
+    return (provider, speaker, lang, " ".join(text.split()))
 
 
 def _cache_get(key: tuple) -> bytes | None:
@@ -192,7 +197,7 @@ async def synthesize_ogg(text: str, lang: str,
 
     started = time.monotonic()
     wav, request_id = await provider.synthesize(text, lang)
-    ogg = await wav_to_ogg_opus(wav)
+    ogg = await wav_to_ogg_opus(wav, settings.saathi_tts_ogg_bitrate)
     ms = int((time.monotonic() - started) * 1000)
     _cache_put(key, ogg)
     return Speech(ogg=ogg, chars=len(text), ms=ms, request_id=request_id, cached=False)

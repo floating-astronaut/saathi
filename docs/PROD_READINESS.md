@@ -469,13 +469,11 @@ Inbound speech works; outbound is text only. For a user with poor eyesight this
 is most of the value missing.
 **Fix:** TTS behind the swappable interface, OGG/Opus out (not a file
 attachment), with the phrase-bank caching in §9.
-**Closed 2026-07-30 (PR-8 build):** TTS shipped — Sarvam Bulbul behind a swappable
-provider, OGG/Opus voice notes, phrase-bank cache, metered via the ledger (D-AE).
-Two dev shortcuts remain:
-- **Off by default and not yet proven in prod.** `SAATHI_TTS_ENABLED=false`; the
-  synthesis→OGG path is proven live, but no voice note has round-tripped to a real
-  WhatsApp thread (that's the enable-time step, gated on the operator turning it on
-  and picking the voice). Existence≠function until that live send is observed.
+**Closed 2026-07-30 (PR-8):** TTS shipped and **enabled in prod** —
+`SAATHI_TTS_ENABLED=true` in the runtime secret, and a real voice note observed
+round-tripping to a handset (acceptance met). Initial audio sounded muddy; **quality
+fixed in VOICE-1** (bulbul:v3 / 48 kHz / preprocessing / per-language voices).
+One residual:
 - **Pricing is an estimate.** Sarvam's per-character TTS rate isn't in a captured
   doc, so the ledger's TTS cost is a labelled `catalog_estimate`
   (`SAATHI_SARVAM_TTS_PAISE_PER_1K_CHARS`, default 150 paise/1k). Reconcile against

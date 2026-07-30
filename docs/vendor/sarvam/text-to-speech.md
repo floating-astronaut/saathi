@@ -13,17 +13,40 @@ Header: api-subscription-key: <SARVAM_API_KEY>   (same key as STT)
 Content-Type: application/json
 ```
 
-## Request body (observed working)
+## Models: v2 vs v3 (verified live 2026-07-30)
+
+**Use `bulbul:v3`** (VOICE-1). Newer, higher quality, and it emits native
+**48 kHz** over REST — which matters because Opus is a 48 kHz codec, so a 22050 Hz
+v2 clip took an ugly internal resample that sounded muddy. Verified our key
+returns `sample_rate=48000` on v3.
+
+- `speech_sample_rate`: v2 → 8000/16000/22050 (default 22050); **v3 → up to 48000
+  via REST** (we use 48000).
+- **Speaker rosters differ between models.** v2 has `anushka`, `manisha`, `vidya`,
+  `arya`, …; v3 does NOT accept those and has its own roster: `ritu`, `priya`,
+  `neha`, `pooja`, `kavya`, `ishita`, `shreya`, `shruti`, `suhani`, `kavitha`,
+  `niharika`, … (female) plus male voices. A v2 speaker on v3 → 400.
+- `enable_preprocessing`: normalises English words + numeric entities in
+  code-mixed text ("Amlodipine 5mg"). We send `true`. v3 forces it anyway.
+- Char limit **2500 per input**; **≤3 inputs per request** (both observed live).
+- v3 supports `pace` (0.5–2.0); `pitch`/`loudness` are v2-only (not sent).
+
+## Request body (observed working, v3)
 
 ```json
 {
   "inputs": ["Namaste"],
   "target_language_code": "hi-IN",
-  "speaker": "anushka",
-  "model": "bulbul:v2",
-  "speech_sample_rate": 22050
+  "speaker": "ritu",
+  "model": "bulbul:v3",
+  "speech_sample_rate": 48000,
+  "enable_preprocessing": true
 }
 ```
+
+Saathi picks the `speaker` **per language** (`speech.TTS_SPEAKER_BY_LANG`): Hindi/
+Hinglish `ritu`, Gujarati `priya`, Malayalam `kavitha`, English `neha` — voices are
+multilingual but the natural one differs by language.
 
 - `inputs` — a **list** of strings, **at most 3 per request** (observed live
   2026-07-30: 5 inputs returns `400 "List should have at most 3 items"`). Each
