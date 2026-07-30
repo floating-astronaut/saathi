@@ -2173,3 +2173,40 @@ step) — deliberate v1 choice. Also opened **AGENT-1** (tool-use reliability) f
 capability feedback + a study of Nous Research's Hermes: the transferable lesson is disciplined
 tool-calling (not the model, which residency forbids). LOOKUP-1 fixed weather specifically;
 AGENT-1 generalises "reach for tools, don't give up".
+
+---
+
+## 2026-07-30 · AGENT-1 (increment 1) — tool-use reliability: reach for tools, don't give up
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/tool-reliability`).
+
+**Trigger:** operator — "an agent that can't tell the temperature in another city is worse than
+ChatGPT… real agent capabilities, not another chatbot."
+
+**Investigated first (existence-is-not-function):** the capability was never missing. Live web
+search (`lookup/web.py`, Gemini Google-grounding, in-India) already answers "temperature in
+Toronto" (26–28°C), "PM of Canada" (Mark Carney), "100 USD in INR" (~9,567). The agent loop
+allows MAX_HOPS=5 tool round-trips, and the prompt already says "CALL THE TOOL." So the Toronto
+failure was (a) the weather bug (LOOKUP-1, fixed) and (b) the model *surrendering* after one
+failed look_up instead of trying web.
+
+**Changed:**
+- `agent/tools/handlers.py` — `look_up` kind=weather order `["weather"]` → `["weather","web"]`:
+  a place the forecaster can't resolve is answered by Google-grounded search, deterministically,
+  not dependent on the model retrying.
+- `agent/prompt.py` — weather in any city is answerable; if one look_up returns nothing, try
+  kind "web" before giving up; "couldn't find it" on a Google-answerable question is a failure.
+- `agent/tools/specs.py` — tool description reframed to encourage reaching for it; query hint to
+  pass a bare place ("Toronto"), not a sentence.
+
+**Verified:** new test — kind=weather with a forecast miss returns the web answer, not
+"couldn't find it". Full suite **633 passed** (was 632). No new ruff findings.
+
+**Boundary note:** this is *reliable answering + acting*, explicitly NOT code execution or
+unbounded actions. Saathi's "capability defined by absence" (no money/OTP/account tools) is the
+elder-safety moat and is untouched. Adopting Hermes/OpenClaw-style code-running would breach it
+and is a product decision, not a refactor — not done.
+
+**Remains (lane stays IN PROGRESS):** a measured tool-use/QA eval set (extend the PR-9 harness
+to score "did it answer correctly / did it reach for the right tool" on a fixed prompt list),
+and generalising the fallback/synthesis discipline across all kinds.
