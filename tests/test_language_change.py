@@ -28,10 +28,12 @@ class Conn:
 
 class T:
     channel = "whatsapp"
-    def __init__(self): self.texts = []; self.buttons = []
+    def __init__(self): self.texts = []; self.buttons = []; self.lists = []
     async def send_text(self, conn, uid, handle, text): self.texts.append(text); return "m"
     async def send_buttons(self, conn, uid, handle, body, buttons):
         self.buttons.append((body, [l for _, l in buttons])); return "m"
+    async def send_list(self, conn, uid, handle, body, button, rows):
+        self.lists.append((body, [l for _, l in rows])); return "m"
 
 
 # --- the request is recognised -----------------------------------------------
@@ -54,12 +56,12 @@ def test_a_statement_about_someone_else_does_not_switch_language():
 
 # --- it re-offers the same choice --------------------------------------------
 
-async def test_the_command_re_offers_both_languages():
+async def test_the_command_re_offers_every_language():
     conn, t = Conn(), T()
     out = await pipeline._run_command(conn, t, 1, "91", commands.Command.LANGUAGE)
     assert out == {}
-    body, btns = t.buttons[0]
-    assert btns == ["हिंदी", "Hinglish", "English"]
+    body, rows = t.lists[0]                      # a list now (5 languages > 3 buttons)
+    assert rows == ["हिंदी", "Hinglish", "English", "ગુજરાતી", "മലയാളം"]
 
 
 # --- and changing it does not un-onboard you ---------------------------------

@@ -55,6 +55,11 @@ ONBOARDED_ONBOARDING_COPY = {
               "nahi hoga. Bas bataiye, kya karna hai?"),
     "en": ("You're already set up. This won't restart signup. Just tell me what "
            "you need."),
+    # gu/ml pending native review (LANG-2).
+    "gu": ("તમારું setup પહેલેથી પૂરું છે. અહીંથી signup ફરી શરૂ નહીં થાય. "
+           "તમે બસ કહો, શું કરવું છે?"),
+    "ml": ("നിങ്ങളുടെ setup ഇതിനകം പൂർത്തിയായി. ഇവിടെനിന്ന് signup വീണ്ടും "
+           "തുടങ്ങില്ല. എന്താണ് വേണ്ടതെന്ന് പറഞ്ഞാൽ മതി."),
 }
 
 
@@ -187,6 +192,14 @@ PAYWALL_COPY = {
            "reminders, the conversations, all of it — you can continue right "
            "here.\n\n"
            "Your existing reminders will keep coming, don't worry."),
+    # gu/ml pending native review (LANG-2).
+    "gu": ("તમારો ફ્રી ટ્રાયલ પૂરો થઈ ગયો છે. 🙏 આગળ પણ હું તમારી સાથે રહું — "
+           "દવાની યાદ, વાતચીત, બધું — તો અહીંથી જ ચાલુ રાખી શકો છો.\n\n"
+           "તમારા પહેલેથી લગાવેલા રિમાઇન્ડર ચાલતા રહેશે, ચિંતા ન કરો."),
+    "ml": ("നിങ്ങളുടെ സൗജന്യ ട്രയൽ പൂർത്തിയായി. 🙏 ഇനിയും ഞാൻ നിങ്ങളോടൊപ്പം "
+           "ഉണ്ടാകാൻ — മരുന്നിന്റെ ഓർമ്മ, സംഭാഷണം, എല്ലാം — ഇവിടെനിന്ന് "
+           "തുടരാം.\n\n"
+           "നിങ്ങൾ നേരത്തെ വച്ച ഓർമ്മപ്പെടുത്തലുകൾ തുടരും, വിഷമിക്കേണ്ട."),
 }
 
 

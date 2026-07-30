@@ -27,11 +27,13 @@ class Conn:
 class T:
     """Transport spy."""
     channel = "whatsapp"
-    def __init__(self): self.texts = []; self.buttons = []
+    def __init__(self): self.texts = []; self.buttons = []; self.lists = []
     async def send_text(self, conn, uid, handle, text):
         self.texts.append(text); return "m"
     async def send_buttons(self, conn, uid, handle, body, buttons):
         self.buttons.append((body, [label for _, label in buttons])); return "m"
+    async def send_list(self, conn, uid, handle, body, button, rows):
+        self.lists.append((body, [label for _, label in rows])); return "m"
 
 
 def test_no_model_import_anywhere_in_onboarding():
@@ -47,10 +49,10 @@ async def test_first_message_asks_the_language_and_nothing_else():
     interface complexity PRD §2 names as the barrier."""
     conn, t = Conn(), T()
     out = await onboarding.begin(conn, t, 1, "91")
-    body, btns = t.buttons[0]
+    body, rows = t.lists[0]                     # a list now: five languages > 3 buttons
     assert out == {"onboarding": "new"}        # language is not consent
-    # Three scripts, which is also WhatsApp's hard limit of three buttons.
-    assert btns == ["हिंदी", "Hinglish", "English"]
+    assert rows == ["हिंदी", "Hinglish", "English", "ગુજરાતી", "മലയാളം"]
+    assert not t.buttons                        # picker is a list, not buttons
     assert "consent" not in " ".join(conn.sql)
 
 

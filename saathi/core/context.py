@@ -51,13 +51,15 @@ class MessageContext:
         """The payload behind a tap, whichever of the two shapes WhatsApp used.
 
         Interactive messages we compose ourselves carry it at
-        `interactive.button_reply.id`. **Template** quick-replies arrive as a
-        different message type entirely — `button.payload` — which was never
+        `interactive.button_reply.id`; a **list** selection (the language picker,
+        LANG-2) at `interactive.list_reply.id`. **Template** quick-replies arrive
+        as a different message type entirely — `button.payload` — which was never
         read, so every reminder acknowledgement was silently dropped (PR-4b).
         """
-        inter = (self.msg.get("interactive") or {}).get("button_reply") or {}
-        if inter.get("id"):
-            return inter["id"]
+        inter = self.msg.get("interactive") or {}
+        reply = inter.get("button_reply") or inter.get("list_reply") or {}
+        if reply.get("id"):
+            return reply["id"]
         return (self.msg.get("button") or {}).get("payload", "")
 
     @property
@@ -89,8 +91,9 @@ class MessageContext:
         return self.kind == "audio"          # 'auto': voice-in -> voice-out
 
     def _tts_lang(self) -> str:
-        """Map the user's script choice to a Sarvam language code."""
-        return "en-IN" if self.lang == "en" else "hi-IN"
+        """Map the user's script choice to a Sarvam language code (hi/en/gu/ml)."""
+        from ..speech import sarvam_lang
+        return sarvam_lang(self.lang)
 
     async def reply(self, text: str) -> str:
         """Send formatted text back, and — best-effort — speak it (PR-8).

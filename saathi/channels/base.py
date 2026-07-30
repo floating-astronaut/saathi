@@ -68,6 +68,14 @@ class Transport(Protocol):
     async def send_buttons(self, conn, user_id: int, handle: str, body: str,
                            buttons: list[tuple[str, str]]) -> str: ...
 
+    async def send_list(self, conn, user_id: int, handle: str, body: str,
+                        button: str, rows: list[tuple[str, str]]) -> str:
+        """A tappable list of choices (more than the 3 quick-reply buttons allow).
+
+        Default falls back to buttons where a channel has no list type; a
+        transport that supports neither should raise."""
+        return await self.send_buttons(conn, user_id, handle, body, rows[:3])
+
     async def send_template(self, conn, user_id: int, handle: str, name: str,
                             lang: str, variables: list[str]) -> str: ...
 

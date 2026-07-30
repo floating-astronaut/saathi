@@ -142,6 +142,34 @@ async def send_buttons(conn, user_id: int, wa_id: str, body: str,
     }, Channel.FREEFORM)
 
 
+async def send_list(conn, user_id: int, wa_id: str, body: str,
+                    button: str, rows: list[tuple[str, str]]) -> str:
+    """An interactive **list** message — up to 10 tappable rows (§11).
+
+    Used where the choice has more options than the three quick-reply buttons
+    allow — the language picker outgrew buttons when Gujarati and Malayalam were
+    added (LANG-2). `button` is the label that opens the list (≤20 chars); each
+    row is (id, title), title ≤24 chars. Truncated rather than letting Meta
+    reject the whole message.
+    """
+    if not rows:
+        raise ValueError("a list message needs at least one row")
+    if len(rows) > 10:
+        raise ValueError("WhatsApp allows at most 10 list rows")
+    return await _send(conn, user_id, wa_id, {
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "body": {"text": body},
+            "action": {
+                "button": button[:20],
+                "sections": [{"rows": [
+                    {"id": rid, "title": title[:24]} for rid, title in rows]}],
+            },
+        },
+    }, Channel.FREEFORM)
+
+
 async def send_cta_url(conn, user_id: int, wa_id: str, body: str,
                        label: str, url: str) -> str:
     """CTA URL button, so the raw link never appears in the message body (§11)."""

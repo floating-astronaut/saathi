@@ -57,7 +57,8 @@ def test_english_users_are_unaffected():
 
 def test_an_unknown_language_falls_back_to_devanagari_not_english():
     """The product is for older adults in India; `DEFAULT_LANG` is already `hi`."""
-    for unknown in (None, "", "ta", "gu"):
+    # gu/ml are real languages now (LANG-2); ta/kn are still unsupported.
+    for unknown in (None, "", "ta", "kn"):
         assert "Devanagari" in script_line(unknown)
 
 

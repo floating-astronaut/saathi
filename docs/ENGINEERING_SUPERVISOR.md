@@ -2028,3 +2028,45 @@ call → valid OGG/Opus (`OggS`) for single- and multi-chunk text; cache hit spe
 round-tripped to a real WhatsApp thread** — that live send is the enable-time step (operator
 turns it on, confirms the voice, one handset observation). And Sarvam's per-char TTS price is a
 labelled `catalog_estimate` until reconciled against an invoice (character count is exact).
+
+---
+
+## 2026-07-30 · LANG-2 — Gujarati + Malayalam as full languages
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/add-gujarati-malayalam`).
+
+**Read:** saathi/onboarding.py, pipeline.py, capabilities.py, agent/prompt.py, speech/ (stt.py,
+audio.py, tts.py), safety/classifier.py, wa/client.py, core/context.py, channels/,
+DECISIONS.md (D-W, LANG-1), the board.
+
+**Ask:** add Gujarati + Malayalam, and make signup ask language first. Finding: onboarding
+**already** asks language first — the real work was adding the two languages everywhere, which
+hit a wall (WhatsApp's 3-quick-reply limit) at the picker.
+
+**Changed:**
+- **Picker → list.** New `wa.send_list` + `Channel.send_list` (interactive list, ≤10 rows);
+  `context.button_id` now also reads `interactive.list_reply.id`. `onboarding.begin` and the
+  `/language` command send a 5-row list. Old 3-button path retired.
+- **Copy.** Added gu/ml to every language-keyed table: onboarding COPY/BTN, pipeline
+  ACK_REPLY/SNOOZE_REPLY/CMD_COPY, capabilities ONBOARDED/PAYWALL, and prompt SCRIPT_RULE. All
+  gu/ml strings flagged as first-draft pending native review.
+- **STT/TTS.** New shared `speech.sarvam_lang` map (hi/hi-en→hi-IN, en→en-IN, gu→gu-IN,
+  ml→ml-IN). **Fixed a latent bug:** `transcribe_voice` was hardcoded `hi-IN` for *everyone* —
+  a Malayalam speaker's audio was transcribed as Hindi. Now threaded from `lang_pref`.
+  `context._tts_lang` reuses the same map.
+- **Safety.** No code change to the classifier — but a loud comment records that its patterns
+  are hi/en-only, so gu/ml native-script emergencies/scams are not caught deterministically
+  (operator decision D-AF to ship with the gap documented; follow-up lane SAFE-LANG-1).
+- Write-back: DECISIONS D-AF, PROD_READINESS LANG-2, board (LANG-2 CLOSED + SAFE-LANG-1 OPEN),
+  CHANGELOG, SESSION_COORDINATION.
+
+**Verified:** 8 new tests (`tests/test_languages.py`) — sarvam_lang map, SCRIPT_RULE coverage,
+the 5-language list picker, gu/ml selection stores + welcomes in-language, list_reply reading,
+_tts_lang, and the list wire payload. Updated the onboarding/language-change/devanagari test
+spies + assertions for the list picker. Full suite **622 passed** (was 614). Changed files add
+no new ruff findings. Live probes (value-blind): Sarvam TTS serves **gu-IN and ml-IN** (HTTP
+200, valid WAV), so the voice path works for the new languages when TTS is enabled.
+
+**Remains:** SAFE-LANG-1 (native-verified gu/ml safety patterns) and a native review of the
+gu/ml copy. Both documented in PROD_READINESS (LANG-2). No migration — `lang_pref` is an
+unconstrained text column, and unknown values fall back to Hindi, so the change degrades safe.
