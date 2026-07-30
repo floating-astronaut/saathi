@@ -28,6 +28,21 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### VOICE-1 — TTS voice quality: v3, 48 kHz, per-language voices   [CLOSED]
+Owner: Claude (runtime box, branch agent/tts-voice-quality)        Opened: 2026-07-30 · Closed: 2026-07-30
+Reading: saathi/speech/tts.py, audio.py, __init__.py, config.py; docs/vendor/sarvam/text-to-speech.md; Sarvam TTS docs; Pipecat/LiveKit Sarvam integrations
+Acceptance: voice notes sound clear (not muddy/robotic); each language uses an
+  appropriate voice; still Sarvam/in-India.
+Write-back: docs/vendor/sarvam/text-to-speech.md, docs/DECISIONS.md (D-AE addendum), CHANGELOG.md, docs/PROD_READINESS.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/*
+Notes: CLOSED 2026-07-30: MET. Operator reported the enabled TTS sounded bad.
+  Diagnosed (not the vendor): `bulbul:v2` @ 22050 → forced resample into 48 kHz
+  Opus at a muddy 32 kbps, no preprocessing. Fixed: **bulbul:v3** (native 48 kHz,
+  verified live), `enable_preprocessing`, clean 48 kbps `application audio` Opus
+  encode, and a **per-language voice map** (hi/hi-en ritu, gu priya, ml kavitha,
+  en neha — v3 roster differs from v2). All config-driven. Researched Sarvam docs +
+  Pipecat/LiveKit (they use WebSocket streaming for live calls; our async voice
+  notes are the HTTP batch case). 624 tests. Deployed via PR (agent/tts-voice-quality).
+
 ### LANG-2 — add Gujarati and Malayalam as full languages   [CLOSED]
 Owner: Claude (runtime box, branch agent/add-gujarati-malayalam)        Opened: 2026-07-30 · Closed: 2026-07-30
 Reading: saathi/onboarding.py, saathi/pipeline.py, saathi/capabilities.py, saathi/agent/prompt.py, saathi/speech/, saathi/safety/classifier.py, saathi/wa/client.py, saathi/core/context.py, docs/DECISIONS.md (D-W, LANG-1)
@@ -590,7 +605,7 @@ Notes (history): detection was built and induced:
   `active` rather than `failed` and `OnFailure` barely applies to it — a
   crash-looping worker looks alive, and only the heartbeat alarm catches it.
 
-### PR-8 — no TTS; a voice-first product that only writes back   [BUILT, INERT]
+### PR-8 — no TTS; a voice-first product that only writes back   [CLOSED]
 Owner: Claude (runtime box, branch agent/tts-voice-replies)        Opened: 2026-07-26 (from PROD_READINESS) · Built: 2026-07-30
 Reading: docs/PRD.md §9, docs/DECISIONS.md, docs/PROD_READINESS.md (PR-8, PR-5),
   docs/USAGE_LEDGER.md, docs/vendor/sarvam/text-to-speech.md, saathi/speech/,
@@ -608,10 +623,12 @@ Notes: Route decision resolved 2026-07-30 (operator): **Sarvam Bulbul**, not Goo
   + voice step in `ctx.reply`. Behind `SAATHI_TTS_ENABLED` (**off**). Proven live:
   real Sarvam call → OGG/Opus (single + multi-chunk; live testing found the
   inputs≤3 cap and it's handled). 12 tests, 614 total. Deployed via PR
-  (agent/tts-voice-replies). **To make it live (flips INERT→done):** operator sets
-  `SAATHI_TTS_ENABLED=true`, confirms the speaker voice, and one real voice note is
-  observed round-tripping to a handset. **Also open:** TTS per-char price is a
-  labelled estimate until reconciled (PROD_READINESS PR-8).
+  (agent/tts-voice-replies). **DONE 2026-07-30:** `SAATHI_TTS_ENABLED=true` set in
+  the runtime secret (survives env-sync), services restarted, and a real voice note
+  observed round-tripping to a handset — acceptance met. Initial audio sounded
+  muddy; quality fixed in lane **VOICE-1** (bulbul:v3 / 48 kHz / per-language
+  voices). **Residual:** TTS per-char price is still a labelled estimate until
+  reconciled against an invoice (PROD_READINESS PR-8).
 
 ### DATA-1 — collect the real STT eval corpus and run it   [OPEN]
 Owner: unassigned        Opened: 2026-07-30

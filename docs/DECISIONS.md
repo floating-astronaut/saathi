@@ -760,3 +760,14 @@ the strings are legible and correct-script; polish follows.
 **Reverse/narrow** only by removing a language from the picker rows — the code
 falls back to Hindi for any `lang_pref` it does not recognise, so a removed
 language degrades safely rather than breaking.
+
+### D-AE addendum (2026-07-30) — moved to bulbul:v3, per-language voices
+
+TTS shipped on `bulbul:v2` but sounded muddy/robotic in production (VOICE-1). Not
+a vendor problem: v2 at 22050 Hz forced a bad resample into 48 kHz Opus, and no
+preprocessing hurt code-mixed pronunciation. Moved to **`bulbul:v3`** (native
+48 kHz, higher quality, `enable_preprocessing` on), a cleaner 48 kbps Opus encode,
+and a **per-language speaker map** (voices are multilingual but the natural choice
+differs by language: hi/hi-en `ritu`, gu `priya`, ml `kavitha`, en `neha`). This
+is a quality tuning *within* D-AE — same vendor, same in-India residency — not a
+new decision. v3 has its own speaker roster, so the v2 `anushka` default retired.
