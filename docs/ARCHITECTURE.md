@@ -134,6 +134,13 @@ India rule; and every synthesis is metered through the usage ledger like STT. A
 TTS failure, cap refusal, or outage can never take down the turn — the text reply
 already succeeded.
 
+**Onboarding is voiced too, for voice users (VOICE-2).** If someone has ever sent
+a voice note (`onboarding._voice_user` reads the `messages` log — no new state),
+each onboarding message is also spoken. This does **not** breach "onboarding never
+calls the model": TTS is a Sarvam call on our own fixed copy, not the LLM, and the
+fixed strings are phrase-cached. Buttons/lists stay the primary; voice is an
+accessibility layer for elders who read with difficulty.
+
 **Memory serves ASR, not just personalisation.** `facts.surface_forms` is the
 entity-bias vocabulary for the correction pass. This is why the product hears
 someone better the longer they use it — a retention mechanic, not an accuracy

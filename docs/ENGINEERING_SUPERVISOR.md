@@ -2142,3 +2142,34 @@ New York; bare "aaj mausam kaisa hai" (home=Mumbai) → Mumbai; empty+no-city �
 now tolerates that, but the `look_up` tool description could also nudge it to pass just the
 place. Not blocking. The persona's post-failure pivot ("are you talking to family there?") was a
 side effect of the failed lookup and should not recur now that the lookup succeeds.
+
+---
+
+## 2026-07-30 · VOICE-2 — voiced onboarding for voice users
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/voice-onboarding`).
+
+**Ask:** onboard voice users by voice (operator: "very critical"). Many elders talk far more
+easily than they read, so silent-text onboarding is the worst case for the target user.
+
+**Changed (`saathi/onboarding.py`):** `_voice_user(conn, user_id)` reads the `messages` log for
+any inbound `audio` — so a voice user is recognised across the tap-driven steps, with no new
+state/migration. `_maybe_voice(...)` sends a voice note of each onboarding message
+(`transport.send_voice`, additive + best-effort) when TTS is on and the user is a voice user,
+in the chosen language via `speech.sarvam_lang`. Wired after welcome, consent-detail, declined,
+name confirm/ask, reminders, training-consent, done, and the post-onboarding language change.
+The language picker stays visual (a list to tap); voicing starts at the welcome.
+
+**Boundary check:** does not breach "onboarding never calls the model" — TTS is a Sarvam vendor
+call on our own *fixed copy*, not the LLM, and can't be prompt-injected; fixed strings hit the
+phrase-bank cache so cost is negligible. `test_no_model_import_anywhere_in_onboarding` still
+passes (the new imports are `config`/`speech`, none of the forbidden substrings).
+
+**Verified:** 4 new tests (voice user hears the welcome + the done message; text user doesn't;
+disabled TTS is silent). Full suite **632 passed** (was 628). No new ruff findings.
+
+**Remains:** the language-pick message isn't voiced (multi-script, inherently a tap-the-list
+step) — deliberate v1 choice. Also opened **AGENT-1** (tool-use reliability) from the operator's
+capability feedback + a study of Nous Research's Hermes: the transferable lesson is disciplined
+tool-calling (not the model, which residency forbids). LOOKUP-1 fixed weather specifically;
+AGENT-1 generalises "reach for tools, don't give up".
