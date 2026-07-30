@@ -478,6 +478,13 @@ against reality.
 **Fix:** PRD §15's corpus — 50–100 real voice notes per language, hand
 transcribed, deliberately including the messy ones. Build it before trusting any
 accuracy claim.
+**Partly closed 2026-07-30 (PR-9 harness):** the *measurement infrastructure*
+now exists — `saathi/eval/` (entity-accuracy-primary scorer + runner) and
+`docs/STT_EVAL.md` (collection/consent protocol). The runner refuses to emit a
+number on an empty corpus, so it cannot manufacture a synthetic claim. **Still
+open — the data task:** the corpus itself is empty; nobody has yet recorded and
+hand-transcribed real elder voice notes. Until they do, real-world STT accuracy
+remains *unmeasured*. This is the residual PR-9 gap.
 
 ### PR-11 · Template names burned
 `reminder_fire` and `reminder_nudge` were deleted to fix their category. Meta

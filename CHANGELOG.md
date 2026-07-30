@@ -1,3 +1,34 @@
+## 2026-07-30 — STT accuracy was unmeasured against real elders; built the harness to measure it (PR-9)
+
+Symptom: every entity-accuracy number Saathi has ever quoted was measured on
+**TTS-generated speech** — a machine reading a clean sentence into a clean mic.
+A 70-year-old on a 2G line with the television on is a different acoustic
+universe, and synthetic audio is not just cleaner, it is *differently* distorted.
+So R1 (mishearing the one word that matters — the medicine name) was the product
+risk and it was unmeasured against reality.
+
+You cannot fabricate the fix: real accuracy needs real recordings, and generating
+synthetic voice notes would be the exact `ffmpeg -version` trap this lane names.
+So this change ships the **measurement infrastructure**, not a number:
+
+- `saathi/eval/` — a loader (`corpus.py`, fails loudly on a malformed manifest
+  rather than silently shrinking the eval), pure scoring (`metrics.py`,
+  `score.py`), and a runner/CLI (`run.py`).
+- The metric is **entity accuracy, not WER** (PRD §15: WER "will actively mislead
+  you"). Entities are matched with the *same* normalisation and 0.78 fuzzy
+  threshold the product uses (`speech/correct.py`), so the eval never reports
+  accuracy the pipeline can't deliver. Scored at two stages (raw vs corrected) so
+  the correction pass's real-world lift finally gets a number.
+- The honesty gate: an **empty corpus yields no accuracy figure** — the runner
+  prints "0 real samples → no accuracy claim" and exits 0. A number appears only
+  when real audio is behind it.
+- `docs/STT_EVAL.md` — the collection + transcription + consent (DPDP) protocol
+  and the manifest schema. `evals/corpus/` ships empty and git-ignored.
+
+15 new tests (602 total, was 587). Remaining (PR-9's open tail, a data task):
+collect 50–100 consented real elder voice notes per language and run the harness
+to get the first real number — before the next model-version decision.
+
 ## 2026-07-30 — tore down the unused Meta Conversions API Gateway
 
 The Cloud Run Gateway the operator had stood up on 2026-07-27 was a web-pixel path
