@@ -2,6 +2,7 @@
 import inspect
 import pytest
 from saathi import onboarding
+from saathi.config import settings
 
 
 class Cur:
@@ -12,11 +13,13 @@ class Cur:
 
 
 class Conn:
-    def __init__(self, name="Kamala", lang="hi"):
-        self.sql = []; self.name = name; self.lang = lang
+    def __init__(self, name="Kamala", lang="hi", has_audio=False):
+        self.sql = []; self.name = name; self.lang = lang; self.has_audio = has_audio
     async def execute(self, q, params=None):
         self.sql.append(" ".join(q.split()))
         low = q.lower()
+        if "from messages" in low and "'audio'" in low:
+            return Cur((1,) if self.has_audio else None)
         if "select display_name" in low:
             return Cur((self.name,))
         if "select lang_pref" in low:
@@ -27,13 +30,15 @@ class Conn:
 class T:
     """Transport spy."""
     channel = "whatsapp"
-    def __init__(self): self.texts = []; self.buttons = []; self.lists = []
+    def __init__(self): self.texts = []; self.buttons = []; self.lists = []; self.voices = []
     async def send_text(self, conn, uid, handle, text):
         self.texts.append(text); return "m"
     async def send_buttons(self, conn, uid, handle, body, buttons):
         self.buttons.append((body, [label for _, label in buttons])); return "m"
     async def send_list(self, conn, uid, handle, body, button, rows):
         self.lists.append((body, [label for _, label in rows])); return "m"
+    async def send_voice(self, conn, uid, handle, text, lang, *, wa_message_id=None):
+        self.voices.append((text, lang)); return "v"
 
 
 def test_no_model_import_anywhere_in_onboarding():
@@ -179,3 +184,36 @@ async def test_finishing_onboarding_queues_the_versioned_free_key(monkeypatch):
     await onboarding._grant_free_allowance(Conn(), user_id=12)
 
     assert calls == [(12, "provision_key", {"account_id": 6}, "provision:v2:6")]
+
+
+# --- voiced onboarding for voice users (VOICE-2) ---------------------------
+
+async def test_voice_user_hears_the_welcome(monkeypatch):
+    monkeypatch.setattr(settings, "saathi_tts_enabled", True)
+    conn, t = Conn(has_audio=True), T()          # has sent a voice note before
+    await onboarding.handle_button(conn, t, 1, "91", "ob:lang:hi", None)
+    assert t.buttons, "welcome still sent as text + buttons"
+    assert t.voices, "voice user should also hear the welcome"
+    text, lang = t.voices[0]
+    assert lang == "hi-IN" and "OTP" in text     # spoken in the chosen language
+
+
+async def test_text_user_gets_no_voice(monkeypatch):
+    monkeypatch.setattr(settings, "saathi_tts_enabled", True)
+    conn, t = Conn(has_audio=False), T()         # only ever tapped/typed
+    await onboarding.handle_button(conn, t, 1, "91", "ob:lang:hi", None)
+    assert t.buttons and not t.voices
+
+
+async def test_no_onboarding_voice_when_tts_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "saathi_tts_enabled", False)
+    conn, t = Conn(has_audio=True), T()
+    await onboarding.handle_button(conn, t, 1, "91", "ob:lang:hi", None)
+    assert not t.voices
+
+
+async def test_done_message_is_voiced_for_voice_user(monkeypatch):
+    monkeypatch.setattr(settings, "saathi_tts_enabled", True)
+    conn, t = Conn(has_audio=True), T()
+    await onboarding.handle_button(conn, t, 1, "91", "ob:imp:yes", None)
+    assert any("🌼" in v[0] for v in t.voices)   # the "all set!" done message, spoken

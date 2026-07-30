@@ -28,6 +28,38 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### VOICE-2 — voiced onboarding for voice users   [CLOSED]
+Owner: Claude (runtime box, branch agent/voice-onboarding)        Opened: 2026-07-30 · Closed: 2026-07-30
+Reading: saathi/onboarding.py, saathi/core/context.py (should_voice), saathi/channels/ (send_voice), saathi/speech/, docs/ARCHITECTURE.md
+Acceptance: a user who has sent a voice note is onboarded by voice (each message
+  also spoken in their language), text+buttons still primary, no boundary breach.
+Write-back: CHANGELOG.md, docs/ARCHITECTURE.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/*
+Notes: CLOSED 2026-07-30: MET. `onboarding._voice_user` reads the messages log for
+  any inbound audio (no new state), so a voice user is recognised across tap-driven
+  steps. Each onboarding message (welcome → done) also `send_voice`d in the chosen
+  language, additive + best-effort. Boundary intact: TTS is a Sarvam call on our own
+  fixed copy, not the model; strings are phrase-cached. Language picker stays visual;
+  voicing starts at welcome. 4 new tests, 632 total. Deployed via PR.
+
+### AGENT-1 — tool-use reliability: reach for tools, don't give up   [OPEN]
+Owner: unassigned        Opened: 2026-07-30
+Reading: saathi/agent/loop.py, saathi/agent/prompt.py, saathi/agent/tools/specs.py + handlers.py, saathi/lookup/, LOOKUP-1
+Acceptance: for answerable factual asks (weather, general facts, definitions) the
+  agent reliably calls the right tool instead of replying "I couldn't find it";
+  measured on a small fixed prompt set; tool descriptions steer the model to pass
+  clean arguments (e.g. a bare place to weather); a failed lookup retries/rephrases
+  rather than surrendering.
+Write-back: saathi/agent/prompt.py, saathi/agent/tools/specs.py, docs/AI_ROUTING.md, CHANGELOG.md
+Notes: opened 2026-07-30 from operator feedback ("an agent that can't answer the
+  temperature is worse than ChatGPT") + a study of Nous Research's Hermes (its
+  strength is disciplined tool-calling — the `<tool_call>` protocol, strong
+  function-use, a persistent user model). We CANNOT adopt Hermes the model
+  (inference-stays-in-India, zai.glm-5), but the *discipline* transfers: better tool
+  schemas/descriptions, a system-prompt that pushes "use your tools, don't guess",
+  and lookups that don't silently fail (LOOKUP-1 fixed weather; this generalises it).
+  Saathi's memory is already the "persistent user model" Hermes describes. Refs:
+  arxiv.org/pdf/2408.11857, github.com/NousResearch/Hermes-Function-Calling.
+
 ### LOOKUP-1 — weather ignored an explicitly-named city   [CLOSED]
 Owner: Claude (runtime box, branch agent/weather-explicit-city)        Opened: 2026-07-30 · Closed: 2026-07-30
 Reading: saathi/lookup/weather.py, saathi/agent/tools/handlers.py (_look_up), tests/test_lookup.py
