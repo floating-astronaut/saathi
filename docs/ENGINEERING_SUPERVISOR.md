@@ -1818,3 +1818,55 @@ Remains:
 - CloudWatch metrics gap (PR-28)
 - No WhatsApp template sends verified on this box — templates are Meta-side, not box-dependent, so no change is expected.
 - OPS-1 tracing stack (saathi-otelcol/saathi-jaeger) not re-installed here — observability.py exists but SAATHI_TRACING_ENABLED is unset.
+
+## RUNTIME-MIGRATION-3 (Phase 3) — estate off the MeshPilot org + old box retired — 2026-07-30 (Claude)
+
+**Read:** CLAUDE.md, docs/RUNBOOK.md, docs/PROD_READINESS.md, docs/DECISIONS.md,
+the tail of this file (Phase 1/2 closures), saathi/config.py, saathi/bedrock.py,
+saathi/media_store.py, saathi/metrics.py, ops/deploy.sh, ops/alerting/.
+
+**Symptom that started it:** the successor box looked healthy — `/healthz` 200,
+services active — while three things were quietly wrong. `cloudwatch:PutMetricData`
+failed every 30s (heartbeat not emitted by this box; the alarm read OK because it
+watched the *old* box's data), audio writes and artifact reads were AccessDenied for
+the instance role, and both services carried `AWS_PROFILE=saathi` — an SSO session
+into `559896294326` on a refresh token that cannot be renewed non-interactively.
+Inference, metrics and voice uploads were all crossing into the MeshPilot org.
+
+**Changed (all via PRs into main, deployed `--local`, verified live):**
+- `01aca03` — created `saathi-dev-{artifacts,audio}-635860424621` mirroring encryption/
+  versioning/public-access-block/lifecycle and copied all 21 objects (ETag manifest +
+  SHA-256 for the multipart one); migrated `saathi/dev/gcp-sa` byte-exact; recreated the
+  `saathi-alerts` topic + both alarms; five least-privilege inline policies on
+  `IndofolkDevBoxRole` mirroring the old `saathi-dev-box`; repointed `SAATHI_AUDIO_BUCKET`,
+  `ops/deploy.sh`, and `ops/alerting/saathi-alert` (now asks IMDS for the instance id).
+- `c98a98e` — DB moved (8 users / 262 messages / 58 scheduled_turns, state histogram
+  matched exactly). Went through plain SQL because an 18.x custom dump is archive 1.16
+  and pg_restore 16 refuses it; stripped one v17+ GUC; reassigned ownership to `saathi`
+  after `--no-owner` left tables under `postgres` and the worker hit InsufficientPrivilege.
+- `d4e0f41` — Postgres 16.14 → 18.4 (PGDG + `pg_upgradecluster`) to match the source box,
+  52s downtime; proven by restoring the old box's own 1.16 dump here. Closes
+  MIGRATION-PG-VERSION-1.
+- `69bd817` — dropped the retained 16 cluster + the leftover empty DB.
+- `265aedb` — inference moved onto a Bedrock-only IAM user `saathi-bedrock-invoke`
+  (`559896294326`), reached by a static key in the runtime secret, scoped in
+  `saathi/bedrock.py`; removed the process-wide `AWS_PROFILE`. Corrected the record that
+  `AmazonBedrockMantleFullAccess` on the role did not (and cannot) grant account entitlement.
+
+**Verified:** 577 tests green after each step; `/healthz` 200 local + tunnel; instance
+role reads both secrets, round-trips the voice prefix, writes `backups/` — and denies a
+write outside `backups/` and a PutMetricData outside the `Saathi` namespace (fails closed);
+WorkerHeartbeat + BackupSuccess now land in `635860424621`; a real backup dumped and
+verified by restore; the Bedrock static key denies S3/Secrets/SSM/IAM/EC2/CloudWatch and any
+model or region outside the two allowed. Old box retired: services disabled, instance
+`i-01b2c27883acb25ca` terminated, root volume + the 2026-07-28 snapshot deleted, old buckets
+swept, old secrets scheduled for deletion (2026-08-06). SNS email re-subscribed and both
+alert paths (OnFailure + alarm→SNS) confirmed by executed-action records.
+
+**Remains:**
+- MIGRATION-BEDROCK-1 (P1): model access on `635860424621` is NOT_AUTHORIZED and
+  `PutUseCaseForModelAccess` is refused — the one reason inference still uses a foreign
+  account. Support case drafted; teardown steps in PROD_READINESS. See PR-BEDROCK-KEY for
+  the long-lived-key trade this created.
+- OpenRouter is the live inference path for all 8 accounts (verified); the Bedrock key is
+  the fallback, not the default.
