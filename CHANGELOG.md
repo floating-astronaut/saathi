@@ -1,3 +1,46 @@
+## 2026-07-30 — inference moved onto a Bedrock-only credential that cannot expire
+
+Symptom: nothing failing yet, and a deadline nobody set. Inference ran on
+`AWS_PROFILE=saathi`-derived credentials — an Identity Center session renewed from a
+refresh token in `~/.aws/sso/cache/`. Nothing on the box can renew that
+non-interactively, so whenever the chain finally broke, `converse()` would start
+returning an auth error and the symptom would be an assistant that had stopped
+answering. It also carried far more authority than inference needs: that profile is
+AWSAdministratorAccess in `559896294326`.
+
+Fix: a dedicated IAM user `saathi-bedrock-invoke` in the inference account, reached
+with a static key delivered through `saathi/dev/runtime` and consumed only by
+`saathi/bedrock.py`, which now prefers an explicit key pair over a named profile over
+the ambient chain. The key arrives by env-sync rather than through `~/.aws/`, which
+nothing syncs and a rebuilt box would not have — the `~/.aws/credentials` copy made
+during setup was deleted so the pair exists in exactly two managed places.
+
+The user's inline policy allows `Converse`/`ConverseStream`/`InvokeModel` on exactly
+two model ARNs — `zai.glm-5` and `qwen.qwen3-vl-235b-a22b` — pinned to ap-south-1,
+plus an explicit `Deny NotAction: bedrock:*` so no later policy attachment can widen
+it. The region pin is doing product work as well as security work: "inference stays in
+India" now lives in the credential, so a call routed elsewhere fails rather than
+quietly succeeding.
+
+Verified by probe against the new credential — every one denied: S3 `ListBuckets`,
+reading the old audio bucket, `GetSecretValue` on `saathi/dev/runtime`, SSM
+`send-command` against the old box, `iam:ListUsers`, `ec2:DescribeInstances`,
+`cloudwatch:PutMetricData`, Bedrock in us-east-1, and `zai.glm-4.7` (a model outside
+the two allowed). Both permitted models return a live "pong". 577 tests pass,
+`/healthz` 200 through the tunnel, and the app authenticates as
+`arn:aws:iam::559896294326:user/saathi-bedrock-invoke` rather than as an
+administrator.
+
+MIGRATION-BEDROCK-1 drops from P0 to P1 — no longer a credential that dies on its
+own, still a cross-org dependency. The new trade is recorded as PR-BEDROCK-KEY: a
+long-lived key with no rotation, whose real fix is deleting it once model access is
+granted on `635860424621`.
+
+Also corrects the record: attaching `AmazonBedrockMantleFullAccess` to the box role
+did not and could not unblock the new account. `authorizationStatus` is an
+account-level entitlement; `entitlementAvailability: AVAILABLE` means available to
+request, not granted. `Operation not allowed` reads like an IAM denial and is not one.
+
 ## 2026-07-30 — Postgres 18.4, so recovery is single-headed again
 
 Symptom: nothing was broken, which is what made this worth fixing. This box ran

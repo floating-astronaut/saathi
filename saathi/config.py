@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     #: Delete this setting once MIGRATION-BEDROCK-1 in `docs/PROD_READINESS.md`
     #: closes. It is a dated workaround, not an extension point.
     saathi_bedrock_profile: str = ""
+    #: Static credentials for the same borrowed account, preferred over the
+    #: profile above because they arrive through the runtime secret rather than
+    #: through `~/.aws/`, which nothing syncs and a rebuilt box would not have.
+    #:
+    #: The IAM user behind these (`saathi-bedrock-invoke` in the inference
+    #: account) can invoke exactly two model ARNs in ap-south-1 and is denied
+    #: every non-Bedrock action outright, so a leak of this pair cannot reach
+    #: that account's S3, secrets or anything else. It is a long-lived key,
+    #: which is the trade being made — see PR-BEDROCK-KEY in
+    #: `docs/PROD_READINESS.md`. Delete both with the profile above.
+    saathi_bedrock_access_key_id: str = ""
+    saathi_bedrock_secret_access_key: str = ""
     saathi_model_id: str = "zai.glm-5"
     # No prompt caching on this model, so cost is linear in prompt size.
     # The agent asserts against this before every call.
