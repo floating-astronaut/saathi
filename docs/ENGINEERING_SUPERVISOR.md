@@ -2111,3 +2111,34 @@ the new settings and listened-tested by the operator; live prod re-render after 
 
 **Remains:** per-char TTS pricing is still an estimate (PROD_READINESS PR-8). Per-language voices
 are a sensible default; the operator can retune any language's voice via `TTS_SPEAKER_BY_LANG`.
+
+---
+
+## 2026-07-30 · LOOKUP-1 — weather ignored an explicitly-named city
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/weather-explicit-city`).
+
+**Symptom:** operator asked (by voice) "what is temp in Toronto" and got a Hinglish "couldn't
+find it, maybe info not available" — a simple weather query failing.
+
+**Diagnosed live** (`saathi/lookup/weather.py`): geocoding "Toronto" works (26°C), but
+`lookup('temp in Toronto')` → None (Open-Meteo geocoding needs a bare place name, not a
+phrase), and `lookup('Toronto', city='Mumbai')` → **Mumbai's** weather, because
+`city = ctx.get("city") or query` let the stored home city win over the named place. So a
+Mumbai user asking about Toronto got Mumbai silently, and a user with no stored city + a phrase
+query got "couldn't find it".
+
+**Changed:** an explicitly-named place now wins; the stored home city is the fallback for a
+bare "aaj mausam?". `_place_candidates(query, stored)` orders raw-query → filler-stripped-query
+(`_strip_filler`: "temp in Toronto" → "Toronto") → home city; `lookup` geocodes each until one
+hits; place names are URL-encoded (multi-word "New York" previously broke). Handler unchanged
+(it already passed both) — provider-only fix, small blast radius.
+
+**Verified:** live — "temp in Toronto"/"toronto ka temperature" → Toronto 26°C; "New York" →
+New York; bare "aaj mausam kaisa hai" (home=Mumbai) → Mumbai; empty+no-city → None. 4 new tests
+(`tests/test_lookup.py`), full suite **628 passed** (was 624). weather.py ruff-clean.
+
+**Remains:** the model still sometimes passes a phrase rather than a bare place; the provider
+now tolerates that, but the `look_up` tool description could also nudge it to pass just the
+place. Not blocking. The persona's post-failure pivot ("are you talking to family there?") was a
+side effect of the failed lookup and should not recur now that the lookup succeeds.

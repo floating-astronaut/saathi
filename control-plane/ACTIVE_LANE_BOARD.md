@@ -28,6 +28,21 @@ Notes: <decisions, blockers, handoff hints>
 
 ## Active
 
+### LOOKUP-1 — weather ignored an explicitly-named city   [CLOSED]
+Owner: Claude (runtime box, branch agent/weather-explicit-city)        Opened: 2026-07-30 · Closed: 2026-07-30
+Reading: saathi/lookup/weather.py, saathi/agent/tools/handlers.py (_look_up), tests/test_lookup.py
+Acceptance: asking the weather for a named city returns that city (not the stored
+  home city, not "couldn't find it"); a bare "aaj mausam?" still uses the home city.
+Write-back: CHANGELOG.md, docs/ENGINEERING_SUPERVISOR.md, control-plane/*
+Notes: CLOSED 2026-07-30: MET. Operator asked "temp in Toronto" and got "couldn't
+  find it". Two bugs: (1) `city = ctx.get("city") or query` let the stored home city
+  override the named place (Mumbai user → Mumbai weather for a Toronto question); (2)
+  Open-Meteo needs a bare place name, so model-passed phrases ("temp in Toronto")
+  and multi-word cities ("New York", never URL-encoded) failed. Fixed: named place
+  wins (home city is fallback for a bare "aaj mausam?"); geocode tries raw →
+  filler-stripped → home; names URL-encoded. Verified live: Toronto/New York answer,
+  bare "aaj mausam" still uses home. 4 new tests, 628 total. Deployed via PR.
+
 ### VOICE-1 — TTS voice quality: v3, 48 kHz, per-language voices   [CLOSED]
 Owner: Claude (runtime box, branch agent/tts-voice-quality)        Opened: 2026-07-30 · Closed: 2026-07-30
 Reading: saathi/speech/tts.py, audio.py, __init__.py, config.py; docs/vendor/sarvam/text-to-speech.md; Sarvam TTS docs; Pipecat/LiveKit Sarvam integrations
