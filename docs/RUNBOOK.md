@@ -12,7 +12,7 @@
 | Security group | `sg-0f805961424175e66` (`saathi-dev`) — **one inbound rule**: TCP 22 from `207.219.25.137/32`, described *"operator Mac SSH dev only"*. It is the only SG on the instance. |
 | Access | **SSM, plus SSH from the operator's Mac only.** Key `tejas-mac-saathi-ai` (ED25519, `SHA256:yvQAXHc7/QSKYDImQL8j0a5uG8n0aGZLJLcGpB102tg`) is the sole entry in `authorized_keys`. `passwordauthentication no`. |
 | Repo on box | `/home/ubuntu/saathi` |
-| Database | `saathi`, role `saathi`. **Postgres 16.14 on the current box**; the original box runs 18.4. The majors differ, so a custom-format dump does not move between them — see `docs/PROD_READINESS.md` MIGRATION-PG-VERSION-1 before planning any restore. Data moved 2026-07-30 (8 users, 262 messages, 58 scheduled turns). |
+| Database | `saathi` on local **Postgres 18.4**, role `saathi`, port 5432. Matches the original box's major, so custom-format dumps move between them in both directions. Upgraded from 16.14 on 2026-07-30 via PGDG + `pg_upgradecluster`; the old 16 cluster is retained **stopped on port 5433** as a rollback and can be released with `pg_dropcluster 16 main`. |
 | Secrets | Secrets Manager `saathi/dev/runtime` (ap-south-1) |
 | WhatsApp number | **+91 8071 581 944** — `phone_number_id 1266402176549539` |
 | WABA | `1687148075730227` — display name **"Indofolk AI"**, currency **INR** |
