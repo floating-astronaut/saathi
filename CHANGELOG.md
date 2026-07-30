@@ -24,9 +24,17 @@ sequences still at the data's max (`users` 21, `messages` 274). `/healthz` repor
 
 The claim this was all for, proven rather than assumed: the original box's own 1.16
 dump — the exact file that failed under 16 — now lists 26 TABLE DATA entries and
-restores 8/262/58 into a throwaway database. The 16 cluster is kept **stopped on
-port 5433** as a rollback; release it with `pg_dropcluster 16 main` once you are
-satisfied. Closes MIGRATION-PG-VERSION-1.
+restores 8/262/58 into a throwaway database. Closes MIGRATION-PG-VERSION-1.
+
+The 16 cluster was kept stopped on port 5433 as an instant rollback, then dropped
+later the same day at the operator's instruction, along with the
+`saathi_preempty_20260730` database left over from the data move (26 tables, zero
+rows — schema only, confirmed before dropping). Rollback is therefore
+restore-from-backup now rather than a port change. What stands behind it:
+`/var/backups/saathi/pre-pg18/` holds the pre-upgrade custom dump and the cluster
+globals, `s3://saathi-dev-artifacts-635860424621/backups/postgres/` holds the
+6-hourly verified backups, and the original box's database is still intact. A fresh
+backup was taken after the drop specifically because the cheap fallback had gone.
 
 ## 2026-07-30 — the database finally followed the tunnel
 
