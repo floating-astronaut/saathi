@@ -28,12 +28,34 @@ _session = None
 def session():
     """The session Bedrock clients are built from.
 
-    Cached, because resolving an SSO profile reads and may refresh the token
-    cache on disk — not something to do on every turn.
+    Three sources, most durable first:
+
+      1. An explicit key pair. This is the intended path while
+         MIGRATION-BEDROCK-1 is open: a Bedrock-invoke-only IAM user in the
+         inference account, delivered through the runtime secret like every
+         other credential, so a rebuilt box gets it from env-sync.
+      2. A named profile, for a human debugging from a shell that already has
+         one. Depends on `~/.aws/`, which nothing syncs — fine for a person,
+         not something a service should need.
+      3. The ambient chain — the instance role. Where this ends up once model
+         access is granted in this account and the two settings above go away.
+
+    Cached because resolving a profile reads (and may refresh) the SSO token
+    cache on disk, which is not something to do on every turn.
     """
     global _session
     if _session is None:
-        if settings.saathi_bedrock_profile:
+        if settings.saathi_bedrock_access_key_id and settings.saathi_bedrock_secret_access_key:
+            log.warning(
+                "bedrock using a static key for a foreign account — "
+                "MIGRATION-BEDROCK-1 is open; inference is not in this account"
+            )
+            _session = boto3.Session(
+                aws_access_key_id=settings.saathi_bedrock_access_key_id,
+                aws_secret_access_key=settings.saathi_bedrock_secret_access_key,
+                region_name=settings.bedrock_region,
+            )
+        elif settings.saathi_bedrock_profile:
             log.warning(
                 "bedrock using borrowed profile %r — MIGRATION-BEDROCK-1 is open; "
                 "inference is not in this account",

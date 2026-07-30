@@ -77,7 +77,7 @@
 | Instance id | `i-03a4911f2f7de793d` · t3.large · role `IndofolkDevBoxRole` (IMDS answers; the earlier "blocked" reading was wrong) |
 | Repo on box | `/home/ubuntu/saathi` |
 | AWS CLI | configured: Identity Center SSO `mcc`, profiles `mcc` (621481811158, AdministratorAccess) and `mcc-dev` (635860424621, DevAdmin). Usable for any AWS work in the **mcc org**. `session-manager-plugin` installed. |
-| Reach into `559896294326` | SSO profile `saathi` (AWSAdministratorAccess) **is** configured here and works. That is how the 2026-07-30 migration was performed — and it is also how inference is still being served, which is the dependency being removed. See `docs/PROD_READINESS.md` MIGRATION-BEDROCK-1. |
+| Reach into `559896294326` | Two separate paths, deliberately. **Inference** uses IAM user `saathi-bedrock-invoke` via a static key in `saathi/dev/runtime` — confined to two model ARNs in ap-south-1 and denied every non-Bedrock action, so it cannot touch that account's S3, secrets or SSM. **Operator access** is SSO profile `saathi` (AWSAdministratorAccess), which is how the 2026-07-30 migration was run and is the only way to reach the old box over SSM; it is a human credential and expires. See `docs/PROD_READINESS.md` MIGRATION-BEDROCK-1 and PR-BEDROCK-KEY. |
 | State | app, worker, Postgres and the `saathi-dev` tunnel connector are **not yet running here**. The original box still serves `saathi.n8nworld.store` until the connector is repointed and the cutover is verified. See `docs/PROD_READINESS.md`. |
 
 The migration moves the tunnel connector onto the successor box; the webhook

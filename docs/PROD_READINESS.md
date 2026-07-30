@@ -20,47 +20,58 @@ Severity: **P0** blocks first external user · **P1** blocks paid launch ·
 
 ## In-progress migration
 
-### MIGRATION-BEDROCK-1 · Inference still runs on a MeshPilot-org SSO token (2026-07-30)
-Everything else in Saathi's AWS estate now lives in `635860424621` (mcc org):
-buckets, both secrets, the `saathi-alerts` topic, both alarms, and least-privilege
-grants on `IndofolkDevBoxRole`. **Bedrock did not move.** Every model in the new
-account returns `authorizationStatus: NOT_AUTHORIZED` — model access has never been
-granted there — and the self-serve path is closed:
+### MIGRATION-BEDROCK-1 · Inference runs in the MeshPilot-org account (2026-07-30)
+Everything else in Saathi's estate is in `635860424621`: buckets, both secrets, the
+`saathi-alerts` topic, both alarms, the database, and least-privilege grants on
+`IndofolkDevBoxRole`. **Bedrock did not move.** Every model in the new account
+returns `authorizationStatus: NOT_AUTHORIZED` — model access has never been granted
+there — and the self-serve path is closed:
 
     aws bedrock put-use-case-for-model-access --form-data …
     ValidationException: Your account is not authorized to perform this action.
     Please create a support case … and we will get back to you.
 
-So `saathi-web` and `saathi-worker` still carry the drop-in
-`/etc/systemd/system/saathi-{web,worker}.service.d/20-aws-profile.conf` setting
-`AWS_PROFILE=saathi`, which resolves to AWSAdministratorAccess in `559896294326`.
-Inference is therefore billed to, and served from, the MeshPilot org account.
+Note what this is *not*: an IAM problem. `IndofolkDevBoxRole` carries both
+`AmazonBedrockFullAccess` and `AmazonBedrockMantleFullAccess`, and there is no SCP
+(the account's only Organizations policy is `FullAWSAccess`). `entitlementAvailability`
+reads `AVAILABLE` — the models are available to *request*, not granted. Attaching
+more IAM will not move it; only the support case will. Draft text and the
+already-accepted use-case form are in `docs/RUNBOOK.md`.
 
-Why this is worse than an ordinary shortcut: it is a **credential with an expiry**,
-not a role. The Identity Center access token for the `saathi` session expires
-roughly every 8 hours and is renewed from a refresh token in
-`~/.aws/sso/cache/`. When that chain finally fails — a revoked session, a rotated
-assignment, an org change on a project Saathi is meant to be independent of —
-`converse()` starts returning an auth error, and the failure surfaces as an
-assistant that has stopped answering. Nothing on this box can renew it
-non-interactively.
+**How inference is served meanwhile.** A dedicated IAM user
+`saathi-bedrock-invoke` in `559896294326`, reached with a static key pair delivered
+through `saathi/dev/runtime` (`SAATHI_BEDROCK_ACCESS_KEY_ID` /
+`SAATHI_BEDROCK_SECRET_ACCESS_KEY`) and consumed only by `saathi/bedrock.py`. It
+replaced an `AWS_PROFILE=saathi` SSO session that was renewed from a refresh token
+on disk and would have failed non-interactively, taking inference with it on
+somebody else's schedule.
 
-**Fix, in order:** (1) open an AWS Support case against `635860424621` requesting
-Bedrock model access for `zai.glm-5` and `qwen.qwen3-vl-235b-a22b` in ap-south-1 —
-the use-case form already accepted for `559896294326` is reproduced verbatim in
-`docs/RUNBOOK.md`; (2) once `authorizationStatus` reads `AUTHORIZED`, confirm a
-`converse()` "pong" through the instance role with no profile set; (3) delete both
-drop-ins and `systemctl daemon-reload && systemctl restart saathi-web saathi-worker`;
-(4) remove the `saathi` profile and its SSO session from `~/.aws/config` so the
-dependency cannot be picked up again by accident.
+The user is confined by an inline policy with an explicit
+`Deny NotAction: bedrock:*`, so no later policy attachment can widen it. Verified by
+probe, all denied: S3 list and bucket read, Secrets Manager, SSM `send-command`
+against the old box, IAM, EC2 describe, CloudWatch `PutMetricData`, Bedrock outside
+ap-south-1, and any model other than the two Saathi calls. Leaking this pair
+therefore costs inference on two models in Mumbai and reaches nothing else in that
+account.
 
-Severity **P0**: this is the last tie to the MeshPilot org, it is the one the
-product cannot run without, and it fails on someone else's schedule.
+The region pin is doing product work, not just security work: it puts "inference
+stays in India" in the credential rather than in a convention, so a call routed to
+`us-east-1` fails rather than quietly succeeding.
 
-Do **not** work around it by repointing to an Anthropic `global.` model. That
-would trade an org dependency for a data-residency breach — "inference stays in
-India" is a product boundary in `docs/DECISIONS.md`, and the Anthropic endpoints
-reachable here are `global.`-only.
+Severity **P1**, down from P0: no longer a credential that expires on its own, but
+still a cross-org dependency and still a long-lived static key — see
+PR-BEDROCK-KEY.
+
+**Closing it:** (1) get model access granted on `635860424621`; (2) confirm a
+`converse()` "pong" through the instance role with no key set; (3) clear
+`SAATHI_BEDROCK_ACCESS_KEY_ID`, `SAATHI_BEDROCK_SECRET_ACCESS_KEY` and
+`SAATHI_BEDROCK_PROFILE` from `.env` and the secret, restart, and confirm the
+warning line in the log is gone; (4) delete the IAM user and its access key in
+`559896294326`, and drop the `saathi` profile and SSO session from `~/.aws/config`.
+
+Do **not** work around it by repointing to an Anthropic `global.` model. That trades
+an org dependency for a data-residency breach — the Anthropic endpoints reachable
+here are `global.`-only.
 
 ### RUNTIME-MIGRATION-1 · Runtime box migration (2026-07-29)
 The application runtime is moving from `i-01b2c27883acb25ca` (EIP
@@ -422,6 +433,28 @@ has made.
 ---
 
 ## P1 — before anyone pays
+
+### PR-BEDROCK-KEY · A long-lived static access key for the inference account
+`saathi/dev/runtime` carries an IAM **user** access key
+(`saathi-bedrock-invoke` in `559896294326`) because model access cannot yet be
+granted in our own account — see MIGRATION-BEDROCK-1. Static keys are the thing
+instance roles exist to avoid: they do not rotate, they sit in `.env` on disk, and
+nothing expires them if they leak.
+
+Three things bound the damage rather than excuse it: the user can invoke exactly two
+model ARNs in ap-south-1, an explicit `Deny NotAction: bedrock:*` blocks every other
+service in that account even if a future policy tries to allow it, and the key is
+mirrored only into Secrets Manager and `.env` (0600) — the `~/.aws/credentials` copy
+created during setup was deleted so there is no third copy.
+
+What is genuinely not handled: **no rotation.** The key has no expiry and no rotation
+schedule, and there is no alarm on its use.
+
+**Fix:** close MIGRATION-BEDROCK-1 and delete the user outright — that is the real
+fix and it removes the key rather than managing it. If that case drags, rotate the key
+and add a CloudWatch alarm on `AccessDenied` for this principal, which would be the
+signal that the pair has been picked up by something that is not Saathi.
+
 
 ### PR-7 · Single Postgres on the box, no PITR
 Backups every 6 hours, verified by restore. But recovery point is up to 6 hours
