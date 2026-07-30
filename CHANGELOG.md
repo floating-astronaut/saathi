@@ -1,3 +1,26 @@
+## 2026-07-30 — docs reconciled: runtime box now signs, migration marked complete
+
+Symptom: the signing contract was self-contradictory across the tree. After the
+runtime box was given its own SSH signing key (registered on GitHub + GitLab,
+`allowedSignersFile` set, `%G?` = `G`), four docs still asserted the opposite —
+`README.md`, `CLAUDE.md`, `CONTRIBUTING.md` and `DECISIONS.md` D-L all said the
+runtime box "cannot sign / is unsigned by necessity" and that `%G?` is unusable.
+Same tree still described the box migration as *in progress* and named the retired
+box `i-01b2c27883acb25ca`.
+
+Fix (docs only, no code):
+- `DECISIONS.md` D-L: appended a 2026-07-30 update — runtime box signs now; the
+  "pushes unsigned" line is superseded; PR-22 blast-radius point sharpened (this
+  box now holds a signing key *and* forge write creds).
+- `CLAUDE.md`: box table + migration blockquote updated to the successor box
+  `i-03a4911f2f7de793d` / acct `635860424621`; signing guardrail and execution
+  rule corrected.
+- `CONTRIBUTING.md`: "Every commit" section — signed on both boxes; `%G?` usable.
+- `README.md`: migration marked complete; worker kinds, Postgres 18.4 updated.
+
+Verified on the box: `git log -1 --format='%G?'` = `G`; `aws sts
+get-caller-identity` = `635860424621` / `IndofolkDevBoxRole`; `pg_lsclusters` = 18.
+
 ## 2026-07-30 — saathi-env-sync is in the repo now, so deploys stop aborting (RUNTIME-ENVSYNC-1)
 
 Symptom: every `ops/deploy.sh --local` on the successor box aborted at

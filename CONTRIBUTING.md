@@ -85,14 +85,15 @@ the previous tree back.
 ## Every commit
 
 - Authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>`
-- **SSH-signed when authored on the dev box**, which holds the signing key.
-  Commits from the runtime box are unsigned by necessity — see `DECISIONS.md`
-  D-L. Signing is not a gate on landing work here.
-- `%G?` is **not** a usable check on either box: SSH signature *verification*
-  needs `gpg.ssh.allowedSignersFile`, which is unset, so correctly signed commits
-  report `N`. To test whether a commit is signed at all:
+- **SSH-signed on both boxes** (2026-07-30). The runtime box now has its own
+  signing key (`~/.ssh/saathi_github_ed25519`), registered as a signing key on
+  GitHub and GitLab, so commits authored on either box verify. Signing is still
+  not a gate on landing work — see `DECISIONS.md` D-L and its 2026-07-30 update.
+- `%G?` **is** now a usable check on the runtime box: `gpg.ssh.allowedSignersFile`
+  is set (`~/.config/git/allowed_signers`), so a correctly signed, verified commit
+  reports `G` with the signer. To check:
   ```
-  git cat-file commit HEAD | grep -q '^gpgsig' && echo signed
+  git log -1 --format='%G? %GS'      # G + signer = signed & verified
   ```
 - Pushed to **both** remotes, and **verified on both**. On the runtime/source
   box, the `gitlab` remote uses the SSH alias `gitlab-saathi`; do not switch it

@@ -50,15 +50,18 @@ checkout, then verify against the owning docs and current files before editing.
 | Box | Region | Can |
 |---|---|---|
 | Dev box | us-east-2 | author, **sign**, push, `ops/deploy.sh` (remote) |
-| Runtime box `i-01b2c27883acb25ca` | ap-south-1 | run services, debug live, verify — **cannot sign** |
+| Runtime box `i-03a4911f2f7de793d` | ap-south-1 | run services, debug live, verify, **author + sign + push** |
 
-> **Runtime migrating (2026-07-29):** moving from `i-01b2c27883acb25ca` to a
-> successor box `ip-172-31-41-224` (ap-south-1). Webhook hostname and
-> `saathi-dev` tunnel unchanged; only the connector moves. Until the new box
-> runs the services and cutover is verified, the original box still serves
-> `saathi.n8nworld.store`. The new box has AWS CLI + SSO for the **mcc org**
-> (`mcc`, `mcc-dev`) — not the Saathi account `559896294326`. See
-> `docs/RUNBOOK.md` and `docs/PROD_READINESS.md`.
+> **Runtime migration complete (2026-07-30).** `saathi.n8nworld.store` is served
+> from the successor box `i-03a4911f2f7de793d` (`ip-172-31-41-224`, public
+> `15.206.170.88`), in the **mcc org** account `635860424621` (instance role
+> `IndofolkDevBoxRole`; CLI profiles `mcc`, `mcc-dev`). It runs
+> `saathi-web`/`saathi-worker`/Postgres 18.4 and the `saathi-dev` tunnel
+> connector. The original box (`i-01b2c27883acb25ca`, account `559896294326`) has
+> been **retired**. Webhook hostname and tunnel never changed. Open item
+> `MIGRATION-BEDROCK-1`: Bedrock model access on the new account was
+> `NOT_AUTHORIZED`, so inference uses a dedicated Bedrock IAM user's keys, not the
+> instance role. See `docs/RUNBOOK.md` and `docs/PROD_READINESS.md`.
 
 The runtime box's `/home/ubuntu/saathi` tree is a deployed artifact with
 fossilized git. Anything you edit there is product state at risk of being
@@ -137,9 +140,10 @@ not a refactor. Full reasoning in `docs/ARCHITECTURE.md` and `docs/DECISIONS.md`
   `scheduled_turns`.
 - Ask before destructive actions; back up config before replacing it.
 - Commits are authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>` and
-  pushed to **both** remotes. Signed *when authored on the dev box*; commits from
-  this box are unsigned by necessity and that is fine — D-L settled that signing
-  is not a gate here. Pushing to both remotes is the rule that still bites.
+  pushed to **both** remotes. **Signed on both boxes now** — the runtime box has
+  its own SSH signing key registered on GitHub + GitLab, so commits here verify
+  (`%G?` = `G`); see D-L's 2026-07-30 update. Signing is still not a *gate* on
+  landing work. Pushing to both remotes is the rule that still bites.
   See `CONTRIBUTING.md`.
 
 ## Execution rule
@@ -147,5 +151,6 @@ not a refactor. Full reasoning in `docs/ARCHITECTURE.md` and `docs/DECISIONS.md`
 When you have the access to finish a lane end to end — build, test, deploy,
 verify — do it yourself rather than handing shell steps back. Hand a step back
 only on a real blocker: a secret you cannot read, a permission wall, an
-unapproved destructive action, or something outside the current environment
-(for example: signing a commit from the runtime box, which has no key).
+unapproved destructive action, or something outside the current environment.
+(Signing a commit from the runtime box is no longer such a blocker — this box
+has its own signing key; see D-L's 2026-07-30 update.)
