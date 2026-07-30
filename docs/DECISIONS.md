@@ -724,3 +724,39 @@ cost is a labelled estimate until reconciled against an invoice (see
 character count — is exact regardless.
 
 **Reverse it** only if Sarvam TTS residency or spend-attribution assumptions break.
+
+### D-AF · Gujarati and Malayalam added as full languages, with a documented safety gap · 2026-07-30
+
+Operator decision. Saathi now offers five languages: Hindi (Devanagari),
+Hinglish (romanised), English, **Gujarati**, and **Malayalam**. What this
+touched: the onboarding picker, reply-script rules, STT/TTS language codes
+(verified live — Sarvam Saaras/Bulbul serve `gu-IN` and `ml-IN`), and the ack/
+command/paywall copy.
+
+**The picker is now a list, not buttons.** Five languages exceeds WhatsApp's
+three-quick-reply limit, so the language step (the one message shown in multiple
+scripts) is a WhatsApp *list message* (up to 10 rows). Onboarding still asks
+language first, before anything else — that was always true; it just needed a
+wider control.
+
+**The safety boundary gap is accepted and documented, not hidden.** The
+priority-0 deterministic safety classifier (medical emergencies + scams, before
+any model call) covers Hindi/English/Hinglish only. Gujarati/Malayalam native-
+*script* emergencies and scams are **not** caught deterministically yet — they
+fall through to the model, which still responds but without the priority-0
+guarantee. Forwarded Hindi/English scams (the common case) are still caught for
+these users. Operator chose to **ship the languages now with the gap documented**
+rather than block them, because the value to a Gujarati/Malayalam-speaking elder
+is real today and the common scam vector is still covered. Closing the gap needs
+native-verified patterns — lane **SAFE-LANG-1**. Per "fail loudly, never fail
+open," this is a *known* hole, recorded in `safety/classifier.py`,
+`PROD_READINESS.md` (LANG-2) and here — not a silent one.
+
+**Also provisional:** the Gujarati/Malayalam onboarding/reply copy is a first
+draft and needs native elder-audience review before it is final (flagged in the
+code and PROD_READINESS). It ships because wrong-but-reviewed beats absent, and
+the strings are legible and correct-script; polish follows.
+
+**Reverse/narrow** only by removing a language from the picker rows — the code
+falls back to Hindi for any `lang_pref` it does not recognise, so a removed
+language degrades safely rather than breaking.

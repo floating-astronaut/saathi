@@ -102,6 +102,8 @@ SCRIPT_RULE = {
     "hi": "Write Hindi in Devanagari (देवनागरी). Do not romanise it.",
     "hi-en": "Write Hindi in simple romanised Latin (Hinglish), not Devanagari.",
     "en": "Write in English.",
+    "gu": "Write in Gujarati, in the Gujarati script (ગુજરાતી). Do not romanise it.",
+    "ml": "Write in Malayalam, in the Malayalam script (മലയാളം). Do not romanise it.",
 }
 
 

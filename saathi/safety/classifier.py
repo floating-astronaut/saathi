@@ -10,6 +10,17 @@ Design rules:
     number is a mild annoyance; missing a stroke is not.
   * Every hit short-circuits the LLM turn entirely and returns fixed copy.
 
+⚠️ LANGUAGE COVERAGE GAP (LANG-2, 2026-07-30): these patterns cover Hindi,
+English and romanised Hinglish only. Gujarati and Malayalam were added as user
+languages without native-script emergency/scam patterns yet — an operator
+decision to ship the languages with the gap documented rather than block them
+(D-AF). So a native-*script* Gujarati/Malayalam emergency or scam is not caught
+deterministically here; it falls through to the model (which still responds, but
+without the priority-0 guarantee). Forwarded Hindi/English scams — the common
+case — are still caught for these users. Closing this gap needs native-verified
+patterns and is tracked as lane SAFE-LANG-1. Until then, entity/emergency
+coverage for gu/ml is a known hole, not a silent one.
+
 Numbers used are the real Indian services:
   112    national emergency (police/fire/ambulance)
   108    state ambulance services

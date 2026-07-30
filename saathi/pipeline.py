@@ -32,6 +32,7 @@ from .agent import loop
 from .agent.tools.handlers import Handlers
 from .core import backpressure
 from .safety.classifier import classify
+from .speech import sarvam_lang
 from .speech import stt as stt_mod
 from .speech.audio import ogg_to_wav16k
 from .channels import registry
@@ -105,11 +106,15 @@ async def log_message(conn, user_id: int, direction: str, kind: str, *,
     return row[0] if row else 0
 
 
+# gu/ml copy is a first draft pending native review (LANG-2).
 ACK_REPLY = {"hi": "शाबाश! हो गया। 🌼", "hi-en": "Shabaash! Ho gaya. 🌼",
-             "en": "Lovely — marked as done. 🌼"}
+             "en": "Lovely — marked as done. 🌼",
+             "gu": "શાબાશ! થઈ ગયું. 🌼", "ml": "കൊള്ളാം! ചെയ്തു. 🌼"}
 SNOOZE_REPLY = {"hi": "ठीक है, {mins} मिनट बाद याद दिला दूँगी।",
                 "hi-en": "Theek hai, {mins} minute baad yaad dila dungi.",
-                "en": "Alright, I'll remind you again in {mins} minutes."}
+                "en": "Alright, I'll remind you again in {mins} minutes.",
+                "gu": "ઠીક છે, {mins} મિનિટ પછી ફરી યાદ કરાવીશ.",
+                "ml": "ശരി, {mins} മിനിറ്റിനു ശേഷം വീണ്ടും ഓർമ്മിപ്പിക്കാം."}
 
 
 async def handle_ack(conn, user_id: int, button_id: str) -> str | None:
@@ -199,7 +204,12 @@ async def transcribe_voice(conn, user_id: int, media_id: str,
             raise usage.UsageAccountingUnavailable("STT reservation is not reusable for a new call")
 
     entities = await memory.surface_forms(conn, user_id)
-    transcript = await stt_mod.transcribe(wav, entities=entities)
+    # Transcribe in the user's chosen language, not always Hindi. A Malayalam or
+    # Gujarati speaker's voice note was previously fed to Saaras as hi-IN (LANG-2).
+    lang_row = await (await conn.execute(
+        "select lang_pref from users where id = %s", (user_id,))).fetchone()
+    language = sarvam_lang(lang_row[0] if lang_row else None)
+    transcript = await stt_mod.transcribe(wav, entities=entities, language=language)
     if reservation is not None:
         try:
             await usage.settle(conn, reservation.id, actual_minor=estimated_paise)
@@ -543,6 +553,35 @@ CMD_COPY = {
         "del_yes": "Yes, delete all", "del_no": "No, keep it",
         "ask_lang": "Which language would you like to use?",
     },
+    # gu/ml command copy is a first draft pending native review (LANG-2).
+    "gu": {
+        "stopped": ("ઠીક છે, હવે હું સંદેશા નહીં મોકલું. "
+                    "'ચાલુ કરો' કહીને ફરી શરૂ કરી શકો છો."),
+        "resumed": "ફરી શરૂ! હવે હું પહેલાંની જેમ યાદ કરાવીશ.",
+        "nothing_known": "હમણાં મારી પાસે તમારા વિશે કંઈ નથી.",
+        "known_intro": "મારી પાસે આ છે:",
+        "known_outro": "કંઈ હટાવવું હોય તો કહો.",
+        "cleared": ("ચેટ સાફ કરી ({n} સંદેશા). તમારા રિમાઇન્ડર અને "
+                    "યાદો એવી જ છે."),
+        "confirm_delete": ("શું તમે ખરેખર બધું હટાવવા માંગો છો? "
+                           "આ પાછું નહીં આવે."),
+        "del_yes": "હા, બધું હટાવો", "del_no": "ના, રહેવા દો",
+        "ask_lang": "તમે કઈ ભાષામાં વાત કરવા માંગો છો?",
+    },
+    "ml": {
+        "stopped": ("ശരി, ഞാൻ ഇനി സന്ദേശങ്ങൾ അയയ്ക്കില്ല. "
+                    "'വീണ്ടും തുടങ്ങൂ' എന്ന് പറഞ്ഞ് തിരികെ തുടങ്ങാം."),
+        "resumed": "വീണ്ടും തുടങ്ങി! ഇനി ഞാൻ പഴയതുപോലെ ഓർമ്മിപ്പിക്കാം.",
+        "nothing_known": "ഇപ്പോൾ നിങ്ങളെക്കുറിച്ച് എന്റെ പക്കൽ ഒന്നുമില്ല.",
+        "known_intro": "എന്റെ പക്കൽ ഇത് ഉണ്ട്:",
+        "known_outro": "എന്തെങ്കിലും നീക്കം ചെയ്യണമെങ്കിൽ പറയൂ.",
+        "cleared": ("ചാറ്റ് മായ്ച്ചു ({n} സന്ദേശങ്ങൾ). നിങ്ങളുടെ "
+                    "ഓർമ്മപ്പെടുത്തലുകളും ഓർമ്മകളും അതേപടിയുണ്ട്."),
+        "confirm_delete": ("എല്ലാം ഇല്ലാതാക്കണോ? ഇത് പിന്നെ "
+                           "തിരികെ ലഭിക്കില്ല."),
+        "del_yes": "അതെ, എല്ലാം ഇല്ലാതാക്കൂ", "del_no": "വേണ്ട, സൂക്ഷിക്കൂ",
+        "ask_lang": "നിങ്ങൾ ഏത് ഭാഷയിൽ സംസാരിക്കാൻ ആഗ്രഹിക്കുന്നു?",
+    },
 }
 
 
@@ -555,16 +594,16 @@ def _c(lang: str, key: str, **fmt) -> str:
 async def _run_command(conn, transport, user_id: int, handle: str, cmd) -> dict | None:
     """Deterministic handling of unambiguous requests. No model, no cost."""
     from .agent.tools.handlers import Handlers
-    from .onboarding import _lang, ASK_LANG, LANG_BUTTONS
+    from .onboarding import _lang, ASK_LANG, LANG_LIST_BUTTON, LANG_ROWS
     C = commands.Command
     lang = await _lang(conn, user_id)
 
     if cmd is C.LANGUAGE:
-        # Re-offer the same two buttons onboarding used. The choice was asked
-        # once and could not be revisited (PR-32); the person most likely to
-        # mistap it is the one this product is for.
-        await transport.send_buttons(conn, user_id, handle, ASK_LANG,
-                                     list(LANG_BUTTONS))
+        # Re-offer the same list onboarding used. The choice was asked once and
+        # could not be revisited (PR-32); the person most likely to mistap it is
+        # the one this product is for.
+        await transport.send_list(conn, user_id, handle, ASK_LANG,
+                                  LANG_LIST_BUTTON, list(LANG_ROWS))
         return {}
     if cmd is C.HELP:
         await transport.send_text(conn, user_id, handle, HELP_TEXT)

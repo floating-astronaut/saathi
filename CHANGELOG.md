@@ -1,3 +1,28 @@
+## 2026-07-30 — Gujarati and Malayalam added as full languages (LANG-2)
+
+Saathi now offers five languages at signup: Hindi, Hinglish, English, **Gujarati**,
+and **Malayalam**. (Onboarding already asked language first — that part didn't need
+building; adding the languages did.)
+
+- **Picker is now a WhatsApp list, not buttons.** Five languages exceeds WhatsApp's
+  3-quick-reply limit, so the language step uses an interactive list. New
+  `wa.send_list` / `Channel.send_list`; `context.button_id` reads `list_reply` too.
+- **Localised everywhere:** onboarding, ack/snooze, command replies, paywall, the
+  "already onboarded" copy, and the model's reply-script rule all gained gu/ml. The
+  gu/ml strings are a first draft flagged for native review.
+- **Fixed a latent bug found on the way:** STT was hardcoded to `hi-IN` for *every*
+  user — a Gujarati or Malayalam (or English) speaker's voice note was transcribed
+  as Hindi. Now the user's `lang_pref` picks the Sarvam code (via `speech.sarvam_lang`),
+  and TTS uses the same map. Verified live that Sarvam serves gu-IN/ml-IN.
+- **Safety gap, documented not hidden (D-AF):** the priority-0 deterministic
+  classifier still matches Hindi/English/Hinglish only, so native-script gu/ml
+  emergencies/scams aren't caught deterministically yet (they fall through to the
+  model; forwarded Hindi/English scams still catch). Operator chose to ship the
+  languages with the gap recorded; native-verified patterns are lane SAFE-LANG-1.
+
+8 new tests, 622 total (was 614). No migration — `lang_pref` is unconstrained and
+unknown values fall back to Hindi, so the change degrades safe.
+
 ## 2026-07-30 — a voice-first product that only wrote back can now speak (PR-8)
 
 Symptom: PR-8 was the biggest felt gap — Saathi is voice-first, elders talk to it,
