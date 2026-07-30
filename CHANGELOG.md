@@ -1,3 +1,35 @@
+## 2026-07-30 — saathi-env-sync is in the repo now, so deploys stop aborting (RUNTIME-ENVSYNC-1)
+
+Symptom: every `ops/deploy.sh --local` on the successor box aborted at
+`saathi-env-sync: command not found` (ops/deploy_onbox.sh), before restarting
+services. The helper that pulls Secrets Manager into `~/saathi/.env` and
+`~/saathi-gcp-sa.json` had only ever existed in `/usr/local/bin` on the *original*
+box — it was never in the repo, so the hand-built successor box never had it, and
+`.env` had to be maintained by hand.
+
+Root cause under it: the runtime secret was **not the full source of truth**. The
+box's `.env` carried 8 keys that were only in `.env` and not in the secret —
+including `SAATHI_DB_DSN`, which holds the database password. A naive "rewrite
+`.env` from the secret" would have dropped the DB connection and broken the app,
+which is likely why env-sync was quietly skipped here.
+
+Fix:
+- Moved those 8 keys into `saathi/dev/runtime` (value-blind; the DB password now
+  lives in Secrets Manager, not just on disk). The secret is now the complete
+  45-key source of truth, so a rewrite is lossless — verified: the regenerated
+  `.env` is a superset of the old one, no key dropped, no value changed.
+- Added `ops/saathi-env-sync` to the repo: reads both secrets via the instance
+  role (no profile, no key material on disk), writes `.env` (0600) and
+  `~/saathi-gcp-sa.json` (0600) atomically, value-blind. Backs up the previous
+  `.env` first.
+- `ops/deploy_onbox.sh` now `install`s it from the repo before the deploy step
+  that calls it, so no future box depends on a hand-placed copy.
+
+Verified: env-sync runs clean; `settings` load the DB DSN, audio bucket, CAPI
+dataset id, GCP SA path, model and dm_policy from the regenerated `.env`; a full
+`ops/deploy.sh --local` now completes through env-sync → uv sync → tests → restart
+→ verify with the manual copy removed first, proving the deploy installs it.
+
 ## 2026-07-30 — Click-to-WhatsApp attribution (CAPI-1): the click id we were throwing away
 
 Symptom: ad spend on "ads that click to WhatsApp" had no conversion signal, so Meta

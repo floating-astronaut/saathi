@@ -283,11 +283,19 @@ Never put a secret in an SSM command — command text is retained and visible in
 the console. Instead:
 
 ```bash
-saathi-env-sync    # on the box; pulls saathi/dev/runtime into .env (0600)
+sudo saathi-env-sync    # pulls saathi/dev/runtime -> .env and saathi/dev/gcp-sa -> ~/saathi-gcp-sa.json, both 0600
 ```
 
-The instance role `saathi-dev-box` has `GetSecretValue` on that ARN only, plus
-`AmazonSSMManagedInstanceCore` and an inline `bedrock-invoke`.
+`saathi-env-sync` lives in the repo at `ops/saathi-env-sync` and is installed to
+`/usr/local/bin` by `ops/deploy_onbox.sh` (RUNTIME-ENVSYNC-1, 2026-07-30) — it is
+no longer a hand-placed file, which is what aborted deploys on the successor box.
+It **rewrites** `.env` from the secret, so the secret is the complete source of
+truth: `saathi/dev/runtime` holds all 45 keys, including `SAATHI_DB_DSN`. Add a key
+with `ops/set-secret.sh`, never by editing `.env` (the next deploy overwrites it).
+
+On the current box the instance role is `IndofolkDevBoxRole` (account
+`635860424621`) with `GetSecretValue` on `saathi/dev/*`. The original box's
+`saathi-dev-box` role in `559896294326` is retired with that box.
 
 **Do not add `EnvironmentFile=` to the unit files.** `config.py` loads `.env`
 with `SettingsConfigDict(env_file=".env")`, reading it from disk into process
