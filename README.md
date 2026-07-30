@@ -18,9 +18,11 @@ Private repo. Two surfaces, deliberately separate:
   cannot receive a POST or run Python — see `docs/LANDMINES.md`).
 
 The application runtime is a single box in **AWS ap-south-1 (Mumbai)** — see
-[`docs/RUNBOOK.md`](docs/RUNBOOK.md). The runtime is mid-migration from the
-original box (`i-01b2c27883acb25ca`) to a successor box; the webhook hostname
-itself does not change, only the box the tunnel connector runs on.
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md). The July-2026 migration is **complete**:
+the runtime is now the successor box `i-03a4911f2f7de793d`
+(`ip-172-31-41-224`, public `15.206.170.88`) in AWS account `635860424621`. The
+original box (`i-01b2c27883acb25ca`, account `559896294326`) has been retired.
+The webhook hostname never changed — only the box the tunnel connector runs on.
 
 **In production since 2026-07-27.** Users reach it on **+91 8071 581 944**,
 where it answers as **Indofolk AI** — the Meta-approved display name on WABA
@@ -71,21 +73,22 @@ name is not free there.
   git push origin <branch> && git push gitlab <branch>
   ```
   origin = GitHub `Nuraveda-Labs/saathi` · gitlab = GitLab `nuraveda-lab/saathi`
-- Every commit is authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>`, and
-  **SSH-signed when authored on the dev box**, which holds the signing key.
-  Commits authored on the runtime box are unsigned by necessity — see
-  `DECISIONS.md` D-L. Signing is not a gate on landing work.
-- **`%G?` is not a usable check on either box.** SSH signature *verification*
-  needs `gpg.ssh.allowedSignersFile`, which is unset, so correctly signed commits
-  still report `N`. It has already sent one session chasing a phantom. To ask
-  whether a commit is signed at all:
+- Every commit is authored `Tejas Karan Agrawal <help.nuraveda@gmail.com>` and
+  **SSH-signed on both the dev box and the runtime box** (2026-07-30). The
+  runtime box now has its own signing key (`~/.ssh/saathi_github_ed25519`),
+  registered as a signing key on GitHub and GitLab, so commits authored on either
+  box verify. This supersedes the old "runtime commits are unsigned by necessity"
+  note in `DECISIONS.md` D-L (a follow-up to that decision record is pending).
+- **`%G?` is now a usable check on the runtime box.** `gpg.ssh.allowedSignersFile`
+  is configured (`~/.config/git/allowed_signers`), so a correctly signed commit
+  reports `G`, not `N`. To confirm signing status directly:
   ```
-  git cat-file commit HEAD | grep -q '^gpgsig' && echo signed
+  git log -1 --format='%G? %GS'      # G + signer = signed & verified
   ```
-- The GitLab token is an OAuth grant that **expires every two hours** and its
-  credential helper does not refresh it, so a push can succeed on GitHub and fail
-  on GitLab, leaving them diverged. Refresh with `glab api user`, then verify
-  both by hash rather than trusting two exit codes.
+- The GitLab token is an OAuth grant that can **expire** and its credential
+  helper may not refresh it, so a push can succeed on GitHub and fail on GitLab,
+  leaving them diverged. Refresh with `glab api user`, then verify both by hash
+  rather than trusting two exit codes.
 
 ---
 
@@ -153,14 +156,15 @@ application** — user traffic arrives only through the Cloudflare tunnel, and
 `:3130` binds `127.0.0.1`. The box itself has exactly one inbound rule: TCP 22
 from the operator's Mac (`207.219.25.137/32`), for operator SSH.
 
-> **Runtime migration in progress.** The application is moving from the original
-> box (`i-01b2c27883acb25ca`, EIP `15.252.75.191`) to a successor box
-> (`ip-172-31-41-224`, ap-south-1). The webhook hostname and the `saathi-dev`
-> tunnel are unchanged — only the tunnel connector (and therefore the box
-> serving `saathi.n8nworld.store`) moves. Until the new box runs
-> `saathi-web`/`saathi-worker`/Postgres and the connector is repointed, the
-> webhook is still served from the original box. See `docs/PROD_READINESS.md`
-> for the open items; the original box must stay up until cutover is verified.
+> **Runtime migration complete (2026-07-30).** `saathi.n8nworld.store` is served
+> from the successor box `i-03a4911f2f7de793d` (`ip-172-31-41-224`, public
+> `15.206.170.88`, ap-south-1, account `635860424621`), which runs
+> `saathi-web`/`saathi-worker`/Postgres 18.4 and the `saathi-dev` tunnel
+> connector. The webhook hostname and tunnel never changed. The original box
+> (`i-01b2c27883acb25ca`, account `559896294326`) has been retired. One open
+> item — `MIGRATION-BEDROCK-1`: Bedrock model access on the new account was
+> `NOT_AUTHORIZED`, so inference authenticates with a dedicated Bedrock IAM
+> user's keys rather than the instance role. See `docs/PROD_READINESS.md`.
 
 ### Adding a capability
 
@@ -217,7 +221,8 @@ behaviour.
       onboarding.py   deterministic, button-driven, model-free, language-first
       scheduling.py   the `scheduled_turns` queue — enqueue, claim, sweep_stuck
       worker/turns.py every kind of future work, registered: reminder, nudge,
-                      checkin, media_purge. Read it top to bottom.
+                      checkin, media_purge, provision_key, reverify. Read it
+                      top to bottom.
     db/               extensions.sql (superuser), schema.sql, migrations/,
                       schema_migrations.sql + record_migration.sql (the ledger —
                       deploy bookkeeping, deliberately not a migration)
