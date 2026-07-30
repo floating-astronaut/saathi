@@ -1,3 +1,44 @@
+## 2026-07-30 — the database finally followed the tunnel
+
+Symptom: `/healthz` was 200 through the tunnel and the box looked cut over, but
+this box's Postgres was empty — `users=0 messages=0 scheduled_turns=0` — while the
+original box still held `users=8 messages=262 scheduled_turns=58` with its worker
+still running. So inbound WhatsApp traffic was being served by a box that had
+never seen these 8 people: their memories and reminders were invisible to the
+assistant answering them, and the only reason reminders still went out at all was
+that the *old* box's worker was quietly dispatching from its own copy. Retiring
+that box would have taken 9 pending turns with it, one of them a medication
+reminder due the same morning.
+
+Fix: stopped the old worker first so nothing could double-dispatch, dumped, and
+restored here. Two things made it not a straight `pg_restore`:
+
+  * **Version drift.** The original box runs Postgres 18.4; Phase 1 installed
+    16.14 here. A custom-format dump from 18 is archive version 1.16, which
+    `pg_restore` 16 refuses outright ("unsupported version (1.16) in file
+    header"). Dumped `-Fp` instead and stripped the single v17+ line the plain
+    SQL carried (`SET transaction_timeout = 0`) — nothing else in the schema was
+    version-specific.
+  * **Ownership.** Restoring `--no-owner` as `postgres` left all 26 tables owned
+    by `postgres`, and the app connects as `saathi`. The worker came up and threw
+    `InsufficientPrivilege: permission denied for table scheduled_turns` on its
+    first poll. Reassigned 26 tables, 21 sequences, 1 view and 12 enum types,
+    plus the schema and database, to `saathi`.
+
+Verified: `users=8 messages=262 scheduled_turns=58` and the state histogram
+(`pending 9, sent 25, acked 12, failed 1, skipped 11`) match the source exactly;
+26 tables, 14 `schema_migrations` rows, `pg_trgm` present; sequences sit at the
+data's max (`users` 21, `messages` 274) so the next insert cannot collide. All 9
+pending turns were confirmed future-dated before the worker was started — an
+overdue set would have fired a burst of stale reminders at real people. Read back
+through the app's own DSN as the `saathi` role: 8 / 9 / 262. Zero errors since the
+ownership fix. A real backup then ran here: `OK 205152B tables=26 users=8`.
+
+The old box's worker is now `disabled`, not merely stopped, so a reboot cannot
+resurrect a second dispatcher against the same reminders. Its database is left
+fully intact as the fallback, and the pre-restore empty database is kept aside as
+`saathi_preempty_20260730`.
+
 ## 2026-07-30 — Saathi's AWS estate moved out of the MeshPilot org account
 
 Symptom: the successor box looked healthy — `/healthz` 200 through the tunnel,
