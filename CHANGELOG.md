@@ -1,3 +1,21 @@
+## 2026-07-30 — measured the agent's tool-use: 100% answered well (AGENT-1, increment 2)
+
+Capability was anecdotal ("it couldn't tell the temperature"). Now it's measured.
+`saathi/eval/agent.py` runs a fixed set of real questions through the actual agent
+loop against the live model and scores each: did it call the required tool, did the
+answer contain the expected text, did it give up. It's side-effect-free — a fake DB
+and a dry-run tool handler run `look_up` for real but stub the state-mutating tools,
+so the eval reads what the model *reached for* without writing a row or sending
+anything.
+
+First live run: **100% answered well** across 13 cases (weather, facts, web,
+arithmetic, conversation, and actions like reminder/remember/list) — 100% right-tool,
+0% give-up. Building it also caught a scorer bug: the give-up detector flagged
+"insulin kaam nahi kar paati" (a correct explanation of diabetes) as a surrender
+because of a bare "kar pa"; tightened to genuine give-ups and pinned with a test.
+Run it with `python -m saathi.eval.agent`. 8 new tests. AGENT-1 closes: the agent
+reliably reaches for tools and answers, and there's now a harness to keep it honest.
+
 ## 2026-07-30 — the agent gave up instead of reaching for its tools (AGENT-1, increment 1)
 
 Symptom: "what's the temperature in Toronto" got "couldn't find it" — a question

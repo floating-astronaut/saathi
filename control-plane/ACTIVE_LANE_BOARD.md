@@ -41,8 +41,8 @@ Notes: CLOSED 2026-07-30: MET. `onboarding._voice_user` reads the messages log f
   fixed copy, not the model; strings are phrase-cached. Language picker stays visual;
   voicing starts at welcome. 4 new tests, 632 total. Deployed via PR.
 
-### AGENT-1 — tool-use reliability: reach for tools, don't give up   [IN PROGRESS]
-Owner: Claude (runtime box, branch agent/tool-reliability)        Opened: 2026-07-30
+### AGENT-1 — tool-use reliability: reach for tools, don't give up   [CLOSED]
+Owner: Claude (runtime box, branches agent/tool-reliability + agent/tool-use-eval)        Opened: 2026-07-30 · Closed: 2026-07-30
 Reading: saathi/agent/loop.py, saathi/agent/prompt.py, saathi/agent/tools/specs.py + handlers.py, saathi/lookup/, LOOKUP-1
 Acceptance: for answerable factual asks (weather, general facts, definitions) the
   agent reliably calls the right tool instead of replying "I couldn't find it";
@@ -65,10 +65,18 @@ Notes: opened 2026-07-30 from operator feedback ("an agent that can't answer the
   (a) deterministic fallback — `look_up` kind=weather now tries forecast **then web**;
   (b) prompt hardened ("try kind web before giving up; 'couldn't find it' on a
   Google-answerable question is a failure"); (c) clearer tool description + "pass a
-  bare place". 1 test. **Remains (keeps this lane open):** a measured tool-use/QA
-  eval set (extend the PR-9 harness), and generalise fallback/synthesis across kinds.
-  **Boundary reaffirmed:** this is reliable answering/acting, NOT code execution or
-  unbounded actions — capability-by-absence stays (no money/OTP/account tools).
+  bare place". 1 test. **Boundary reaffirmed:** this is reliable answering/acting,
+  NOT code execution or unbounded actions — capability-by-absence stays (no money/
+  OTP/account tools).
+  **Increment 2 landed 2026-07-30 (branch agent/tool-use-eval, CLOSES the lane):**
+  `saathi/eval/agent.py` — a tool-use/QA eval that RUNS against the live model
+  (fake DB + dry-run tool handler: real look_up search, mutating tools stubbed, no
+  side effects). 13 committed cases across weather/fact/web/direct/action. First
+  live run: **100% answered well, 100% right-tool, 0% give-up**. Caught + fixed a
+  scorer false-positive (a correct diabetes answer flagged as give-up via a bare
+  "kar pa"). `python -m saathi.eval.agent`. 8 tests. Acceptance MET: agent reliably
+  reaches for tools and answers, measured on a fixed set, with a harness to catch
+  regressions. Deployed via PR. Eval set can grow over time (not a blocker).
 
 ### LOOKUP-1 — weather ignored an explicitly-named city   [CLOSED]
 Owner: Claude (runtime box, branch agent/weather-explicit-city)        Opened: 2026-07-30 · Closed: 2026-07-30
