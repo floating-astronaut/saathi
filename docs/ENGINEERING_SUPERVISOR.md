@@ -2070,3 +2070,44 @@ no new ruff findings. Live probes (value-blind): Sarvam TTS serves **gu-IN and m
 **Remains:** SAFE-LANG-1 (native-verified gu/ml safety patterns) and a native review of the
 gu/ml copy. Both documented in PROD_READINESS (LANG-2). No migration — `lang_pref` is an
 unconstrained text column, and unknown values fall back to Hindi, so the change degrades safe.
+
+---
+
+## 2026-07-30 · VOICE-1 — TTS voice quality (bulbul:v3, 48 kHz, per-language voices)
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/tts-voice-quality`).
+
+**Trigger:** operator enabled TTS (PR-8), the round-trip worked, but the voice sounded muddy
+and robotic on the handset.
+
+**Diagnosis (not the vendor):** `bulbul:v2` at 22050 Hz, then a 32 kbps Opus encode after a
+forced 22050→48000 resample (Opus is a 48 kHz codec), and no `enable_preprocessing` so English
+words/numbers in code-mixed text were mispronounced.
+
+**Researched:** Sarvam TTS docs (v2 vs v3, sample rates, params) and how Pipecat/LiveKit/VideoSDK
+wrap Sarvam — they use the WebSocket streaming mode for live phone agents; Saathi's async voice
+notes are the HTTP batch case, which is what we already use. Probed our key live (value-blind):
+`bulbul:v3` works and returns native **48 kHz**; v3 has a different speaker roster than v2
+(v2 `anushka`/`manisha`/… are rejected on v3); female v3 voices `ritu`/`priya`/`neha`/`kavitha`/…
+verified in hi-IN/gu-IN/ml-IN/en-IN.
+
+**Changed:**
+- `config.py`: model `bulbul:v2`→`bulbul:v3`, sample rate 22050→48000, new
+  `saathi_tts_enable_preprocessing=True`, `saathi_tts_ogg_bitrate="48k"`, fallback speaker
+  `anushka`→`ritu` (v2 name invalid on v3).
+- `speech/__init__.py`: `TTS_SPEAKER_BY_LANG` (hi/hi-en `ritu`, gu `priya`, ml `kavitha`, en
+  `neha`) + `tts_speaker()`.
+- `speech/tts.py`: send v3 model + 48 kHz + `enable_preprocessing` + the per-language speaker;
+  cache key keyed by resolved speaker; pass the configured bitrate to the encoder.
+- `speech/audio.py`: Opus encode resamples to 48 kHz with soxr, mono, `-application audio`,
+  configurable bitrate (was a bare 32 kbps).
+- `docs/vendor/sarvam/text-to-speech.md` (v3 contract + rosters), D-AE addendum, CHANGELOG,
+  PROD_READINESS (PR-8 residual), board (VOICE-1 CLOSED; PR-8 CLOSED — round-trip observed).
+
+**Verified:** 2 new tests (per-language speaker map; synthesize sends v3/48k/preprocessing/voice),
+624 total. Changed files ruff-clean. Rendered all four languages through the production path with
+the new settings and listened-tested by the operator; live prod re-render after deploy confirmed
+48 kHz OGG output.
+
+**Remains:** per-char TTS pricing is still an estimate (PROD_READINESS PR-8). Per-language voices
+are a sensible default; the operator can retune any language's voice via `TTS_SPEAKER_BY_LANG`.

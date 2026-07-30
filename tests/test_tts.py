@@ -1,6 +1,8 @@
 """TTS (PR-8): chunking, WAV concat, phrase cache, the voice trigger policy, and
 that voice is strictly additive to — never a gate on — the text reply."""
+import base64
 import io
+import typing
 import wave
 
 import pytest
@@ -8,7 +10,7 @@ import pytest
 from saathi import usage
 from saathi.config import settings
 from saathi.core.context import MessageContext
-from saathi.speech import tts
+from saathi.speech import tts, tts_speaker
 
 
 def _wav(frames: bytes = b"\x00\x00" * 100) -> bytes:
@@ -57,7 +59,7 @@ class FakeProvider:
 
 
 async def test_synthesize_ogg_caches_fixed_phrases(monkeypatch):
-    monkeypatch.setattr(tts, "wav_to_ogg_opus", lambda wav: _fake_ogg())
+    monkeypatch.setattr(tts, "wav_to_ogg_opus", lambda wav, bitrate="48k": _fake_ogg())
     tts._CACHE.clear()
     provider = FakeProvider()
 
@@ -155,3 +157,42 @@ def test_tts_cost_is_per_character_estimate():
     assert usage.sarvam_tts_cost_paise(0, paise_per_1k=150) == 0
     with pytest.raises(ValueError):
         usage.sarvam_tts_cost_paise(-1, paise_per_1k=150)
+
+
+# --- per-language voice + v3 request (VOICE-1) -----------------------------
+
+def test_speaker_is_per_language():
+    assert tts_speaker("hi-IN", "fallback") == "ritu"
+    assert tts_speaker("gu-IN", "fallback") == "priya"
+    assert tts_speaker("ml-IN", "fallback") == "kavitha"
+    assert tts_speaker("en-IN", "fallback") == "neha"
+    assert tts_speaker("ta-IN", "fallback") == "fallback"   # unmapped -> default
+
+
+class _Resp:
+    status_code = 200
+    def __init__(self, payload): self._p = payload
+    def json(self): return self._p
+
+
+class _Client:
+    """Captures the request body SarvamTTS sends."""
+    captured: typing.ClassVar[dict] = {}
+    def __init__(self, *a, **k): pass
+    async def __aenter__(self): return self
+    async def __aexit__(self, *a): return False
+    async def post(self, url, headers=None, json=None):
+        _Client.captured = json
+        return _Resp({"audios": [base64.b64encode(_wav()).decode()], "request_id": "r"})
+
+
+async def test_synthesize_sends_v3_preprocessing_and_language_voice(monkeypatch):
+    monkeypatch.setattr(settings, "sarvam_api_key", "test-key")
+    monkeypatch.setattr(tts.httpx, "AsyncClient", _Client)
+    await tts.SarvamTTS().synthesize("namaste", "gu-IN")
+    sent = _Client.captured
+    assert sent["model"] == "bulbul:v3"
+    assert sent["speaker"] == "priya"              # Gujarati voice, not the global default
+    assert sent["speech_sample_rate"] == 48000
+    assert sent["enable_preprocessing"] is True
+    assert sent["target_language_code"] == "gu-IN"

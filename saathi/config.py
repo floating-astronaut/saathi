@@ -83,12 +83,22 @@ class Settings(BaseSettings):
     #: *when* to speak is `core.context.should_voice` — default voice-in→voice-out
     #: (`users.voice_reply_pref='auto'`), the trigger the operator chose to start.
     saathi_tts_enabled: bool = False
-    #: Sarvam Bulbul voice. Female to match the persona (D-W / LANG-1). See
-    #: docs/vendor/sarvam/text-to-speech.md for the id set.
-    saathi_tts_speaker: str = "anushka"
-    saathi_tts_model: str = "bulbul:v2"
-    saathi_tts_sample_rate: int = 22050
+    #: Fallback Sarvam Bulbul voice for any language not in the per-language map
+    #: (`speech.TTS_SPEAKER_BY_LANG`). Female to match the persona (D-W / LANG-1).
+    #: Must be a speaker the model supports — v3 has its own roster (VOICE-1).
+    saathi_tts_speaker: str = "ritu"
+    #: bulbul:v3 (VOICE-1): higher quality than v2, native 48 kHz so no ugly
+    #: resample into Opus, and its own speaker roster. See the vendor doc.
+    saathi_tts_model: str = "bulbul:v3"
+    saathi_tts_sample_rate: int = 48000
+    #: Normalise English words + numeric entities in code-mixed text ("Amlodipine
+    #: 5mg"). Recommended for Saathi's Hindi/English mixing; v3 forces it anyway.
+    saathi_tts_enable_preprocessing: bool = True
+    #: Outbound Opus bitrate. 48k/`application audio` is clear for a warm voice;
+    #: 32k sounded muddy (VOICE-1). Bump to 64k for a touch more fidelity.
+    saathi_tts_ogg_bitrate: str = "48k"
     #: Per-input character cap; longer replies are chunked and concatenated.
+    #: (bulbul allows 2500/input, but shorter chunks keep prosody sane.)
     saathi_tts_max_chars: int = 1200
     #: Ledger cost estimate — Sarvam's per-char TTS price is not in a captured
     #: doc, so this is a labelled `catalog_estimate` (the recorded *character

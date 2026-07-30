@@ -1,3 +1,28 @@
+## 2026-07-30 — voice notes sounded muddy and robotic; fixed the engine + encode (VOICE-1)
+
+Symptom: TTS was enabled, the round-trip worked, but the voice sounded bad —
+muddy and robotic. Root cause was two-fold and had nothing to do with the TTS
+vendor: we were on `bulbul:v2` at **22050 Hz**, then crushing it to **32 kbps**
+Opus after a forced resample (Opus is a 48 kHz codec, so 22050 → 48000 happened
+badly), with **no preprocessing** so English words and numbers in code-mixed text
+("Amlodipine 5mg") were mispronounced.
+
+Fixed, all within Sarvam (no vendor change, D-AE holds):
+- **`bulbul:v3`** — newer, higher quality, emits native **48 kHz** over REST, so
+  no resample. Verified live our key serves it at 48 kHz.
+- **`enable_preprocessing: true`** — normalises English/numeric tokens in mixed
+  text. Critical for Saathi's Hindi/English mixing.
+- **Opus encode** → 48 kHz (soxr), `application audio`, mono, **48 kbps** (was a
+  muddy 32 kbps phone-call-grade encode). All config-driven.
+- **Per-language voices** (`speech.TTS_SPEAKER_BY_LANG`): a single voice sounds
+  off across languages, so each gets its own v3 speaker — Hindi/Hinglish `ritu`,
+  Gujarati `priya`, Malayalam `kavitha`, English `neha`. v3 has a different
+  speaker roster than v2, so the old `anushka` default is retired.
+
+2 new tests, 624 total. Researched against Sarvam's docs and how Pipecat/LiveKit
+wrap the same API (they use the WebSocket streaming mode for live calls; Saathi's
+async voice notes are the HTTP batch case, which is what we use).
+
 ## 2026-07-30 — Gujarati and Malayalam added as full languages (LANG-2)
 
 Saathi now offers five languages at signup: Hindi, Hinglish, English, **Gujarati**,

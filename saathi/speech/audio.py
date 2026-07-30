@@ -52,8 +52,18 @@ async def ogg_to_wav16k(ogg: bytes) -> bytes:
         os.unlink(path)
 
 
-async def wav_to_ogg_opus(wav: bytes, bitrate: str = "32k") -> bytes:
-    """Outbound TTS -> OGG/Opus so it appears as a voice note with a waveform."""
+async def wav_to_ogg_opus(wav: bytes, bitrate: str = "48k") -> bytes:
+    """Outbound TTS -> OGG/Opus so it appears as a voice note with a waveform.
+
+    Quality (VOICE-1): resample to 48 kHz with soxr (Opus's native rate — a
+    non-48k input otherwise gets a rough internal resample that sounded muddy),
+    mono, and `-application audio` rather than the default so a warm companion
+    voice is not degraded like a low-bitrate phone call. With v3 already emitting
+    48 kHz the resample is a passthrough; it stays for robustness if the rate
+    ever changes.
+    """
     return await _run(["ffmpeg", "-hide_banner", "-loglevel", "error",
-                       "-i", "pipe:0", "-c:a", "libopus", "-b:a", bitrate,
-                       "-f", "ogg", "pipe:1"], wav)
+                       "-i", "pipe:0",
+                       "-af", "aresample=48000:resampler=soxr:precision=28",
+                       "-ac", "1", "-c:a", "libopus", "-b:a", bitrate,
+                       "-application", "audio", "-f", "ogg", "pipe:1"], wav)

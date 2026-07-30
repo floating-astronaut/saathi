@@ -21,3 +21,20 @@ LANG_TO_SARVAM = {
 def sarvam_lang(lang_pref: str | None) -> str:
     """Sarvam code for a stored `lang_pref`, defaulting to Hindi."""
     return LANG_TO_SARVAM.get(lang_pref or "hi", "hi-IN")
+
+
+#: Sarvam Bulbul (v3) voice per language (VOICE-1). Voices are multilingual, but
+#: the natural choice differs by language — a single global voice sounds off in
+#: some. Keyed by Sarvam language code (what `sarvam_lang` returns). Any code not
+#: listed falls back to `settings.saathi_tts_speaker`. All are v3-roster speakers.
+TTS_SPEAKER_BY_LANG = {
+    "hi-IN": "ritu",     # Hindi + Hinglish
+    "gu-IN": "priya",    # Gujarati
+    "ml-IN": "kavitha",  # Malayalam
+    "en-IN": "neha",     # English
+}
+
+
+def tts_speaker(sarvam_code: str, default: str) -> str:
+    """Voice for a Sarvam language code, falling back to the configured default."""
+    return TTS_SPEAKER_BY_LANG.get(sarvam_code, default)
