@@ -36,19 +36,82 @@ SA for the bucket" refers to is present and working. **The only thing absent is 
 Saathi-side event source** — there is no code, anywhere in the app, that emits a
 conversion event to anything.
 
-## What a CAPI Gateway actually is
+## The actual goal: Click-to-WhatsApp (CTWA) attribution
 
-It is a self-hosted appliance Meta ships as Terraform. It exposes an endpoint that
-speaks the Graph `/events` shape; your server POSTs events to *it*, and it forwards
-them to Meta's Conversions API using the pixel/dataset and token configured inside
-it at install time. The value over calling Meta directly is that the Gateway does
-the batching, ret/dedup and event-matching, and keeps the long-lived Meta token on
-the Gateway rather than in every caller.
+Clarified by the operator: the point of all this is **WhatsApp attribution** —
+knowing which Meta ad drove a person into a WhatsApp conversation and eventually to
+convert. That is a specific, documented Meta flow, and it changes the design away
+from a generic web-pixel Gateway.
 
-Consequence for us: Saathi does **not** need the Meta token to send events — it
-needs the **Gateway's URL**, the **pixel/dataset ID**, and the Gateway's own access
-token. The `ads_management` token matters only for *managing* the pixel, not for
-sending events through the Gateway.
+**How CTWA attribution works** (Meta docs, verified 2026-07-30):
+1. A person taps a Facebook/Instagram *Ads that click to WhatsApp* creative and
+   lands in a chat with the business number.
+2. Their **first inbound message** carries a `referral` object, and inside it a
+   **`ctwa_clid`** — the click-to-WhatsApp click ID that ties this conversation to
+   that ad click.
+3. When the person converts, you send a **Conversions API event** carrying that
+   `ctwa_clid`, and Meta attributes the conversion back to the ad.
+
+Saathi already receives step 2's payload — `pipeline.extract_messages` yields the
+whole message dict, so `msg["referral"]["ctwa_clid"]` is *present and simply never
+read*. Nothing captures it; there is no column to store it and no code to send it.
+That is the entire gap.
+
+### Two models — and the difference is a privacy decision, not a technical one
+
+Meta offers two ways to produce the conversion event:
+
+- **A · Automatic Events API.** You opt in ("Instruct Meta to automatically identify
+  order and lead events"), and **Meta runs regex + natural-language processing over
+  the customer's WhatsApp message threads** to decide when a lead or purchase
+  happened, then fires an `automatic_events` webhook you can forward to CAPI. For an
+  elder-privacy product this means **letting Meta analyse elders' conversations** —
+  a real concession, and one this product exists to avoid.
+- **B · Manual Conversions API (recommended).** Saathi captures `ctwa_clid` on first
+  contact, decides its *own* conversion signal — onboarding completion — and sends
+  one event. **Meta never sees message content.** What leaves the box is the click
+  ID Meta itself minted, an event name, and a timestamp. No elder PII, no thread.
+
+Model B is the fit. It keeps the boundary intact and is simpler. The recommendation
+is to **turn the Automatic Events opt-in OFF** in Business Suite (Settings →
+WhatsApp accounts → Privacy and data sharing) so Meta is not analysing threads, and
+send our own events.
+
+### The event, exactly (Meta CAPI for business messaging)
+
+```
+POST https://graph.facebook.com/v21.0/{DATASET_ID}/events?access_token={SYSTEM_USER_TOKEN}
+{
+  "data": [{
+    "event_name": "LeadSubmitted",           // our signal = onboarding complete
+    "event_time": <unix seconds>,
+    "action_source": "business_messaging",    // required for WhatsApp
+    "messaging_channel": "whatsapp",          // required
+    "user_data": {
+      "whatsapp_business_account_id": "<WA_BUSINESS_ACCOUNT_ID>",  // already in the secret
+      "ctwa_clid": "<captured from the inbound referral>"
+    }
+  }]
+}
+```
+
+Note what is **absent**: no phone number, no email, no hashed PII. With CTWA the
+`ctwa_clid` is the match key, so attribution needs nothing about the elder at all —
+which is exactly why this is the model to use.
+
+### The Gateway you deployed is probably not needed for this
+
+A CAPI Gateway is a web-pixel appliance — a self-hosted relay for browser/website
+events. **CTWA business-messaging events go directly to the dataset endpoint above**
+with the system-user token, which Saathi already holds (`WA_ACCESS_TOKEN` /
+`META_SYSTEM_USER_TOKEN`, both carry `ads_management`). So the Cloud Run Gateway and
+its GCS bucket add infrastructure and cost without being on this path. Decide
+whether to keep the Gateway for a future web funnel or **tear it down** — it has
+billed since 2026-07-27 for a flow that does not use it.
+
+Sources: [CAPI for Business Messaging](https://developers.facebook.com/docs/marketing-api/conversions-api/business-messaging/),
+[Automatic Events API](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/automatic-events-api),
+[Ads that click to WhatsApp](https://developers.facebook.com/docs/marketing-api/ad-creative/messaging-ads/click-to-whatsapp/).
 
 ## The decision that gates the code — do not skip this
 
@@ -78,36 +141,42 @@ about *the elders themselves*, which is a different product.
 
 ## What "finished" needs from the operator
 
-Blocking, and only the operator has them:
+Almost everything is already in hand. What is **not**:
 
-- **The decision above** (option 1 unless stated otherwise).
-- **The Gateway endpoint URL** — the Cloud Run service URL from the CAPIG console.
-  A storage-scoped SA cannot read it; one click in the console can.
-- **The pixel / dataset ID** the Gateway forwards to.
-- **The Gateway access token** it expects on inbound events (a Gateway-issued
-  value, distinct from the Meta system-user token).
+- **Confirm Model B** (send our own events; Automatic-Events opt-in OFF). Default
+  unless you say otherwise.
+- **The dataset ID.** The one identifier we do not have — from Meta Events Manager,
+  the dataset connected to the WhatsApp Business Account. (Not a pixel URL, not a
+  Gateway URL.)
+
+Already available, no action needed: the system-user token (`WA_ACCESS_TOKEN`, has
+`ads_management`), the WhatsApp Business Account ID (`WA_BUSINESS_ACCOUNT_ID` in the
+secret), and the `ctwa_clid` itself (arrives in the inbound webhook — we just start
+reading it).
 
 ## The shape once unblocked (design, not yet built)
 
-Runs on this box, matching how the operator scoped it:
+Two small pieces, both on this box:
 
-- A `saathi/capi.py` that, given an event name + a hashed identifier, POSTs to the
-  Gateway endpoint. Fire-and-forget with the same discipline as `metrics.py`:
-  **publishing must never raise into a user turn**, and it carries no message
-  content by construction — the function's signature simply has nowhere to put it.
-- The single call site under option 1 is onboarding completion in
-  `saathi/onboarding.py` — one `CompleteRegistration` per newly onboarded account,
-  keyed by a hash of the phone number, nothing else.
-- Config via the runtime secret: `SAATHI_CAPI_GATEWAY_URL`,
-  `SAATHI_CAPI_PIXEL_ID`, `SAATHI_CAPI_ACCESS_TOKEN`. Absent config → the module is
-  a no-op, exactly like `saathi_audio_bucket == ""` disables media capture.
-- A `tests/test_capi.py` asserting the payload never contains message/turn content
-  and that a Gateway outage does not raise.
+1. **Capture.** In `saathi/pipeline.py`, on a message whose `referral.ctwa_clid` is
+   present, persist the click id against the account — a `ctwa_clid` (+ captured-at)
+   column on `accounts`, or a tiny `ctwa_attribution` table. Written once, on the
+   first ad-originated message; never overwritten by a later organic message.
+2. **Convert.** A `saathi/capi.py` that, on **onboarding completion**
+   (`saathi/onboarding.py`), POSTs one `LeadSubmitted` event to
+   `graph.facebook.com/v21.0/{DATASET_ID}/events` with the stored `ctwa_clid`.
+   Fire-and-forget with `metrics.py`'s discipline: **it never raises into a turn**,
+   and it carries no message content by construction — the payload has room only for
+   the click id, event name and time. Skipped cleanly when there is no `ctwa_clid`
+   (organic signups) or no `DATASET_ID` configured.
 
-The GCP SA and bucket do not appear in this path at all: the bucket is the
-Gateway's own storage, and Saathi talks to the Gateway over HTTPS, not through GCS.
-The SA's only ongoing relevance is operational (backups/restore of the Gateway),
-not part of the event flow.
+Config via the runtime secret: `SAATHI_CAPI_DATASET_ID`; the token and WABA id are
+already there. Absent `DATASET_ID` → no-op, exactly like `saathi_audio_bucket == ""`
+disables media capture. `tests/test_capi.py` asserts the payload never contains
+message/turn content and that a Graph outage does not raise.
+
+Neither the GCP SA, the bucket, nor the Cloud Run Gateway appears in this path.
+They belong to a web-pixel flow this attribution does not use.
 
 ## Open operational notes (not this lane's job, but spotted)
 
