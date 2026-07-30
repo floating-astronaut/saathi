@@ -78,6 +78,7 @@ a measurement disagree, the measurement wins and `DECISIONS.md` records it.
 | `PROD_READINESS.md` | Dev shortcuts that must be fixed before production, with severity. **Add a row when you take one.** |
 | `AI_ROUTING.md` | How a turn reaches a model, who pays, and where the data goes. Model routing, per-account keys, spend caps, residency. |
 | `USAGE_LEDGER.md` | Saathi-owned paid-vendor usage ledger: OpenRouter/Bedrock, Sarvam, WhatsApp templates, and future paid search. |
+| `STT_EVAL.md` | How speech-to-text accuracy is measured against real elder audio, not TTS: the corpus + consent protocol, the entity-accuracy-not-WER metric, and the `saathi/eval/` harness. |
 | `COMMERCIAL_ACTIONS.md` | Shopping, carts, flights, movie/event tickets, deeplinks, offer/search adapters, and the no-transaction boundary for internet action capabilities. |
 | `DAILY_LIFE_OS.md` | Product frame and roadmap for Saathi as a WhatsApp operating system for daily life: read/explain, tasks, bills, drafts, scam shield, local errands. |
 | `PATTERNS_TO_BORROW.md` | Survey of sibling projects — what is worth adapting, and why the impressive things are not. Not a roadmap. |

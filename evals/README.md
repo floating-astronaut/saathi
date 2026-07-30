@@ -1,0 +1,26 @@
+# evals/ — Saathi evaluation harnesses
+
+Runnable evaluations and their data. Code lives in `saathi/eval/`; this tree
+holds corpora and generated reports.
+
+## STT eval (lane PR-9)
+
+Measures speech-to-text **entity accuracy** against real elder audio. Full
+protocol, metric rationale, and consent rules: [`docs/STT_EVAL.md`](../docs/STT_EVAL.md).
+
+```bash
+# Empty corpus (shipped default) — proves the harness runs and refuses to invent
+# a number:
+uv run python -m saathi.eval.run --corpus evals/corpus
+
+# Against a real, out-of-band corpus of consented recordings:
+uv run python -m saathi.eval.run --corpus /path/to/corpus --out evals/report
+```
+
+- `corpus/` — real samples go here (audio + one JSON manifest each). **Not
+  committed** — real elder voice notes are personal data under DPDP. Only the
+  README and `SCHEMA.md` are tracked. See `docs/STT_EVAL.md` §2.2.
+- `report/` — generated reports (git-ignored).
+
+The unit tests (`tests/test_eval_*.py`) build throwaway corpora in a temp dir, so
+no synthetic audio is ever committed.
