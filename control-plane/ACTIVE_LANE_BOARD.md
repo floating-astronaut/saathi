@@ -77,6 +77,11 @@ Notes: opened 2026-07-30 from operator feedback ("an agent that can't answer the
   "kar pa"). `python -m saathi.eval.agent`. 8 tests. Acceptance MET: agent reliably
   reaches for tools and answers, measured on a fixed set, with a harness to catch
   regressions. Deployed via PR. Eval set can grow over time (not a blocker).
+  **Widened 2026-07-30 (branch agent/eval-widen):** 13 → **38** cases across 10
+  categories (health, knowledge, live data, conversion, translation, drafting, time,
+  actions), incl. stress cases (current office-holders that must be looked up, live
+  prices). Live run: **100% answered well, 0% give-up** across all 38. Guard test
+  added for typo'd tool names. Eval-only (no serving-path impact; not deployed).
 
 ### LOOKUP-1 — weather ignored an explicitly-named city   [CLOSED]
 Owner: Claude (runtime box, branch agent/weather-explicit-city)        Opened: 2026-07-30 · Closed: 2026-07-30

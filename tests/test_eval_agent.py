@@ -75,3 +75,16 @@ async def test_run_aggregates_over_the_case_set():
     assert rep.answered_well == 0.5          # one good, one gave up
     assert rep.give_up_rate == 0.5
     assert "Agent tool-use eval" in agent.render_markdown(rep)
+
+
+def test_all_cases_reference_real_tools():
+    """A typo'd expect_tool would silently make a case unpassable — guard it."""
+    from saathi.agent.tools.specs import TOOLS
+    from saathi.eval.agent_cases import CASES
+    real = {t["toolSpec"]["name"] for t in TOOLS}
+    ids = [c["id"] for c in CASES]
+    assert len(ids) == len(set(ids)), "duplicate case ids"
+    for c in CASES:
+        assert {"id", "category", "question", "expect_tool"} <= c.keys(), c["id"]
+        if c["expect_tool"] is not None:
+            assert c["expect_tool"] in real, f"{c['id']}: unknown tool {c['expect_tool']}"
