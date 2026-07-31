@@ -2241,3 +2241,37 @@ full suite green, ruff clean.
 to catch regressions. The eval is non-deterministic (temperature 0.2) and 13 cases — it can grow;
 not a blocker. **Boundary reaffirmed throughout:** capability = reliable answering/acting, NOT
 code execution; "capability defined by absence" (no money/OTP/account tools) is untouched.
+
+---
+
+## 2026-07-30 · SAFE-LANG-1 — native Gujarati/Malayalam safety patterns
+
+**Owner:** Claude (runtime box `ip-172-31-41-224`, branch `agent/safe-lang-gu-ml`).
+
+**Symptom:** LANG-2 shipped gu/ml as user languages, but the priority-0 deterministic safety
+classifier (`saathi/safety/classifier.py`) matched Hindi/English/Hinglish only. A native-script
+gu/ml "chest pain", "I want to die", or "send money now / account blocked" was not caught before
+the model — the documented D-AF gap.
+
+**Read:** classifier.py in full (families, priority order, `_normalise`), tests/test_safety.py,
+D-AF. Confirmed non-Latin scripts are case-less, so `_normalise` (NFKC + lowercase + collapse
+ws) and `re.I` are no-ops for them and matching is unchanged.
+
+**Changed:** added native-script gu/ml patterns to every family — `_EMERGENCY` (chest pain,
+heart attack, breathless, fall, unconscious, stroke/paralysis, heavy bleeding), `_HYPOGLYCEMIA`,
+`_SELF_HARM`, `_MEDICAL_ADVICE`, `_SCAM` + `_SUSPICIOUS` (native pressure: electricity-cut,
+courier/customs, send-money/account-blocked, warrant/arrest). Kept them fuzzy (`.{0,N}`) to
+tolerate spelling/dialect and honour "prefer a false positive over a false negative". The
+mechanical scam markers (OTP/PIN/CVV/KYC/AnyDesk/UPI) are Latin and already caught for all
+languages, so only native-script phrases were needed. Updated the file's coverage note and the
+D-AF addendum; PROD_READINESS LANG-2 safety line closed.
+
+**Verified:** a live probe of 16 representative gu/ml sentences across all families each fired
+the correct trigger (emergency→112, self-harm→14416, hypo, scam/suspicious block, advice
+declined), and 3+ benign gu/ml sentences (weather, hunger, tea, routine doctor visit) did NOT
+trigger. Formalised as 25 parametrised tests (`test_gu_ml_*`); full suite **665 passed** (was
+640). No new ruff findings.
+
+**Remains:** the patterns are a first pass and still want a native-speaker review (flagged in
+classifier.py) — this is a real priority-0 net where gu/ml had none, not the final word. A
+native reviewer may add phrasings and prune any over-broad match. Not a blocker to shipping.

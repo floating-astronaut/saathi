@@ -145,3 +145,66 @@ def test_scam_reply_states_the_thing_that_defeats_digital_arrest():
 def test_suspicious_reply_gives_one_safe_verification_step():
     r = classify("AnyDesk install karke screen share karo").reply.lower()
     assert "official" in r and "1930" in r
+
+
+# --- Gujarati + Malayalam native-script coverage (SAFE-LANG-1) ---------------
+# Provisional patterns (native review pending), but they must fire: gu/ml users
+# had zero deterministic safety coverage before this.
+
+GU_ML_EMERGENCY = [
+    "મને છાતીમાં દુખાવો થાય છે",
+    "બા પડી ગયા અને બેભાન છે",
+    "શ્વાસ લેવામાં તકલીફ છે",
+    "എനിക്ക് നെഞ്ചുവേദന ഉണ്ട്",
+    "അമ്മ വീണു, ബോധം കെട്ടു",
+    "ശ്വാസം കിട്ടുന്നില്ല",
+]
+GU_ML_SELF_HARM = ["મારે હવે જીવવું નથી", "આપઘાત કરી લઈશ", "എനിക്ക് മരിക്കണം",
+                   "ജീവിക്കാൻ തോന്നുന്നില്ല"]
+GU_ML_HYPO = ["સુગર ઓછી થઈ ગઈ છે", "എന്റെ ഷുഗർ കുറഞ്ഞു"]
+GU_ML_ADVICE = ["કેટલી ગોળી લઉં?", "દવા બદલી દઉં?", "എത്ര ഗുളിക കഴിക്കണം?",
+                "മരുന്ന് മാറ്റണോ"]
+GU_ML_SCAM = ["તાત્કાલિક પૈસા મોકલો નહીં તો ખાતું બંધ થઈ જશે",
+              "ഉടനെ പണം അയക്കൂ അല്ലെങ്കിൽ അക്കൗണ്ട് ബ്ലോക്ക് ചെയ്യും"]
+GU_ML_SUSPICIOUS = ["તમારી વીજળી કપાઈ જશે, બિલ ભરો",
+                    "നിങ്ങളുടെ കറന്റ് കട്ട് ചെയ്യും"]
+GU_ML_BENIGN = ["આજે હવામાન બહુ સરસ છે", "મને ભૂખ લાગી છે",
+                "എനിക്ക് ഒരു ചായ വേണം", "നാളെ ഡോക്ടറെ കാണണം"]
+
+
+@pytest.mark.parametrize("t", GU_ML_EMERGENCY)
+def test_gu_ml_emergency(t):
+    v = classify(t)
+    assert v.trigger is Trigger.MEDICAL_EMERGENCY, f"missed: {t!r}"
+    assert "112" in v.reply and v.blocks_llm
+
+
+@pytest.mark.parametrize("t", GU_ML_SELF_HARM)
+def test_gu_ml_self_harm(t):
+    assert classify(t).trigger is Trigger.SELF_HARM, f"missed: {t!r}"
+
+
+@pytest.mark.parametrize("t", GU_ML_HYPO)
+def test_gu_ml_hypoglycemia(t):
+    assert classify(t).trigger is Trigger.HYPOGLYCEMIA, f"missed: {t!r}"
+
+
+@pytest.mark.parametrize("t", GU_ML_ADVICE)
+def test_gu_ml_advice(t):
+    assert classify(t).trigger is Trigger.MEDICAL_ADVICE, f"missed: {t!r}"
+
+
+@pytest.mark.parametrize("t", GU_ML_SCAM)
+def test_gu_ml_scam(t):
+    assert classify(t).blocks_llm and classify(t).trigger in (Trigger.SCAM, Trigger.SUSPICIOUS), f"missed: {t!r}"
+
+
+@pytest.mark.parametrize("t", GU_ML_SUSPICIOUS)
+def test_gu_ml_suspicious(t):
+    assert classify(t).trigger is Trigger.SUSPICIOUS, f"missed: {t!r}"
+
+
+@pytest.mark.parametrize("t", GU_ML_BENIGN)
+def test_gu_ml_benign_passes_through(t):
+    v = classify(t)
+    assert v.trigger is None, f"false positive on {t!r}: {v.trigger} via {v.matched!r}"

@@ -482,11 +482,11 @@ One residual:
 ### LANG-2 · Gujarati/Malayalam shipped with provisional copy and a safety gap
 Gujarati and Malayalam were added as full languages (D-AF). Two knowingly-
 incomplete corners:
-- **Safety coverage.** The priority-0 deterministic classifier (emergencies +
-  scams) matches Hindi/English/Hinglish only. Native-*script* gu/ml emergencies
-  and scams are not caught deterministically — they fall through to the model
-  (still answered, but not the priority-0 guarantee). Forwarded Hindi/English
-  scams still catch. **Fix:** native-verified gu/ml patterns — lane SAFE-LANG-1.
+- **Safety coverage.** ~~The priority-0 classifier matches Hindi/English only.~~
+  **Closed 2026-07-30 (SAFE-LANG-1):** native-script gu/ml patterns added across
+  emergency/hypoglycemia/self-harm/medical-advice/scam/suspicious, verified live.
+  Residual: the patterns are a first pass and still want a **native-speaker review**
+  (flagged in `safety/classifier.py`) — a real net now, refinement welcome.
 - **Translation quality.** The gu/ml onboarding/reply/ack/paywall copy is a first
   draft (flagged in code), legible and correct-script but not native-reviewed.
   **Fix:** native elder-audience review pass before wide rollout.

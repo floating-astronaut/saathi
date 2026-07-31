@@ -771,3 +771,13 @@ and a **per-language speaker map** (voices are multilingual but the natural choi
 differs by language: hi/hi-en `ritu`, gu `priya`, ml `kavitha`, en `neha`). This
 is a quality tuning *within* D-AE — same vendor, same in-India residency — not a
 new decision. v3 has its own speaker roster, so the v2 `anushka` default retired.
+
+### D-AF addendum (2026-07-30) — the gu/ml safety gap is now closed (first pass)
+
+D-AF shipped Gujarati/Malayalam with the priority-0 safety classifier still
+Hindi/English-only, as a documented gap (lane SAFE-LANG-1). That lane is now done:
+native-script gu/ml patterns cover emergency, hypoglycemia, self-harm, medical-
+advice, and scam/suspicious pressure phrases; verified live to fire across all
+families with no benign false-positives in the test set. The patterns are a first
+pass and still want a native-speaker review pass (flagged in `safety/classifier.py`),
+but gu/ml users now have a real priority-0 net rather than none.

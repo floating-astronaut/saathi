@@ -10,16 +10,20 @@ Design rules:
     number is a mild annoyance; missing a stroke is not.
   * Every hit short-circuits the LLM turn entirely and returns fixed copy.
 
-⚠️ LANGUAGE COVERAGE GAP (LANG-2, 2026-07-30): these patterns cover Hindi,
-English and romanised Hinglish only. Gujarati and Malayalam were added as user
-languages without native-script emergency/scam patterns yet — an operator
-decision to ship the languages with the gap documented rather than block them
-(D-AF). So a native-*script* Gujarati/Malayalam emergency or scam is not caught
-deterministically here; it falls through to the model (which still responds, but
-without the priority-0 guarantee). Forwarded Hindi/English scams — the common
-case — are still caught for these users. Closing this gap needs native-verified
-patterns and is tracked as lane SAFE-LANG-1. Until then, entity/emergency
-coverage for gu/ml is a known hole, not a silent one.
+LANGUAGE COVERAGE (SAFE-LANG-1, 2026-07-30): patterns now cover Hindi, English,
+romanised Hinglish, **and native-script Gujarati + Malayalam** — emergencies,
+hypoglycemia, self-harm, medical-advice, and native pressure phrases for scam/
+suspicious (the mechanical scam markers — OTP, PIN, CVV, KYC, AnyDesk, UPI brand
+names — are Latin and already caught for every language). Non-Latin scripts are
+case-less, so `re.I`/lowercasing in `_normalise` is a no-op for them and matching
+works unchanged.
+
+⚠️ The gu/ml patterns are a **first pass and still want native-speaker review** —
+they follow the "prefer a false positive over a false negative" rule and use fuzzy
+`.{0,N}` gaps to tolerate spelling/dialect variation, but a native pass may add
+phrasings and catch over-broad matches. This is a real improvement over the prior
+zero deterministic coverage for gu/ml, not the final word. Tracked to completion on
+SAFE-LANG-1.
 
 Numbers used are the real Indian services:
   112    national emergency (police/fire/ambulance)
@@ -79,6 +83,22 @@ _EMERGENCY = [
     r"\bstroke\b", r"\bparalysis\b", r"lakwa",
     # bleeding / unconscious
     r"bahut khoon", r"heavy bleeding", r"behosh", r"unconscious",
+    # --- Gujarati (SAFE-LANG-1, provisional — native review recommended) ---
+    r"છાતી.{0,4}(દુખાવો|દર્દ|દુખે)",          # chest pain
+    r"હાર્ટ એટેક", r"હૃદય.{0,6}હુમલો",          # heart attack
+    r"શ્વાસ.{0,10}(નથી|તકલીફ|લેવા|રૂંધા|ચડ)",  # can't breathe
+    r"પડી ગય",                                  # fell (gu "sugar" drop uses ઓછી, not પડી)
+    r"બેભાન", r"બેહોશ",                          # unconscious
+    r"લકવો", r"પક્ષઘાત",                        # stroke / paralysis
+    r"બહુ લોહી", r"લોહી વહે",                    # heavy bleeding
+    # --- Malayalam (SAFE-LANG-1, provisional — native review recommended) ---
+    r"നെഞ്ച.{0,4}വേദന",                         # chest pain
+    r"ഹൃദയാഘാത", r"ഹാർട്ട്.{0,4}അറ്റാക്ക്",     # heart attack
+    r"ശ്വാസം.{0,8}(കിട്ട|മുട്ട|ഇല്ല|തടസ)",      # can't breathe
+    r"വീണു", r"വീണ് പോയി",                       # fell (ml sugar drop uses കുറഞ്ഞു)
+    r"ബോധം കെട്ട", r"അബോധ",                     # unconscious
+    r"പക്ഷാഘാത", r"തളർവാത",                     # stroke / paralysis
+    r"ധാരാളം രക്ത", r"രക്തസ്രാവ",                # heavy bleeding
 ]
 
 # Low blood sugar. Kept separate from MEDICAL_EMERGENCY because the correct
@@ -92,18 +112,29 @@ _HYPOGLYCEMIA = [
     r"chakkar.{0,20}pasina", r"pasina.{0,20}chakkar",
     r"haath (kaanp|kamp).{0,20}sugar", r"sugar.{0,20}haath (kaanp|kamp)",
     r"shaky.{0,15}sweat", r"sweating.{0,15}shak",
+    # Gujarati / Malayalam (SAFE-LANG-1, provisional)
+    r"(સુગર|બ્લડ સુગર).{0,8}(ઓછી|ઓછું|ઘટી|ઘટ|લો)",
+    r"(പഞ്ചസാര|ഷുഗർ|ഗ്ലൂക്കോസ്).{0,8}(കുറഞ്ഞ|കുറവ്|താഴ്ന്ന|ലോ)",
 ]
 
 _SELF_HARM = [
     r"marna chahta", r"marna chahti", r"jeene ka mann nahi", r"jeena nahi chahta",
     r"khudkushi", r"aatmhatya", r"\bsuicide\b", r"kill myself", r"end my life",
     r"khatam kar du[ni]?", r"no reason to live",
+    # Gujarati / Malayalam (SAFE-LANG-1, provisional)
+    r"મરવું છે", r"મરી જવું", r"જીવવું નથી", r"જીવવાની ઇચ્છા નથી",
+    r"આપઘાત", r"આત્મહત્યા",
+    r"മരിക്കണം", r"മരിക്കാൻ.{0,8}തോന്ന", r"ജീവിക്കാൻ.{0,10}(തോന്നുന്നില്ല|വയ്യ|ഇഷ്ടമില്ല)",
+    r"ആത്മഹത്യ", r"ജീവിതം അവസാനിപ്പിക്ക",
 ]
 
 _MEDICAL_ADVICE = [
     r"kitni goli", r"kitne mg", r"dose kitn", r"dawa badal", r"davai badal",
     r"should i (take|stop)", r"\bincrease\b.*\bdose\b", r"\bstop taking\b",
     r"goli band kar", r"is (it|this) safe to take", r"can i take .* with",
+    # Gujarati / Malayalam (SAFE-LANG-1, provisional)
+    r"કેટલી ગોળી", r"દવા બદલ", r"ગોળી બંધ", r"ડોઝ.{0,6}(કેટલો|વધાર|ઘટાડ)",
+    r"എത്ര ഗുളിക", r"മരുന്ന്.{0,4}മാറ്റ", r"ഗുളിക.{0,4}നിർത്ത", r"ഡോസ്.{0,6}(കൂട്ട|കുറയ്ക്ക)",
 ]
 
 _SCAM = [
@@ -116,6 +147,12 @@ _SCAM = [
     r"\bcvv\b", r"lottery", r"lucky draw", r"\bkbc\b", r"crore jeet",
     r"account (block|band)", r"kyc update", r"click (this|is) link",
     r"paisa transfer kar", r"send money urgently",
+    # Gujarati / Malayalam native pressure (OTP/PIN/KYC/link/lottery above are
+    # Latin and already catch for everyone). SAFE-LANG-1, provisional.
+    r"ગિરફ્તાર", r"પૈસા.{0,8}(મોકલ|ટ્રાન્સફર|ભરો|મોકલો)", r"ખાતું બંધ",
+    r"તાત્કાલિક.{0,8}પૈસા", r"વોરંટ",
+    r"അറസ്റ്റ്", r"പണം.{0,8}(അയക്ക|ട്രാൻസ്ഫർ|അടയ്ക്ക)", r"അക്കൗണ്ട്.{0,6}(ബ്ലോക്ക്|അടച്ച)",
+    r"അടിയന്തിര.{0,10}പണം", r"വാറന്റ്",
 ]
 
 # These are pressure-shaped fraud pretexts rather than proof that every sender
@@ -140,6 +177,13 @@ _SUSPICIOUS = [
     # UPI collection pressure and remote-control software.
     r"(?:upi|gpay|phonepe|paytm).{0,35}(?:collect|request|approve|urgent|pay now)",
     r"(?:anydesk|teamviewer|quick support|quicksupport|remote access|screen share)",
+    # Gujarati / Malayalam native pressure (SAFE-LANG-1, provisional). AnyDesk/UPI
+    # brand names above are Latin and catch for everyone.
+    r"વીજળી.{0,10}(કપાઈ|કપાશે|બંધ|કાપ|ડિસ્કનેક્ટ)",   # electricity cut-off threat
+    r"કુરિયર.{0,30}(કસ્ટમ|પાર્સલ|ફી|દંડ|પોલીસ)",       # courier/customs
+    r"વૈദ്യുതി.{0,12}(വിച്ഛേദ|കട്ട്|നിർത്ത|ബന്ധിപ്പിക്കും)",
+    r"കറന്റ്.{0,6}കട്ട്",
+    r"കൊറിയർ.{0,30}(കസ്റ്റം|പാർസൽ|ഫീസ്|പിഴ|പോലീസ്)",
 ]
 
 _COMPILED: dict[Trigger, list[re.Pattern[str]]] = {
