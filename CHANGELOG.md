@@ -1,3 +1,27 @@
+## 2026-07-30 — Gujarati/Malayalam users had no priority-0 safety net; added native patterns (SAFE-LANG-1)
+
+Symptom: LANG-2 shipped Gujarati and Malayalam as user languages, but the priority-0
+deterministic safety classifier (medical emergencies, self-harm, scams — matched
+*before* any model call) only covered Hindi/English/Hinglish. A native-script
+Gujarati/Malayalam "I have chest pain", "I want to die", or "send money now or your
+account is blocked" was **not** caught deterministically — it fell through to the
+model, without the priority-0 guarantee. That was the documented gap from D-AF.
+
+Closed it: added native-script gu/ml patterns to every family — emergency (chest
+pain, heart attack, breathlessness, a fall, unconsciousness, stroke, heavy
+bleeding), hypoglycemia, self-harm, medical-advice, and native pressure phrases for
+scam/suspicious (electricity-cut and courier/customs threats, "send money"/"account
+blocked", warrant/arrest). The mechanical scam markers — OTP, PIN, CVV, KYC, AnyDesk,
+UPI brand names — are Latin and were already caught for every language. Non-Latin
+scripts are case-less, so the existing normalise/`re.I` path handles them unchanged.
+
+Verified live: 16 representative gu/ml sentences across all families each fire the
+right trigger, and benign gu/ml sentences (weather, hunger, tea, a routine doctor
+visit) do not. 25 new tests, 665 total. **The patterns are a first pass and still
+want a native-speaker review** (flagged in the classifier) — but this is a real
+priority-0 net where there was none, following the "prefer a false positive over a
+false negative" rule.
+
 ## 2026-07-30 — widened the tool-use eval to 38 real questions, still 100% (AGENT-1)
 
 Grew the agent tool-use eval from 13 to **38** cases across 10 categories: health/
