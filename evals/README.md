@@ -38,4 +38,8 @@ uv run python -m saathi.eval.agent          # needs model creds; costs a few cal
 ```
 
 Scored per case: called the required tool, answer contained the expected text, and
-did it give up. First live run (2026-07-30): **100% answered well** across 13 cases.
+did it give up. Live run 2026-07-30: **100% answered well** across **38 cases** —
+weather, health/medicine, general knowledge, live data (gold/petrol/cricket),
+conversions, translation, drafting, time, and actions (reminders/lists). Includes
+stress cases (current office-holders that must be looked up, not recalled — e.g.
+"President of India" → Murmu). The set is meant to grow.

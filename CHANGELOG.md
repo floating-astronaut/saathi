@@ -1,3 +1,15 @@
+## 2026-07-30 — widened the tool-use eval to 38 real questions, still 100% (AGENT-1)
+
+Grew the agent tool-use eval from 13 to **38** cases across 10 categories: health/
+medicine (side effects, doses, normal BP/sugar — must look up, not guess), general
+knowledge, live data (gold rate, petrol price, cricket, tomorrow's London weather),
+conversions, translation, drafting, time/date, and more actions (list reminders,
+create reminder, add to list). Deliberately includes stress cases — current office-
+holders that must be *looked up* not recalled ("President of India" → Murmu). Live
+run: **100% answered well, 100% right-tool, 0% give-up** across all 38. Added a guard
+test so a typo'd `expect_tool` in a future case fails loudly. Eval-only change — no
+runtime/serving-path impact.
+
 ## 2026-07-30 — measured the agent's tool-use: 100% answered well (AGENT-1, increment 2)
 
 Capability was anecdotal ("it couldn't tell the temperature"). Now it's measured.
