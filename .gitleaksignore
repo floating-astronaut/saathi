@@ -1,0 +1,3 @@
+# False positive: Meta's own sample-curl placeholder 'Authorization: Bearer ACCESS_TOKEN'
+051a7d5399f08bad56d91cd0662f8d3fc92f3a5e:docs/vendor/meta/conversational-components.md:curl-auth-header:111
+d45e978dfdfb3e1a9c7c29ec8a52fb5f11ee85cc:docs/vendor/meta/conversational-components.md:curl-auth-header:111
